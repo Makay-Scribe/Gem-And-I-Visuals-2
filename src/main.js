@@ -11,6 +11,7 @@ import { BackgroundManager } from './modules/BackgroundManager.js';
 import { ImagePlaneManager } from './modules/ImagePlaneManager.js';
 import { ModelManager } from './modules/ModelManager.js';
 import { ComputeManager } from './compute/ComputeManager.js';
+import { GPGPUDebugger } from './modules/GPGPUDebugger.js';
 
 const App = {
     THREE: THREE, 
@@ -54,6 +55,7 @@ const App = {
     ImagePlaneManager: ImagePlaneManager,
     ModelManager: ModelManager,
     ComputeManager: ComputeManager,
+    GPGPUDebugger: GPGPUDebugger,
 
     defaultVisualizerSettings: {
         cameraTarget: 'imagePlane',
@@ -153,6 +155,7 @@ const App = {
         },
         enableFovPlus: false, enableFovMinus: false,
         enableCameraPulse: false, cameraPulseStrength: 5.0,
+        enableGPGPUDebugger: true, // <-- ADDED: Control for the debug plane
     },
 
     async preloadDevAssets() {
@@ -244,6 +247,9 @@ const App = {
 
         if (this.ShaderManager) this.ShaderManager.init(this);
         else console.error("FATAL: ShaderManager not found.");
+
+        if (this.GPGPUDebugger) this.GPGPUDebugger.init(this);
+        else console.error("FATAL: GPGPUDebugger not found.");
 
         
         setTimeout(() => {
@@ -377,6 +383,10 @@ const App = {
         if (this.BackgroundManager) this.BackgroundManager.render();
         this.renderer.clearDepth();
         this.renderer.render(this.scene, this.camera);
+        
+        // Render the debugger last so it appears on top of the main scene
+        if (this.GPGPUDebugger) this.GPGPUDebugger.update();
+
         this.renderer.setClearColor(new THREE.Color('#000000'), 0);
     }
 };

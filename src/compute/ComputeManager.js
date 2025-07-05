@@ -80,10 +80,12 @@ export const ComputeManager = {
         this.positionVariable.material.uniforms['u_audioMid'] = { value: 0 };
         this.positionVariable.material.uniforms['u_beat'] = { value: 0 };
         this.positionVariable.material.uniforms['u_planeDimensions'] = { value: planeDimensionsVec2 };
+        this.positionVariable.material.uniforms['u_deformationStrength'] = { value: 0.0 }; // ADDED
 
         this.normalVariable.material.uniforms['u_time'] = { value: 0 };
         this.normalVariable.material.uniforms['u_audioLow'] = { value: 0 };
         this.normalVariable.material.uniforms['u_planeDimensions'] = { value: planeDimensionsVec2 };
+        this.normalVariable.material.uniforms['u_deformationStrength'] = { value: 0.0 }; // ADDED
 
 
         const error = this.gpuCompute.init();
@@ -102,13 +104,17 @@ export const ComputeManager = {
         const A = this.app.AudioProcessor;
 
         // Update uniforms for compute shaders
-        this.positionVariable.material.uniforms['u_time'].value = this.app.currentTime;
-        this.positionVariable.material.uniforms['u_audioLow'].value = A.energy.low;
-        this.positionVariable.material.uniforms['u_audioMid'].value = A.energy.mid;
-        this.positionVariable.material.uniforms['u_beat'].value = A.triggers.beat ? 1.0 : 0.0;
+        const positionUniforms = this.positionVariable.material.uniforms;
+        positionUniforms['u_time'].value = this.app.currentTime;
+        positionUniforms['u_audioLow'].value = A.energy.low;
+        positionUniforms['u_audioMid'].value = A.energy.mid;
+        positionUniforms['u_beat'].value = A.triggers.beat ? 1.0 : 0.0;
+        positionUniforms['u_deformationStrength'].value = S.deformationStrength; // ADDED
 
-        this.normalVariable.material.uniforms['u_time'].value = this.app.currentTime;
-        this.normalVariable.material.uniforms['u_audioLow'].value = A.energy.low;
+        const normalUniforms = this.normalVariable.material.uniforms;
+        normalUniforms['u_time'].value = this.app.currentTime;
+        normalUniforms['u_audioLow'].value = A.energy.low;
+        normalUniforms['u_deformationStrength'].value = S.deformationStrength; // ADDED
 
         // Run the computation
         this.gpuCompute.compute();
@@ -120,6 +126,7 @@ export const ComputeManager = {
         uniform float u_audioMid;
         uniform float u_beat;
         uniform vec2 u_planeDimensions;
+        uniform float u_deformationStrength; // ADDED
 
         void main() {
             vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -132,7 +139,7 @@ export const ComputeManager = {
             );
 
             // --- DEFORMATION LOGIC WILL BE ADDED HERE ---
-
+            pos.z += u_audioLow * u_deformationStrength; // ADDED
 
             gl_FragColor = vec4(pos, 1.0);
         }
@@ -141,6 +148,7 @@ export const ComputeManager = {
         uniform float u_time;
         uniform float u_audioLow;
         uniform vec2 u_planeDimensions;
+        uniform float u_deformationStrength; // ADDED
 
         // This function must EXACTLY match the deformation logic in the position shader
         vec3 getDeformedPosition(vec2 uv) {
@@ -151,7 +159,7 @@ export const ComputeManager = {
             );
 
             // --- DEFORMATION LOGIC WILL BE ADDED HERE ---
-
+            pos.z += u_audioLow * u_deformationStrength; // ADDED
 
             return pos;
         }

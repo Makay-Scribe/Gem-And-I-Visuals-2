@@ -50,6 +50,19 @@ export const UIManager = {
         this.toggleLightSliders();
         this.updateCameraControlsVisibility(); 
         this.updateSliderStates(); // Set initial state of sliders
+        this.openAllAccordionsForDev(); // Open panels for easy dev access
+    },
+
+    openAllAccordionsForDev() {
+        // This function opens all top-level accordions on startup for easier development.
+        console.log("Opening all accordions for development mode.");
+        document.querySelectorAll('.controls-panel > .accordion-item > .accordion-content').forEach(content => {
+            if (content) {
+                content.classList.add('open');
+                // Set max-height to its natural scroll height to make it visible
+                content.style.maxHeight = content.scrollHeight + 'px';
+            }
+        });
     },
 
     setTransitioning(isTransitioning) {

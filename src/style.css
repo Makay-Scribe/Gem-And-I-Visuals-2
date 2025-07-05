@@ -23,6 +23,8 @@
     --special-control-bg: #3A5943; /* Greenish-yellow for special dropdowns/buttons */
     --special-control-hover-bg: #4A6953; /* Lighter version for hover */
     --glow-color-yellow: rgba(255, 255, 150, 0.7); /* Color for the new glow effect */
+    --debug-header-bg: #6e5300; /* New color for debug panels */
+    --debug-header-hover-bg: #8c6a00; /* New hover color for debug */
 }
 
 /* --- GLOW ANIMATION --- */
@@ -115,6 +117,14 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     min-height: 20px;
 }
 .accordion-header:hover { background-color: var(--header-hover-bg); }
+
+/* NEW STYLE FOR DEBUG HEADERS */
+.accordion-header.debug-header {
+    background-color: var(--debug-header-bg);
+}
+.accordion-header.debug-header:hover {
+    background-color: var(--debug-header-hover-bg);
+}
 
 .accordion-item .accordion-item .accordion-header {
     background-color: var(--sub-header-bg);
