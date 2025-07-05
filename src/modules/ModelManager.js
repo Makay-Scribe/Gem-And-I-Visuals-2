@@ -6,6 +6,7 @@ export const ModelManager = {
     gltfModel: null,
     animationMixer: null,
     baseScale: new THREE.Vector3(1, 1, 1),
+    boundingSphere: new THREE.Sphere(), // For collision detection
 
     homePosition: new THREE.Vector3(0, 5, 5),
     
@@ -26,7 +27,7 @@ export const ModelManager = {
         transitionDuration: 10.0,
         
         mode: null,
-        subMode: null, // For multi-state presets like "Curious Observer"
+        subMode: null, 
         randomBounds: null,
         startPosition: new THREE.Vector3(),
         targetPosition: new THREE.Vector3(),
@@ -67,11 +68,15 @@ export const ModelManager = {
                 this.app.gltfModel = gltf.scene;
 
                 const box = new THREE.Box3().setFromObject(this.gltfModel);
+                box.getBoundingSphere(this.boundingSphere); // Calculate the bounding sphere for collision detection
+                
                 const size = box.getSize(new THREE.Vector3());
                 const scale = 10 / Math.max(size.x, size.y, size.z);
                 this.baseScale.set(scale, scale, scale);
                 this.gltfModel.scale.copy(this.baseScale);
                 
+                this.boundingSphere.radius *= scale; // Scale the sphere radius too
+
                 this.gltfModel.position.copy(this.homePosition);
 
                 if (gltf.animations && gltf.animations.length) {
@@ -112,12 +117,12 @@ export const ModelManager = {
             this.homePosition.clone().add(boundsSize)
         );
 
-        if (presetId === 'autopilotPreset1') { // Close Encounter
+        if (presetId === 'autopilotPreset1') {
             ap.randomBounds.min.z = this.app.camera.position.z - 5;
             ap.randomBounds.max.z = this.homePosition.z + 20;
-        } else if (presetId === 'autopilotPreset2') { // Curious Observer
+        } else if (presetId === 'autopilotPreset2') {
             ap.subMode = 'roaming';
-        } else if (presetId === 'autopilotPreset3' || presetId === 'autopilotPreset4') { // Aerobatics
+        } else if (presetId === 'autopilotPreset3' || presetId === 'autopilotPreset4') {
              ap.randomBounds.expandByVector(new THREE.Vector3(15, 10, 15));
         }
         console.log(`Model autopilot started with preset: ${presetId}`);
@@ -202,6 +207,7 @@ export const ModelManager = {
 
         const S = this.app.vizSettings;
         const ap = this.autopilot;
+        const landscapeBox = this.app.ImagePlaneManager.boundingBox;
         
         this.gltfModel.visible = S.enableModel;
         if (!this.gltfModel.visible) {
@@ -211,11 +217,12 @@ export const ModelManager = {
         
         this.gltfModel.scale.copy(this.baseScale).multiplyScalar(S.modelScale);
         const speed = S.modelAutopilotSpeed;
+        const finalPosition = new THREE.Vector3(); // A temporary vector for calculations
 
         if (ap.isTransitioningIn) {
             ap.transitionProgress = Math.min(1.0, ap.transitionProgress + (delta * speed) / ap.transitionDuration);
             const ease = 0.5 - 0.5 * Math.cos(ap.transitionProgress * Math.PI);
-            this.gltfModel.position.lerpVectors(ap.transitionStartPos, this.homePosition, ease);
+            finalPosition.lerpVectors(ap.transitionStartPos, this.homePosition, ease);
             this.gltfModel.quaternion.slerpQuaternions(ap.transitionStartQuat, new THREE.Quaternion(), ease);
             if (ap.transitionProgress >= 1.0) {
                 ap.isTransitioningIn = false;
@@ -225,14 +232,20 @@ export const ModelManager = {
         } else if (S.modelAutopilotOn && ap.active) {
             if (ap.holdTimer > 0) {
                 ap.holdTimer -= delta;
-                return;
-            }
-            if (ap.transitionProgress < 1.0) {
+            } else if (ap.transitionProgress < 1.0) {
                 const duration = Math.max(0.1, ap.waypointTransitionDuration);
                 ap.transitionProgress = Math.min(1.0, ap.transitionProgress + (delta * speed) / duration);
                 const easeProgress = 0.5 - 0.5 * Math.cos(ap.transitionProgress * Math.PI);
-                this.gltfModel.position.lerpVectors(ap.startPosition, ap.targetPosition, easeProgress);
-                this.gltfModel.quaternion.slerpQuaternions(ap.startQuaternion, ap.targetQuaternion, easeProgress);
+                
+                finalPosition.lerpVectors(ap.startPosition, ap.targetPosition, easeProgress);
+                const modelSphereAtNextPos = this.boundingSphere.clone().set(finalPosition, this.boundingSphere.radius * S.modelScale);
+                
+                if (this.app.ImagePlaneManager.landscape.visible && landscapeBox.intersectsSphere(modelSphereAtNextPos)) {
+                    console.log("Collision Detected! Deflecting...");
+                    this.generateNewRandomWaypoint({ aerobatics: (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4'), audioReactive: ap.mode === 'autopilotPreset4' });
+                } else {
+                    this.gltfModel.quaternion.slerpQuaternions(ap.startQuaternion, ap.targetQuaternion, easeProgress);
+                }
             } else {
                  if (ap.mode === 'autopilotPreset1' || ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4') {
                     this.generateNewRandomWaypoint({ aerobatics: (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4'), audioReactive: ap.mode === 'autopilotPreset4' });
@@ -247,14 +260,19 @@ export const ModelManager = {
                  if (this.transition.active) {
                     this.transition.progress = Math.min(1.0, this.transition.progress + delta / this.transition.duration);
                     const ease = 0.5 - 0.5 * Math.cos(this.transition.progress * Math.PI);
-                    this.gltfModel.position.lerpVectors(this.transition.start, this.transition.end, ease);
+                    finalPosition.lerpVectors(this.transition.start, this.transition.end, ease);
                     if (this.transition.progress >= 1.0) {
                         this.transition.active = false;
                     }
                 } else {
-                    this.gltfModel.position.copy(S.manualModelPosition);
+                    finalPosition.copy(S.manualModelPosition);
                 }
             }
+        }
+
+        // Apply final position
+        if(!S.modelAutopilotOn || (S.modelAutopilotOn && !ap.holdTimer > 0)) {
+             this.gltfModel.position.copy(finalPosition);
         }
 
         if (S.enableModelSpin && !S.modelAutopilotOn) {

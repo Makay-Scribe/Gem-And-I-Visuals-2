@@ -9,6 +9,7 @@ export const ImagePlaneManager = {
     // --- State ---
     landscape: null,
     landscapeMaterial: null,
+    boundingBox: new THREE.Box3(), // Added a bounding box for collision detection
     
     planeDimensions: new THREE.Vector2(40, 40),
     planeResolution: new THREE.Vector2(128, 128),
@@ -102,6 +103,12 @@ export const ImagePlaneManager = {
         this.transition.progress = 0;
         this.transition.start.copy(this.landscape.position);
         this.transition.end.copy(this.homePosition);
+    },
+
+    updateBoundingBox() {
+        if (!this.landscape) return;
+        this.landscape.geometry.computeBoundingBox();
+        this.boundingBox.copy(this.landscape.geometry.boundingBox).applyMatrix4(this.landscape.matrixWorld);
     },
 
     createMaterials() {
@@ -289,10 +296,7 @@ export const ImagePlaneManager = {
         }
         
         if (S.enableLandscapeSpin && !S.landscapeAutopilotOn) {
-            const orientation = S.planeOrientation;
-            if (orientation === 'xy') { this.landscape.rotation.z -= S.landscapeSpinSpeed * cappedDelta; } 
-            else if (orientation === 'xz') { this.landscape.rotation.y -= S.landscapeSpinSpeed * cappedDelta; } 
-            else if (orientation === 'yz') { this.landscape.rotation.x -= S.landscapeSpinSpeed * cappedDelta; }
+            this.landscape.rotation.z -= S.landscapeSpinSpeed * cappedDelta;
         }
 
         if (this.app.ComputeManager) {
@@ -300,5 +304,6 @@ export const ImagePlaneManager = {
         }
         
         this.updateDeformationUniforms();
+        this.updateBoundingBox(); // Update the bounding box every frame
     }
 };
