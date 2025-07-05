@@ -22,7 +22,7 @@ export const UIManager = {
             const el = document.getElementById(key);
             if (el && !el.closest('#cameraOptions')) { 
                 if (el.type === 'checkbox') el.checked = this.app.vizSettings[key];
-                else el.value = this.app.vizSettings[key];
+                else if (el.type !== 'range') el.value = this.app.vizSettings[key];
             }
         });
 
@@ -317,7 +317,17 @@ export const UIManager = {
             if (el) el.addEventListener('change', (e) => this.handleFileSelect(e, id));
         });
 
-        document.querySelectorAll('input:not([type="file"]), select').forEach(control => {
+        // ** THE FIX IS HERE **
+        // Listen to the GPGPU Debugger checkbox specifically.
+        const gpgpuDebugCheckbox = document.getElementById('enableGPGPUDebugger');
+        if (gpgpuDebugCheckbox) {
+            gpgpuDebugCheckbox.addEventListener('change', (e) => {
+                this.app.vizSettings.enableGPGPUDebugger = e.target.checked;
+            });
+        }
+
+
+        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select').forEach(control => {
             if (control.closest('#cameraOptions')) return;
             
             control.addEventListener('input', (e) => {

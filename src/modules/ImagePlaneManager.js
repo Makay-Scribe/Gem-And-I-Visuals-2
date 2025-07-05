@@ -9,8 +9,9 @@ export const ImagePlaneManager = {
     // --- State ---
     landscape: null,
     landscapeMaterial: null,
-    boundingBox: new THREE.Box3(), // Added a bounding box for collision detection
+    boundingBox: new THREE.Box3(),
     
+    // This is now the single source of truth for plane geometry
     planeDimensions: new THREE.Vector2(40, 40),
     planeResolution: new THREE.Vector2(128, 128),
 
@@ -43,6 +44,9 @@ export const ImagePlaneManager = {
         this.app = appInstance;
         this.raycaster = new THREE.Raycaster();
         
+        // This will be called again in createDefaultLandscape, but it's good to have it early.
+        this.updatePlaneDimensions(); 
+
         if (this.app.ComputeManager) {
             this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
         } else {
@@ -57,6 +61,12 @@ export const ImagePlaneManager = {
         this.createDefaultLandscape();
         
         this.landscape.position.copy(this.homePosition);
+    },
+
+    updatePlaneDimensions() {
+        const baseSize = 40;
+        const aspectRatio = parseFloat(this.app.vizSettings.planeAspectRatio) || 1.0;
+        this.planeDimensions.set(baseSize * aspectRatio, baseSize);
     },
 
     startAutopilot(presetId) {
@@ -146,11 +156,21 @@ export const ImagePlaneManager = {
     },
     
     createDefaultLandscape() {
+        // ** THE FIX IS HERE **
+        // 1. Update dimensions based on the latest aspect ratio setting.
+        this.updatePlaneDimensions();
+
+        // 2. Re-initialize the ComputeManager with the new dimensions.
+        if (this.app.ComputeManager) {
+            this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
+        }
+
         if (this.landscape) {
             this.app.scene.remove(this.landscape);
             if (this.landscape.geometry) this.landscape.geometry.dispose();
         }
         
+        // 3. Create the new geometry with the correct dimensions.
         const landGeom = new THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
         
         const uvCount = this.planeResolution.x * this.planeResolution.y;
@@ -208,7 +228,14 @@ export const ImagePlaneManager = {
     
     applyOrientation() {
         if (!this.landscape) return;
+        const S = this.app.vizSettings;
         this.landscape.rotation.set(0, 0, 0);
+
+        if (S.planeOrientation === 'xz') { // Floor
+            this.landscape.rotateX(-Math.PI / 2);
+        } else if (S.planeOrientation === 'yz') { // Side Wall
+            this.landscape.rotateY(Math.PI / 2);
+        }
     },
 
     updateDeformationUniforms() {
@@ -243,6 +270,7 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const ap = this.autopilot;
 
+        this.applyOrientation();
         this.landscape.visible = S.enableLandscape;
 
         if (!this.landscape.visible) {
@@ -304,6 +332,6 @@ export const ImagePlaneManager = {
         }
         
         this.updateDeformationUniforms();
-        this.updateBoundingBox(); // Update the bounding box every frame
+        this.updateBoundingBox();
     }
 };

@@ -57,7 +57,6 @@ export const BackgroundManager = {
         this.app.backgroundPlane = new THREE.Mesh(bgGeom, this.app.shaderMaterial);
         this.app.backgroundScene.add(this.app.backgroundPlane);
 
-        // --- SETUP FOR LIVE REFLECTIONS ("SHADERBOX") ---
         const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(256, {
             format: THREE.RGBAFormat,
             generateMipmaps: true,
@@ -65,9 +64,8 @@ export const BackgroundManager = {
         });
 
         this.cubeCamera = new THREE.CubeCamera(1, 1000, cubeRenderTarget);
-        this.app.backgroundScene.add(this.cubeCamera); // Add to the background scene to capture it
+        this.app.backgroundScene.add(this.cubeCamera);
 
-        // Set the live render target as the main reflection texture
         this.app.hdrTexture = this.cubeCamera.renderTarget.texture;
     },
 
@@ -133,19 +131,17 @@ export const BackgroundManager = {
 
     render() {
         const bgMode = this.app.vizSettings.backgroundMode;
-        this.app.backgroundPlane.visible = false;
-        
         let isBackgroundActive = false;
 
-        if (bgMode === 'shader' && this.app.shaderMaterial) {
-            this.app.backgroundPlane.material = this.app.shaderMaterial;
+        if (bgMode === 'shader' || bgMode === 'butterchurn') {
+             this.app.backgroundPlane.material = (bgMode === 'shader') 
+                ? this.app.shaderMaterial 
+                : this.app.butterchurnMaterial;
+            
             this.app.backgroundPlane.visible = true;
             isBackgroundActive = true;
-        } else if (bgMode === 'butterchurn' && this.app.butterchurnMaterial) {
-            this.app.backgroundPlane.material = this.app.butterchurnMaterial;
-            this.app.backgroundPlane.visible = true;
-            isBackgroundActive = true;
-            if (this.app.ButterchurnManager.visualizer) {
+
+            if (bgMode === 'butterchurn' && this.app.ButterchurnManager.visualizer) {
                 const updateInterval = Math.max(1, Math.floor(11 - this.app.vizSettings.butterchurnSpeed));
                 if (this.app.frame % updateInterval === 0) {
                     this.app.ButterchurnManager.render();
@@ -154,28 +150,23 @@ export const BackgroundManager = {
                     }
                 }
             }
+        } else {
+            this.app.backgroundPlane.visible = false;
         }
 
         // --- LIVE REFLECTION CAPTURE ---
         if (isBackgroundActive && this.app.vizSettings.enableReflections) {
-            // Point the cube camera at the background plane and update its render target
             this.cubeCamera.update(this.app.renderer, this.app.backgroundScene);
-            // The result is automatically available in this.app.hdrTexture for other managers
             this.app.scene.environment = this.app.hdrTexture;
         } else {
-            // If reflections are off or there's no background, disable the environment
             this.app.scene.environment = null;
         }
         
         // --- RENDER VISIBLE BACKGROUND ---
+        // This function no longer calls .clear() or .setClearColor().
+        // It is only responsible for drawing the background plane if it's active.
         if (isBackgroundActive) {
             this.app.renderer.render(this.app.backgroundScene, this.app.backgroundCamera);
-        } else if (bgMode === 'greenscreen') {
-            this.app.renderer.setClearColor(new this.app.THREE.Color('#00ff00'));
-            this.app.renderer.clear();
-        } else {
-            this.app.renderer.setClearColor(new this.app.THREE.Color('#000000'));
-            this.app.renderer.clear();
         }
     }
 };

@@ -1,87 +1,95 @@
 import * as THREE from 'three';
 
+// --- SHADER CODE IS NOW INLINED HERE ---
+
+const gpgpuDebugVertexShader = `
+    varying vec2 vUv;
+
+    void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`;
+
+const gpgpuDebugFragmentShader = `
+    uniform sampler2D tDebug; 
+    uniform vec2 u_planeDimensions;
+
+    varying vec2 vUv;
+
+    float remap(float value, float from1, float to1, float from2, float to2) {
+        // Add a check to prevent division by zero
+        if (to1 - from1 == 0.0) return from2;
+        return from2 + (value - from1) * (to2 - from2) / (to1 - from1);
+    }
+
+    void main() {
+        // --- ORIGINAL CODE RE-ENABLED ---
+        vec4 data = texture2D(tDebug, vUv);
+
+        float halfWidth = u_planeDimensions.x / 2.0;
+        float halfHeight = u_planeDimensions.y / 2.0;
+
+        // Remap X position (-halfWidth to +halfWidth) to Red channel (0 to 1)
+        float r = remap(data.x, -halfWidth, halfWidth, 0.0, 1.0);
+
+        // Remap Y position (-halfHeight to +halfHeight) to Green channel (0 to 1)
+        float g = remap(data.y, -halfHeight, halfHeight, 0.0, 1.0);
+
+        // For the Z value, let's make 0.0 be a mid-grey (0.5)
+        // and visualize some range around it.
+        float b = remap(data.z, -5.0, 5.0, 0.0, 1.0);
+
+        gl_FragColor = vec4(r, g, b, 1.0);
+    }
+`;
+
 export const GPGPUDebugger = {
     app: null,
-    renderer: null,
-    scene: null,
-    camera: null,
     mesh: null,
     
-    // --- Configuration ---
-    size: 128,
-    margin: 10,
-
     init(appInstance) {
         this.app = appInstance;
-        this.renderer = this.app.renderer;
 
-        if (!this.app.ComputeManager || !this.renderer || !this.app.ComputeManager.gpuCompute) {
-            console.error("GPGPUDebugger: ComputeManager or Renderer not available on init.");
+        if (!this.app.ComputeManager || !this.app.ComputeManager.gpuCompute) {
+            console.error("GPGPUDebugger: ComputeManager not available on init.");
             return;
         }
 
-        this.scene = new THREE.Scene();
+        const geometry = new THREE.PlaneGeometry(10, 10);
         
-        this.camera = new THREE.OrthographicCamera(
-            -this.size / 2, this.size / 2, 
-             this.size / 2, -this.size / 2, 
-             1, 1000
-        );
-        this.camera.position.z = 100;
-
-        const geometry = new THREE.PlaneGeometry(this.size, this.size);
-        
-        // As a diagnostic, let's start with a bright red color.
-        // If we see a red square, we know the rendering is correct.
-        const material = new THREE.MeshBasicMaterial({
-            color: 0xff0000,
+        const material = new THREE.ShaderMaterial({
+            vertexShader: gpgpuDebugVertexShader,
+            fragmentShader: gpgpuDebugFragmentShader,
+            uniforms: {
+                tDebug: { value: null },
+                u_planeDimensions: { value: this.app.ImagePlaneManager.planeDimensions }
+            },
             side: THREE.DoubleSide
         });
 
         this.mesh = new THREE.Mesh(geometry, material);
-        this.scene.add(this.mesh);
+        
+        // ** THE FIX IS HERE **
+        // Positioned it to the left of the center.
+        this.mesh.position.set(-15, 0, 5); 
 
-        console.log("GPGPU Debugger initialized.");
+        this.app.scene.add(this.mesh);
+
+        console.log("GPGPU Debugger re-initialized as a 3D object in the main scene.");
     },
 
     update() {
-        // The only job of update is to make sure the material is showing the latest texture.
-        if (!this.app.vizSettings.enableGPGPUDebugger || !this.mesh || !this.app.ComputeManager.gpuCompute) {
-            return;
+        if (!this.mesh) return;
+
+        this.mesh.visible = this.app.vizSettings.enableGPGPUDebugger;
+
+        if (this.mesh.visible && this.app.ComputeManager.gpuCompute) {
+            this.mesh.material.uniforms.tDebug.value = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable).texture;
         }
-        
-        // Point the material's map to the live GPGPU texture.
-        this.mesh.material.map = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable).texture;
-        this.mesh.material.color.set(0xffffff); // Set to white to see texture colors.
-        this.mesh.material.needsUpdate = true;
     },
 
-    // NEW: A dedicated render function to be called by the main loop.
     render() {
-        if (!this.app.vizSettings.enableGPGPUDebugger || !this.mesh) {
-            return;
-        }
-        
-        const { width, height } = this.renderer.domElement;
-        
-        // Save state
-        const currentViewport = new THREE.Vector4();
-        this.renderer.getViewport(currentViewport);
-        const currentScissor = new THREE.Vector4();
-        this.renderer.getScissor(currentScissor);
-        const isScissorTest = this.renderer.getScissorTest();
-
-        // Set viewport for top-left corner
-        this.renderer.setViewport(this.margin, height - this.size - this.margin, this.size, this.size);
-        this.renderer.setScissor(this.margin, height - this.size - this.margin, this.size, this.size);
-        this.renderer.setScissorTest(true);
-
-        // Render the debug scene
-        this.renderer.render(this.scene, this.camera);
-
-        // Restore state
-        this.renderer.setViewport(currentViewport);
-        this.renderer.setScissor(currentScissor);
-        this.renderer.setScissorTest(isScissorTest);
+        // This function is intentionally empty.
     }
 };
