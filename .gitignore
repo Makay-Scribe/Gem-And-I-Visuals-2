@@ -23,5 +23,9 @@ pnpm-debug.log*
  /public/3dmodel
  /public/hdri
 
+# VSCode
+.vscode/
+!.vscode/tasks.json
 
- .history/
+# Editor History
+.history/
