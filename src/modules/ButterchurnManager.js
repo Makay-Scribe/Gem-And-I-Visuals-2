@@ -1,4 +1,4 @@
-const ButterchurnManager = {
+export const ButterchurnManager = {
     app: null, // This will be set to the main App instance on init
     visualizer: null, 
     visualizerCanvas: null, 
@@ -8,19 +8,19 @@ const ButterchurnManager = {
     
     init(appInstance) {
         this.app = appInstance;
-        // Wait for the libraries to be ready before loading presets.
+        // The UIManager is now responsible for populating its own list.
+        // This manager just needs to provide the preset list when asked.
         this._waitForLibraries();
     },
 
     _waitForLibraries() {
         const checkInterval = setInterval(() => {
-            // Updated check to look for the 'default' export which contains the library functions.
             if (window.butterchurn && window.butterchurn.default && window.butterchurnPresets) {
-                clearInterval(checkInterval); // Stop checking
-                console.log("Butterchurn libraries and default export loaded. Initializing presets.");
-                this.loadPresetListOnly(); // Now it's safe to load the presets
+                clearInterval(checkInterval);
+                console.log("Butterchurn libraries and default export loaded.");
+                this.loadPresetListOnly();
             }
-        }, 100); // Check every 100ms
+        }, 100);
     },
 
     _getPresetsFromSource(sourceName) {
@@ -44,25 +44,24 @@ const ButterchurnManager = {
         const allPresets = this._getAllPresets();
         this.presetKeys = Object.keys(allPresets);
         this.presetKeys.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-        this.app.UIManager.filterButterchurnPresets();
+        
+        // The error occurred here. We remove the call to the non-existent UIManager function.
+        // The UIManager will now pull this data when it needs it.
+        // this.app.UIManager.filterButterchurnPresets(); 
     },
 
     connectAudio(audioContext, audioSourceNode) {
-        // If the visualizer already exists, just reconnect the audio.
         if (this.visualizer) { 
             this.visualizer.connectAudio(audioSourceNode); 
             return; 
         }
 
-        // The library seems to be packaged as a module, so the actual library object
-        // is in the `default` property of the global `window.butterchurn` object.
         const bc = window.butterchurn?.default;
 
-        // Updated check to look for `createVisualizer` on the `default` export.
         if (typeof bc?.createVisualizer !== 'function') {
-            this.app.UIManager.logError("Butterchurn is not ready. Try again in a moment.");
-            console.error("Attempted to init Butterchurn, but `createVisualizer` is not a function. Current state of `window.butterchurn`:", window.butterchurn);
-            return; // Stop execution to prevent a crash.
+            if (this.app.UIManager) this.app.UIManager.logError("Butterchurn is not ready. Try again in a moment.");
+            console.error("Attempted to init Butterchurn, but `createVisualizer` is not a function.");
+            return;
         }
 
         console.log("Creating new Butterchurn visualizer instance.");
@@ -71,11 +70,9 @@ const ButterchurnManager = {
         this.visualizerCanvas.height = 512;
         
         if (this.app.butterchurnMaterial) {
-            // THREE needs to be imported here if used directly, or accessed via this.app.THREE
-            const THREE = this.app.THREE; 
-            this.app.butterchurnTexture = new THREE.CanvasTexture(this.visualizerCanvas);
-            this.app.butterchurnTexture.minFilter = THREE.LinearFilter; 
-            this.app.butterchurnTexture.magFilter = THREE.LinearFilter;
+            this.app.butterchurnTexture = new this.app.THREE.CanvasTexture(this.visualizerCanvas);
+            this.app.butterchurnTexture.minFilter = this.app.THREE.LinearFilter; 
+            this.app.butterchurnTexture.magFilter = this.app.THREE.LinearFilter;
             this.app.butterchurnMaterial.map = this.app.butterchurnTexture;
             this.app.butterchurnMaterial.color.set(this.app.vizSettings.butterchurnTintColor);
             this.app.butterchurnMaterial.opacity = this.app.vizSettings.butterchurnOpacity;
@@ -91,8 +88,7 @@ const ButterchurnManager = {
             }
             this.loadPresetByIndex(this.currentPresetIndex);
         } else { 
-            this.app.UIManager.logError("No Butterchurn presets found."); 
-            document.getElementById('butterchurnCurrentPresetName').textContent = "No Presets Loaded"; 
+            if (this.app.UIManager) this.app.UIManager.logError("No Butterchurn presets found."); 
         }
         
         this.updateCycleInterval();
@@ -103,11 +99,12 @@ const ButterchurnManager = {
         
         this.currentPresetIndex = index;
         const presetKey = this.presetKeys[index];
-        document.getElementById('butterchurnCurrentPresetName').textContent = presetKey.split(" - ").pop();
         
-        const presetListElement = document.getElementById('butterchurnPresetList');
-        if (presetListElement) { 
-            presetListElement.value = index; 
+        // This manager should not directly touch the DOM. We'll let UIManager handle this.
+        // document.getElementById('butterchurnCurrentPresetName').textContent = presetKey.split(" - ").pop();
+        
+        if (this.app.UIManager) {
+            this.app.UIManager.updateButterchurnPresetDisplay(presetKey, index);
         }
         
         if (this.visualizer) {
@@ -120,18 +117,14 @@ const ButterchurnManager = {
 
     nextPreset() {
         if (this.presetKeys.length === 0) return;
-        const listElement = document.getElementById('butterchurnPresetList');
-        const currentIndexInList = Array.from(listElement.options).findIndex(opt => parseInt(opt.value) === this.currentPresetIndex);
-        const nextOption = listElement.options[currentIndexInList + 1];
-        this.loadPresetByIndex(parseInt(nextOption ? nextOption.value : listElement.options[0].value));
+        let newIndex = (this.currentPresetIndex + 1) % this.presetKeys.length;
+        this.loadPresetByIndex(newIndex);
     },
 
     prevPreset() {
         if (this.presetKeys.length === 0) return;
-        const listElement = document.getElementById('butterchurnPresetList');
-        const currentIndexInList = Array.from(listElement.options).findIndex(opt => parseInt(opt.value) === this.currentPresetIndex);
-        const prevOption = listElement.options[currentIndexInList - 1];
-        this.loadPresetByIndex(parseInt(prevOption ? prevOption.value : listElement.options[listElement.options.length - 1].value));
+        let newIndex = (this.currentPresetIndex - 1 + this.presetKeys.length) % this.presetKeys.length;
+        this.loadPresetByIndex(newIndex);
     },
 
     randomPreset() {
@@ -158,5 +151,3 @@ const ButterchurnManager = {
         } 
     }
 };
-
-export { ButterchurnManager };
