@@ -50,19 +50,6 @@ export const UIManager = {
         this.toggleLightSliders();
         this.updateCameraControlsVisibility(); 
         this.updateSliderStates(); // Set initial state of sliders
-        this.openAllAccordionsForDev(); // Open panels for easy dev access
-    },
-
-    openAllAccordionsForDev() {
-        // This function opens all top-level accordions on startup for easier development.
-        console.log("Opening all accordions for development mode.");
-        document.querySelectorAll('.controls-panel > .accordion-item > .accordion-content').forEach(content => {
-            if (content) {
-                content.classList.add('open');
-                // Set max-height to its natural scroll height to make it visible
-                content.style.maxHeight = content.scrollHeight + 'px';
-            }
-        });
     },
 
     setTransitioning(isTransitioning) {
@@ -786,7 +773,8 @@ export const UIManager = {
                 break;
             case 'hdriInput': 
                 this.updateFileNameDisplay('hdri', file.name);
-                if (this.app.SceneManager) this.app.SceneManager.loadHDRI(file);
+                // The loadHDRI function is now in BackgroundManager for live reflections
+                if (this.app.BackgroundManager) this.app.BackgroundManager.loadHDRI(file);
                 break;
             case 'gltfModelInput':
                 this.updateFileNameDisplay('gltf', file.name);

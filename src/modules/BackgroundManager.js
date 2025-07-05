@@ -1,8 +1,10 @@
+import * as THREE from 'three';
 import backgroundVertexShader from '../rendering/shaders/background.vert?raw';
 import backgroundFragmentShader from '../rendering/shaders/background.frag?raw';
 
 export const BackgroundManager = {
     app: null, // Will be set on init
+    cubeCamera: null, // Will capture the live background for reflections
 
     init(appInstance) {
         this.app = appInstance;
@@ -15,7 +17,6 @@ export const BackgroundManager = {
         
         const bgPlaceholderTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 
-        // FIX: Create a minimal, valid default fragment shader to prevent startup errors.
         const defaultFragShader = `
             out vec4 outColor;
             void main() {
@@ -25,7 +26,7 @@ export const BackgroundManager = {
 
         this.app.shaderMaterial = new THREE.ShaderMaterial({
             vertexShader: backgroundVertexShader,
-            fragmentShader: defaultFragShader, // Use the valid default shader initially
+            fragmentShader: defaultFragShader, 
             uniforms: {
                 iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                 iTime: { value: 0.0 },
@@ -55,6 +56,19 @@ export const BackgroundManager = {
 
         this.app.backgroundPlane = new THREE.Mesh(bgGeom, this.app.shaderMaterial);
         this.app.backgroundScene.add(this.app.backgroundPlane);
+
+        // --- SETUP FOR LIVE REFLECTIONS ("SHADERBOX") ---
+        const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(256, {
+            format: THREE.RGBAFormat,
+            generateMipmaps: true,
+            minFilter: THREE.LinearMipmapLinearFilter,
+        });
+
+        this.cubeCamera = new THREE.CubeCamera(1, 1000, cubeRenderTarget);
+        this.app.backgroundScene.add(this.cubeCamera); // Add to the background scene to capture it
+
+        // Set the live render target as the main reflection texture
+        this.app.hdrTexture = this.cubeCamera.renderTarget.texture;
     },
 
     updateShader(fragmentShaderCode) {
@@ -63,7 +77,6 @@ export const BackgroundManager = {
             return;
         }
 
-        // Now, we build the full shader using our wrapper template and inject the user's code.
         const fullFragmentShader = backgroundFragmentShader.replace(
             '// SHADERTOY_CODE_GOES_HERE',
             fragmentShaderCode
@@ -121,13 +134,17 @@ export const BackgroundManager = {
     render() {
         const bgMode = this.app.vizSettings.backgroundMode;
         this.app.backgroundPlane.visible = false;
+        
+        let isBackgroundActive = false;
+
         if (bgMode === 'shader' && this.app.shaderMaterial) {
             this.app.backgroundPlane.material = this.app.shaderMaterial;
             this.app.backgroundPlane.visible = true;
-            this.app.renderer.render(this.app.backgroundScene, this.app.backgroundCamera);
+            isBackgroundActive = true;
         } else if (bgMode === 'butterchurn' && this.app.butterchurnMaterial) {
             this.app.backgroundPlane.material = this.app.butterchurnMaterial;
             this.app.backgroundPlane.visible = true;
+            isBackgroundActive = true;
             if (this.app.ButterchurnManager.visualizer) {
                 const updateInterval = Math.max(1, Math.floor(11 - this.app.vizSettings.butterchurnSpeed));
                 if (this.app.frame % updateInterval === 0) {
@@ -137,6 +154,21 @@ export const BackgroundManager = {
                     }
                 }
             }
+        }
+
+        // --- LIVE REFLECTION CAPTURE ---
+        if (isBackgroundActive && this.app.vizSettings.enableReflections) {
+            // Point the cube camera at the background plane and update its render target
+            this.cubeCamera.update(this.app.renderer, this.app.backgroundScene);
+            // The result is automatically available in this.app.hdrTexture for other managers
+            this.app.scene.environment = this.app.hdrTexture;
+        } else {
+            // If reflections are off or there's no background, disable the environment
+            this.app.scene.environment = null;
+        }
+        
+        // --- RENDER VISIBLE BACKGROUND ---
+        if (isBackgroundActive) {
             this.app.renderer.render(this.app.backgroundScene, this.app.backgroundCamera);
         } else if (bgMode === 'greenscreen') {
             this.app.renderer.setClearColor(new this.app.THREE.Color('#00ff00'));

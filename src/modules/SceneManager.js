@@ -11,16 +11,8 @@ export const SceneManager = {
         // This prevents it from drawing a solid color over our dedicated background scene.
         this.app.scene.background = null;
 
-        // Basic lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        this.app.scene.add(ambientLight);
-
-        this.app.directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        this.app.directionalLight.position.set(5, 10, 7.5);
-        this.app.scene.add(this.app.directionalLight);
-        
-        // Environment map loading is temporarily disabled to prevent WebGL warnings.
-        // We will re-enable this in a more controlled way later.
+        // The scene's lighting environment will now be set by the BackgroundManager
+        // which will handle loading the HDRI for reflections.
         this.app.scene.environment = null; 
         console.log("SceneManager initialized. Main scene background is transparent.");
     },

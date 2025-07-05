@@ -34,9 +34,7 @@ export const ModelManager = {
             // onProgress (optional)
             (xhr) => {
                 const percentComplete = (xhr.loaded / xhr.total) * 100;
-                // console.log(`Model loading: ${Math.round(percentComplete)}%`);
                 if (this.app.UIManager) {
-                    // Avoid spamming the log
                     if (percentComplete === 100) {
                         this.app.UIManager.logSuccess(`Model '${path.split('/').pop()}' processed.`);
                     }
@@ -51,15 +49,12 @@ export const ModelManager = {
     },
     
     onModelLoad(gltf) {
-        // First, dispose of the old model if it exists
         if (this.gltfModel) {
             this.app.scene.remove(this.gltfModel);
-            // Proper disposal would go here (geometry, material)
         }
 
         this.gltfModel = gltf.scene;
 
-        // Scale and position the model
         const box = new THREE.Box3().setFromObject(this.gltfModel);
         const size = box.getSize(new THREE.Vector3());
         const scale = 10 / Math.max(size.x, size.y, size.z);
@@ -67,7 +62,6 @@ export const ModelManager = {
         
         this.gltfModel.position.set(0, 0, 0); // Center it initially
 
-        // Set up animations
         if (gltf.animations && gltf.animations.length) {
             this.app.animationMixer = new THREE.AnimationMixer(this.gltfModel);
             const action = this.app.animationMixer.clipAction(gltf.animations[0]);
@@ -76,20 +70,13 @@ export const ModelManager = {
             this.app.animationMixer = null;
         }
 
-        // Apply custom material settings
         this.gltfModel.traverse((child) => {
             if (child.isMesh) {
                 child.material.metalness = this.app.vizSettings.metalness;
                 child.material.roughness = this.app.vizSettings.roughness;
-                
-                // This is a good place for other material adjustments
             }
         });
         
-        // FIX: The function updateEnvironment was removed from SceneManager.
-        // This call is no longer needed as we are not using PBR environment maps for now.
-        // this.app.SceneManager.updateEnvironment(this.gltfModel);
-
         this.app.scene.add(this.gltfModel);
         console.log("GLTF Model loaded and added to scene.");
 
@@ -97,9 +84,24 @@ export const ModelManager = {
             this.app.UIManager.logSuccess("3D Model loaded successfully.");
         }
     },
+    
+    // NEW: Function to be called by UIManager
+    setPositionFromSliders(distance, height) {
+        if (this.gltfModel) {
+            // The sliders will now control the model's position in world space.
+            // A larger "distance" value moves it further from the camera's default home.
+            this.gltfModel.position.set(0, height, distance);
+        }
+    },
 
     update(delta) {
-        if (this.app.vizSettings.enableModelSpin && this.gltfModel) {
+        // Toggle visibility based on the camera target and the master enable switch
+        if (this.gltfModel) {
+            const isModelTarget = this.app.vizSettings.cameraTarget === 'model';
+            this.gltfModel.visible = isModelTarget && this.app.vizSettings.enableModel;
+        }
+
+        if (this.app.vizSettings.enableModelSpin && this.gltfModel && this.gltfModel.visible) {
             this.gltfModel.rotation.y += this.app.vizSettings.modelSpinSpeed * delta;
         }
         // Autopilot logic will go here...
@@ -108,7 +110,6 @@ export const ModelManager = {
     returnToHome() {
         this.autopilot.active = false;
         if (this.gltfModel) {
-            // Simple return for now, can be a transition later
             this.gltfModel.position.set(0, 0, 0);
             this.gltfModel.rotation.set(0, 0, 0);
         }

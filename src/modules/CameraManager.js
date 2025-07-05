@@ -20,19 +20,16 @@ export const CameraManager = {
     init(appInstance) {
         this.app = appInstance;
         
-        // --- FIX: Create the camera FIRST ---
-        // Create the main camera and add it to the app instance.
         const fov = this.app.vizSettings.cameraFOV;
         const aspect = window.innerWidth / window.innerHeight;
         const near = 0.1;
         const far = 2000;
         this.app.camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-        this.app.camera.position.set(0, 0, 30); // Set initial position
-        this.app.scene.add(this.app.camera); // Add camera to the scene
+        this.app.camera.position.set(0, 0, 30); 
+        this.app.scene.add(this.app.camera); 
 
         console.log("Camera created and added to the scene.");
 
-        // --- Now create the controls, using the camera we just made ---
         this._controls = new OrbitControls(this.app.camera, this.app.renderer.domElement);
         this._controls.enableDamping = true;
         this._controls.dampingFactor = 0.05;
@@ -48,21 +45,30 @@ export const CameraManager = {
     setMode(mode) {
         if (!this._controls) return;
         this.app.vizSettings.cameraControlMode = mode;
+        this._autopilot.active = false; 
+        
         switch (mode) {
             case 'manual':
-                this._controls.enabled = true;
-                this._autopilot.active = false;
-                break;
             case 'autopilot':
+                // In these modes, the camera is passive. The mouse should not control it.
                 this._controls.enabled = false;
-                this._autopilot.active = true;
                 break;
-            // Add other cases as needed
+            case 'freelook':
+                // In this mode, the mouse has full control.
+                this._controls.enabled = true;
+                break;
         }
     },
 
     update(delta) {
-        if (this._autopilot.active) {
+        const S = this.app.vizSettings;
+        
+        // This manager no longer moves the camera based on sliders.
+        // It only handles freelook updates, master transitions, and autopilot.
+
+        if (S.cameraControlMode === 'freelook') {
+            if(this.app.UIManager) this.app.UIManager.updateFreeLookSlidersFromCamera();
+        } else if (this._autopilot.active) {
             // Autopilot logic will go here
         }
         
@@ -79,17 +85,16 @@ export const CameraManager = {
             }
         }
         
-        if (this._controls.enabled) {
-            this._controls.update();
-        }
+        // Always update controls to apply damping.
+        this._controls.update();
     },
 
     returnToHome() {
         this._masterReturnTransition.active = true;
-        this._masterReturnTransition.targetPos.set(0, this.app.vizSettings.cameraHeight, this.app.vizSettings.cameraDistance);
-        // --- FIX: Corrected typo from _masteroposition to _masterReturnTransition ---
-        this._masterReturnTransition.targetLook.set(0, this.app.vizSettings.cameraLookAtY, 0);
+        // Use a fixed home position, not one derived from sliders.
+        this._masterReturnTransition.targetPos.set(0, 0, 30);
+        this._masterReturnTransition.targetLook.set(0, 0, 0);
         this.setMode('manual');
-        this._controls.enabled = false; // Disable user control during transition
+        this._controls.enabled = false;
     }
 };

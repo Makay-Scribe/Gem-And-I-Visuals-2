@@ -38,7 +38,6 @@ export const ImagePlaneManager = {
         const placeholderMapTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
         placeholderMapTexture.needsUpdate = true;
 
-        // **FIX**: The GPGPU renderer provides its own render targets. We must use those.
         const positionRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
         const normalRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.normalVariable);
 
@@ -46,7 +45,6 @@ export const ImagePlaneManager = {
         this.landscapeMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 u_map: { value: placeholderMapTexture }, 
-                // **FIX**: Assign the .texture property of the render targets, not the initial textures.
                 u_positionTexture: { value: positionRenderTarget.texture }, 
                 u_normalTexture: { value: normalRenderTarget.texture },   
                 u_metalness: { value: S.metalness },
@@ -61,7 +59,8 @@ export const ImagePlaneManager = {
                 u_ambientLightColor: { value: new THREE.Color(S.ambientLightColor) },
                 u_lightDirection: { value: new THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
                 u_cameraPosition: { value: this.app.camera.position },
-                t_envMap: { value: this.app.placeholderEnvMap },
+                // Use the app-level hdrTexture which is now guaranteed to exist
+                t_envMap: { value: this.app.hdrTexture }, 
             },
             vertexShader: landscapeRenderVertexShader,
             fragmentShader: landscapeRenderFragmentShader,
@@ -167,6 +166,7 @@ export const ImagePlaneManager = {
         U.u_metalness.value = S.metalness;
         U.u_roughness.value = S.roughness;
         U.u_envMapIntensity.value = S.reflectionStrength;
+        // This now correctly updates every frame with the latest HDRI
         U.t_envMap.value = this.app.hdrTexture; 
         U.u_cameraPosition.value = this.app.camera.position;
 
