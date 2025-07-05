@@ -28,7 +28,6 @@ const App = {
     hdrTexture: null, audioTexture: null,
     placeholderEnvMap: null,
     backgroundScene: null, backgroundCamera: null, backgroundPlane: null,
-    // **NEW**: Dedicated scene for the landscape
     landscapeScene: null, 
     shaderMaterial: null, butterchurnMaterial: null, butterchurnTexture: null,
     guideLaser: null, directionalLight: null, ambientLight: null,
@@ -45,7 +44,6 @@ const App = {
     isTransitioning: false,
     transitionTarget: null, 
 
-    // --- MANAGERS ---
     UIManager: UIManager,
     ButterchurnManager: ButterchurnManager,
     AudioProcessor: AudioProcessor,
@@ -69,6 +67,7 @@ const App = {
         enableModelDistanceMinus: false,
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
+        enableShaderMouse: false, // <-- New setting for mouse control
         shaderAudioLink: false,
         shaderAudioSource: 'lows',
         shaderAudioStrength: 1.0,
@@ -137,8 +136,9 @@ const App = {
         toneMappingExposure: 1.0,
         enableReflections: true,
         reflectionStrength: 1.0,
-        lightColor: "#FFF5E1",
-        ambientLightColor: "#663300",
+        // FIX: Set default light colors to white
+        lightColor: "#ffffff",
+        ambientLightColor: "#ffffff",
         lightDirectionX: 0.5, lightDirectionY: 0.8, lightDirectionZ: 0.5,
         enableLightOrbit: true, lightOrbitSpeed: 0.2, enableGuideLaser: false,
         cameraControlMode: 'manual', 
@@ -158,16 +158,18 @@ const App = {
     async preloadDevAssets() {
         console.log("Attempting to preload developer assets...");
         try {
-            const audioResponse = await fetch('/Devmedia/Devaudio.mp3');
+            // FIX: Updated path to load audio file from /public/ directory.
+            const audioPath = '/WH21 #9 42825-music.mp3';
+            const audioResponse = await fetch(audioPath);
             if (!audioResponse.ok) throw new Error(`HTTP error! Status: ${audioResponse.status}`);
             const audioBlob = await audioResponse.blob();
-            const audioFile = new File([audioBlob], 'Devaudio.mp3', { type: 'audio/mpeg' });
+            const audioFile = new File([audioBlob], audioPath.split('/').pop(), { type: 'audio/mpeg' });
             this.AudioProcessor.loadAudioFile(audioFile);
-            this.UIManager.updateFileNameDisplay('audio', 'Devaudio.mp3');
-            console.log("Preloaded Devaudio.mp3 successfully.");
+            this.UIManager.updateFileNameDisplay('audio', audioPath.split('/').pop());
+            console.log(`Preloaded ${audioPath} successfully.`);
         } catch (error) {
-            console.warn(`Could not preload Devaudio.mp3: ${error.message}. App will start without it.`);
-            if (this.UIManager) this.UIManager.logError(`Devaudio.mp3 preload failed: ${error.message.substring(0, 100)}...`);
+            console.warn(`Could not preload development audio: ${error.message}. App will start without it.`);
+            if (this.UIManager) this.UIManager.logError(`Dev audio preload failed: ${error.message.substring(0, 100)}...`);
         }
         try {
             const imageResponse = await fetch('/Devmedia/Devimage.jpeg');
@@ -187,7 +189,6 @@ const App = {
         this.vizSettings = { ...this.defaultVisualizerSettings };
         this.vizSettings.autopilotSpeeds = { ...this.defaultVisualizerSettings.autopilotSpeeds };
         
-        // --- GLOBAL ERROR HANDLING ---
         window.onerror = (message, source, lineno, colno, error) => {
             console.error("Uncaught Error (Global Handler):", message, source, lineno, colno, error);
             const displayMessage = `Runtime Error: ${message.toString().substring(0, 150)}...`;
@@ -201,7 +202,6 @@ const App = {
             if (this.UIManager) this.UIManager.logError(displayMessage);
             event.preventDefault(); 
         };
-        // --- END GLOBAL ERROR HANDLING ---
 
         this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('glCanvas'), antialias: true, powerPreference: "high-performance" });
         this.renderer.setPixelRatio(window.devicePixelRatio); this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -210,18 +210,28 @@ const App = {
         this.renderer.toneMapping = toneMappingOptions[this.vizSettings.toneMappingMode] || THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
 
-        // **FIX**: Correct Initialization Order
+        const planeWidth = 20;
+        const planeHeight = 20;
+        const planeResX = 128;
+        const planeResY = 128;
+
         if (this.SceneManager) this.SceneManager.init(this);
         else console.error("FATAL: SceneManager not found.");
         
+        if (this.CameraManager) this.CameraManager.init(this);
+        else console.error("FATAL: CameraManager not found.");
+        
         if (this.UIManager) this.UIManager.init(this);
         else console.error("FATAL: UIManager not found. Cannot initialize application.");
+        
+        if (this.ComputeManager) this.ComputeManager.init(this, planeWidth, planeHeight, planeResX, planeResY);
+        else console.error("FATAL: ComputeManager not found.");
 
+        if (this.ImagePlaneManager) this.ImagePlaneManager.init(this, planeWidth, planeHeight, planeResX, planeResY);
+        else console.error("FATAL: ImagePlaneManager not found.");
+        
         if (this.BackgroundManager) this.BackgroundManager.init(this);
         else console.error("FATAL: BackgroundManager not found.");
-        
-        if (this.ImagePlaneManager) this.ImagePlaneManager.init(this);
-        else console.error("FATAL: ImagePlaneManager not found.");
 
         if (this.ModelManager) this.ModelManager.init(this);
         else console.error("FATAL: ModelManager not found.");
@@ -236,11 +246,9 @@ const App = {
         else console.error("FATAL: ShaderManager not found.");
 
         
-        // **FIX**: Delay asset loading to prevent initialization race conditions
         setTimeout(() => {
             this.preloadDevAssets();
             
-            // Load default shader from our new preset list
             const defaultShaderCode = this.shaderPresets['presetBg1'];
             if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
                 console.log("Loading default background shader preset...");
@@ -260,10 +268,26 @@ const App = {
                 this.ModelManager.loadGLTFModel(modelPreset.path);
                 if (this.UIManager) this.UIManager.updateFileNameDisplay('gltf', modelPreset.name);
             }
-        }, 100); // 100ms delay
+        }, 100);
 
 
         window.addEventListener('resize', this.onWindowResize.bind(this));
+        
+        // Add mouse listeners that are conditional on the new setting
+        window.addEventListener('mousemove', (event) => {
+            if (!this.vizSettings.enableShaderMouse) return;
+            this.mouseState.x = event.clientX;
+            this.mouseState.y = event.clientY;
+        });
+        window.addEventListener('mousedown', () => {
+            if (!this.vizSettings.enableShaderMouse) return;
+            this.mouseState.z = 1;
+        });
+        window.addEventListener('mouseup', () => {
+            if (!this.vizSettings.enableShaderMouse) return;
+            this.mouseState.z = 0;
+        });
+        
         this.animate();
     },
 
@@ -317,8 +341,17 @@ const App = {
         this.frame++;
         
         if (this.AudioProcessor) this.AudioProcessor.updateAudioData();
+        
+        if (this.ComputeManager) this.ComputeManager.update(cappedDelta);
+        
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         if (this.ModelManager) this.ModelManager.update(cappedDelta);
+        
+        if (this.ImagePlaneManager && this.ImagePlaneManager.material && this.ComputeManager && this.ComputeManager.gpuCompute) {
+            this.ImagePlaneManager.material.uniforms.u_positionTexture.value = 
+                this.ComputeManager.gpuCompute.getCurrentRenderTarget(this.ComputeManager.positionVariable).texture;
+        }
+
         if (this.ImagePlaneManager) this.ImagePlaneManager.update(cappedDelta);
         
         if (this.isTransitioning) {
@@ -336,7 +369,9 @@ const App = {
         }
         if (this.CameraManager) this.CameraManager.update(cappedDelta); 
         if (this.SceneManager) this.SceneManager.update(cappedDelta);
-        if (this.BackgroundManager) this.BackgroundManager.update();
+        if (this.BackgroundManager) {
+            this.BackgroundManager.update();
+        }
 
         this.renderer.clear();
         if (this.BackgroundManager) this.BackgroundManager.render();

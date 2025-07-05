@@ -373,6 +373,16 @@ export const UIManager = {
     },
 
     setupEventListeners() {
+        // FIX: Add listener for the new shader mouse control checkbox
+        const enableShaderMouseEl = document.getElementById('enableShaderMouse');
+        if (enableShaderMouseEl) {
+            enableShaderMouseEl.addEventListener('input', (e) => {
+                this.app.vizSettings.enableShaderMouse = e.target.checked;
+            });
+        } else {
+            console.warn("UIManager.setupEventListeners: #enableShaderMouse not found.");
+        }
+
         const toggleMicInput = document.getElementById('toggleMicInput');
         if (toggleMicInput) toggleMicInput.addEventListener('click', () => this.app.AudioProcessor.startMic());
         else console.warn("UIManager.setupEventListeners: #toggleMicInput not found.");
@@ -474,7 +484,7 @@ export const UIManager = {
         const enableModelDistanceMinus = document.getElementById('enableModelDistanceMinus');
         if (enableModelDistancePlus && enableModelDistanceMinus) {
             enableModelDistancePlus.addEventListener('change', (e) => { if (e.target.checked) { enableModelDistanceMinus.checked = false; this.app.vizSettings.enableModelDistanceMinus = false; }});
-            enableModelDistanceMinus.addEventListener('change', (e) => { if (e.target.checked) { enableModelDistancePlus.checked = false; this.app.vizSettings.enableModelDistancePlus = false; }});
+            enableModelDistanceMinus.addEventListener('change', (e) => { if (e.target.checked) { enableModelDistancePlus.checked = false; this.app.vizSettings.enableFovPlus = false; }});
         }
 
         this.setupButterchurnEventListeners();

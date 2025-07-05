@@ -1,11 +1,26 @@
-precision highp float; 
+// These uniforms are provided by BackgroundManager.js
+uniform vec3 iResolution;
+uniform float iTime;
+uniform vec4 iMouse;
+uniform float iAudioVolume;
+uniform float iAudioLow;
+uniform float iAudioMid;
+uniform float iAudioHigh;
+uniform float iBeat;
+uniform sampler2D iChannel0;
+uniform sampler2D iChannel1;
+uniform sampler2D iChannel2;
+uniform sampler2D iChannel3;
 
-uniform vec3 iResolution; 
-uniform float iTime; 
-varying vec2 vUv; 
+out vec4 outColor;
 
-void main() { 
-  vec2 p = vUv * 2.0 - 1.0; 
-  vec3 col = 0.5 + 0.5 * cos(iTime + p.xyx + vec3(0,2,4)); 
-  gl_FragColor = vec4(col,1.0); 
+// The mainImage function will be defined by the user's shader code.
+// It is injected here by replacing the placeholder comment below.
+// SHADERTOY_CODE_GOES_HERE
+
+void main() {
+    // We call the mainImage function from the user's shader code.
+    vec4 fragColor;
+    mainImage(fragColor, gl_FragCoord.xy);
+    outColor = fragColor;
 }

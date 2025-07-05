@@ -8,21 +8,24 @@ export const BackgroundManager = {
         this.app = appInstance;
         const THREE = this.app.THREE;
 
-        // Create the dedicated scene and camera for the background
         this.app.backgroundScene = new THREE.Scene();
         this.app.backgroundCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-        // Create the plane that will cover the screen
         const bgGeom = new THREE.PlaneGeometry(2, 2);
         
-        // Create a placeholder texture for shader channels to prevent errors
         const bgPlaceholderTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 
-        // --- Create Materials ---
-        // ShaderToy-compatible material
+        // FIX: Create a minimal, valid default fragment shader to prevent startup errors.
+        const defaultFragShader = `
+            out vec4 outColor;
+            void main() {
+                outColor = vec4(0.0, 0.0, 0.0, 1.0); // Start with a black screen
+            }
+        `;
+
         this.app.shaderMaterial = new THREE.ShaderMaterial({
             vertexShader: backgroundVertexShader,
-            fragmentShader: backgroundFragmentShader,
+            fragmentShader: defaultFragShader, // Use the valid default shader initially
             uniforms: {
                 iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                 iTime: { value: 0.0 },
@@ -39,10 +42,10 @@ export const BackgroundManager = {
                 iChannel2: { value: bgPlaceholderTexture.clone() },
                 iChannel3: { value: bgPlaceholderTexture.clone() },
                 iChannelResolution: { value: [new THREE.Vector3(1, 1, 1), new THREE.Vector3(1, 1, 1), new THREE.Vector3(1, 1, 1), new THREE.Vector3(1, 1, 1)] }
-            }
+            },
+            glslVersion: THREE.GLSL3
         });
 
-        // Butterchurn material
         this.app.butterchurnMaterial = new THREE.MeshBasicMaterial({
             color: 0x000000,
             depthTest: false,
@@ -50,9 +53,24 @@ export const BackgroundManager = {
             transparent: true
         });
 
-        // Create the mesh and add it to the background scene
         this.app.backgroundPlane = new THREE.Mesh(bgGeom, this.app.shaderMaterial);
         this.app.backgroundScene.add(this.app.backgroundPlane);
+    },
+
+    updateShader(fragmentShaderCode) {
+        if (!this.app.shaderMaterial) {
+            console.error("BackgroundManager: shaderMaterial not initialized.");
+            return;
+        }
+
+        // Now, we build the full shader using our wrapper template and inject the user's code.
+        const fullFragmentShader = backgroundFragmentShader.replace(
+            '// SHADERTOY_CODE_GOES_HERE',
+            fragmentShaderCode
+        );
+        
+        this.app.shaderMaterial.fragmentShader = fullFragmentShader;
+        this.app.shaderMaterial.needsUpdate = true;
     },
 
     onWindowResize() {
@@ -62,12 +80,9 @@ export const BackgroundManager = {
     },
 
     update() {
-        // This method will be responsible for updating uniforms and rendering the background pass
         const S = this.app.vizSettings;
         const A = this.app.AudioProcessor;
         const THREE = this.app.THREE;
-
-        // --- Uniform Updates for ShaderToy Background ---
         if (this.app.shaderMaterial && this.app.shaderMaterial.uniforms.iTime) {
             const u = this.app.shaderMaterial.uniforms;
             const d = new Date();
@@ -93,7 +108,7 @@ export const BackgroundManager = {
                 u.iAudioHigh.value = A.energy.high * S.shaderAudioStrength;
                 u.iBeat.value = A.triggers.beat ? 1.0 * S.shaderAudioStrength : 0.0;
 
-            } else { // If not linked, ensure all audio uniforms are zero
+            } else {
                 u.iAudioVolume.value = 0.0;
                 u.iAudioLow.value = 0.0;
                 u.iAudioMid.value = 0.0;
@@ -104,10 +119,8 @@ export const BackgroundManager = {
     },
 
     render() {
-        // This method handles the actual rendering of the background
         const bgMode = this.app.vizSettings.backgroundMode;
-        this.app.backgroundPlane.visible = false; // Hide by default
-
+        this.app.backgroundPlane.visible = false;
         if (bgMode === 'shader' && this.app.shaderMaterial) {
             this.app.backgroundPlane.material = this.app.shaderMaterial;
             this.app.backgroundPlane.visible = true;
@@ -128,7 +141,7 @@ export const BackgroundManager = {
         } else if (bgMode === 'greenscreen') {
             this.app.renderer.setClearColor(new this.app.THREE.Color('#00ff00'));
             this.app.renderer.clear();
-        } else { // 'black' or default
+        } else {
             this.app.renderer.setClearColor(new this.app.THREE.Color('#000000'));
             this.app.renderer.clear();
         }
