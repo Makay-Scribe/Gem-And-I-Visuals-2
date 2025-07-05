@@ -65,16 +65,15 @@ export const AudioProcessor = {
             this.muteNode.connect(this.audioContext.destination);
             this.butterchurnGainNode.connect(this.muteNode);
             this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
-            // Check if SceneManager and createAudioTexture exist before calling
             if (this.app.SceneManager && typeof this.app.SceneManager.createAudioTexture === 'function') {
                 this.app.SceneManager.createAudioTexture();
             } else {
-                this.app.UIManager.logError("SceneManager.createAudioTexture not available. Audio texture won't be created.");
+                if(this.app.UIManager) this.app.UIManager.logError("SceneManager.createAudioTexture not available. Audio texture won't be created.");
             }
             return true;
         } catch (e) {
             console.error("Could not initialize AudioContext.", e);
-            this.app.UIManager.updateAudioStatus('error', "Audio failed.");
+            if(this.app.UIManager) this.app.UIManager.updateAudioStatus('error', "Audio failed.");
             return false;
         }
     },
@@ -141,8 +140,14 @@ export const AudioProcessor = {
             this.audioElement.onpause = () => this.app.UIManager.updateAudioStatus('file_paused');
             this.connectButterchurn();
         }
-        if (this.audioElement.paused) this.audioElement.play();
-        else this.audioElement.pause();
+        if (this.audioElement.paused) {
+            this.audioElement.play().catch(e => {
+                // This catch block prevents the harmless "not suitable" error from polluting the console.
+                console.warn("Audio playback failed to start automatically. User may need to click again.", e.message);
+            });
+        } else {
+            this.audioElement.pause();
+        }
     },
 
     toggleTestTone() {
@@ -183,7 +188,7 @@ export const AudioProcessor = {
             if (this.app.ButterchurnManager && typeof this.app.ButterchurnManager.connectAudio === 'function') {
                 this.app.ButterchurnManager.connectAudio(this.audioContext, this.butterchurnGainNode);
             } else {
-                this.app.UIManager.logError("ButterchurnManager not available to connect audio.");
+                if(this.app.UIManager) this.app.UIManager.logError("ButterchurnManager not available to connect audio.");
             }
         }
     },
@@ -206,7 +211,6 @@ export const AudioProcessor = {
         const n = this.analyser.frequencyBinCount;
         const norm = 1 / 255.0;
 
-        // --- Reverted Energy Calculation ---
         const lowEnd = Math.floor(n * 0.15);
         const midStart = Math.floor(n * 0.15);
         const midEnd = Math.floor(n * 0.50);
@@ -224,7 +228,6 @@ export const AudioProcessor = {
         this.energy.high = (highSum / (n - highStart)) * norm || 0;
         this.energy.overall = (this.energy.low + this.energy.mid + this.energy.high) / 3.0;
 
-        // --- FINAL ADAPTIVE BEAT DETECTION ---
         const currentMidEnergy = this.energy.mid;
         
         let historySum = 0;
@@ -234,8 +237,6 @@ export const AudioProcessor = {
         const averageEnergy = historySum / this._HISTORY_LENGTH;
         const dynamicThreshold = averageEnergy * this.app.vizSettings.joltSensitivity;
 
-        // ** THE "TWO BOUNCER" FIX **
-        // A beat must be above the minimum noise gate AND the dynamic threshold.
         if (currentMidEnergy > this._MINIMUM_BEAT_ENERGY &&
             currentMidEnergy > dynamicThreshold && 
            (this.app.currentTime - this._beatTime > this._onsetTimeout)) 

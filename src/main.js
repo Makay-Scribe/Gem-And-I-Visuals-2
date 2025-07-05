@@ -24,12 +24,12 @@ const App = {
         'modelPreset4': { name: 'School of Fish', path: '/3dmodel/converted/School of fish.glb' },
         'modelPreset5': { name: 'Walking Astronaut', path: '/3dmodel/converted/Walking astronaut.glb' },
         'modelPreset6': { name: 'Banana Gun', path: '/3dmodel/converted/Banana Gun with Scope.glb' },
-        'modelPreset7': { name: 'Dancing Planet', path: '/3dmodel/converted/Dancing planet.glb' },      // Doubled up
-        'modelPreset8': { name: 'Swimming Shark', path: '/3dmodel/converted/Swimming shark.glb' },      // Doubled up
-        'modelPreset9': { name: 'Flying Pterodactyl', path: '/3dmodel/converted/Flying pterodactyl.glb' },// Doubled up
-        'modelPreset10': { name: 'School of Fish', path: '/3dmodel/converted/School of fish.glb' },     // Doubled up
-        'modelPreset11': { name: 'Walking Astronaut', path: '/3dmodel/converted/Walking astronaut.glb' },// Doubled up
-        'modelPreset12': { name: 'Banana Gun', path: '/3dmodel/converted/Banana Gun with Scope.glb' },   // Doubled up
+        'modelPreset7': { name: 'Dancing Planet', path: '/3dmodel/converted/Dancing planet.glb' },
+        'modelPreset8': { name: 'Swimming Shark', path: '/3dmodel/converted/Swimming shark.glb' },
+        'modelPreset9': { name: 'Flying Pterodactyl', path: '/3dmodel/converted/Flying pterodactyl.glb' },
+        'modelPreset10': { name: 'School of Fish', path: '/3dmodel/converted/School of fish.glb' },
+        'modelPreset11': { name: 'Walking Astronaut', path: '/3dmodel/converted/Walking astronaut.glb' },
+        'modelPreset12': { name: 'Banana Gun', path: '/3dmodel/converted/Banana Gun with Scope.glb' },
     },
     shaderAudioValue: 0.0,
     hdrTexture: null, audioTexture: null,
@@ -50,6 +50,7 @@ const App = {
     },
     vizSettings: {},
 
+    // --- MANAGERS ---
     UIManager: UIManager,
     ButterchurnManager: ButterchurnManager,
     AudioProcessor: AudioProcessor,
@@ -63,28 +64,39 @@ const App = {
     GPGPUDebugger: GPGPUDebugger,
 
     defaultVisualizerSettings: {
-        activeControl: 'landscape',
+        // Master Controls
+        activeControl: 'landscape', // 'landscape' or 'model'
         landscapeAutopilotOn: false,
         modelAutopilotOn: false,
         activeLandscapePreset: null,
         activeModelPreset: null,
+        
+        // Manual Positions for each actor (controlled by sliders)
         manualLandscapePosition: new THREE.Vector3(0, 0, -5),
-        manualModelPosition: new THREE.Vector3(0, 5, 5),
+        manualModelPosition: new THREE.Vector3(0, 5, 5), // Changed Z to be in front
+
+        // Autopilot/Shared Properties
         landscapeScale: 1.0,
         modelScale: 1.0,
         landscapeAutopilotSpeed: 1.0,
         modelAutopilotSpeed: 1.0,
+        
+        // Model-Specific
         enableModel: true,
         enableModelSpin: false,
         modelSpinSpeed: 0.0,
         enableModelDistancePlus: false,
         enableModelDistanceMinus: false,
+
+        // Landscape-Specific
         enableLandscape: true,
         enableLandscapeSpin: false,
         landscapeSpinSpeed: 0.0,
         planeAspectRatio: '1.0',
         planeOrientation: 'xy',
         deformationStrength: 1.5,
+        
+        // Background
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
         enableShaderMouse: false,
@@ -95,8 +107,12 @@ const App = {
         butterchurnSpeed: 1, butterchurnAudioInfluence: 1.0, butterchurnBlendTime: 5.0,
         butterchurnTintColor: '#ffffff', butterchurnOpacity: 1.0,
         butterchurnEnableCycle: false, butterchurnCycleTime: 15,
+        
+        // Audio
         audioSmoothing: 0.8,
         testToneMode: 'dynamicPulse',
+
+        // Material & Lighting
         metalness: 1.0,
         roughness: 0.10,
         enablePBRColor: true,
@@ -108,6 +124,8 @@ const App = {
         ambientLightColor: "#ffffff",
         lightDirectionX: 0.5, lightDirectionY: 0.8, lightDirectionZ: 0.5,
         enableLightOrbit: true, lightOrbitSpeed: 0.2, enableGuideLaser: false,
+        
+        // GPGPU Debug
         enableGPGPUDebugger: true, 
     },
 
@@ -180,10 +198,11 @@ const App = {
         this.ModelManager.init(this);
         this.ButterchurnManager.init(this);
         this.ShaderManager.init(this);
-        this.GPGPUDebugger.init(this);
         
+        // Initialize UIManager before GPGPUDebugger
         this.UIManager.init(this);
-
+        // Initialize GPGPUDebugger last, as it might depend on a fully initialized UI state
+        this.GPGPUDebugger.init(this);
         
         setTimeout(() => {
             this.preloadDevAssets();
@@ -274,12 +293,12 @@ const App = {
         this.SceneManager.update(cappedDelta);
         
         this.BackgroundManager.update();
-        
+        this.GPGPUDebugger.update();
+
         this.renderer.clear();
         this.BackgroundManager.render();
         this.renderer.clearDepth();
         this.renderer.render(this.scene, this.camera);
-        
         this.GPGPUDebugger.render();
     }
 };

@@ -394,24 +394,136 @@ export const UIManager = {
         });
         canvas.addEventListener('mousemove', e => { if (this.app.mouseState.z > 0) { this.app.mouseState.x = e.offsetX; this.app.mouseState.y = canvas.clientHeight - e.offsetY; } });
     },
-    
+
     setupButterchurnEventListeners() {
-        // ... implementation
+        const speedSlider = document.getElementById('butterchurnSpeed');
+        if (speedSlider) speedSlider.addEventListener('input', (e) => { this.app.vizSettings.butterchurnSpeed = parseInt(e.target.value); this.updateRangeDisplay('butterchurnSpeed', e.target.value); });
+        
+        const audioInfluence = document.getElementById('butterchurnAudioInfluence');
+        if (audioInfluence) audioInfluence.addEventListener('input', (e) => { this.app.vizSettings.butterchurnAudioInfluence = parseFloat(e.target.value); this.updateRangeDisplay('butterchurnAudioInfluence', e.target.value); if (this.app.AudioProcessor.butterchurnGainNode) this.app.AudioProcessor.butterchurnGainNode.gain.value = e.target.value; });
+        
+        const blendTime = document.getElementById('butterchurnBlendTime');
+        if (blendTime) blendTime.addEventListener('input', (e) => { this.app.vizSettings.butterchurnBlendTime = parseFloat(e.target.value); this.updateRangeDisplay('butterchurnBlendTime', e.target.value); });
+        
+        const cycleTime = document.getElementById('butterchurnCycleTime');
+        if (cycleTime) cycleTime.addEventListener('input', (e) => { this.app.vizSettings.butterchurnCycleTime = parseFloat(e.target.value); this.updateRangeDisplay('butterchurnCycleTime', e.target.value); this.app.ButterchurnManager.updateCycleInterval(); });
+        
+        const opacitySlider = document.getElementById('butterchurnOpacity');
+        if (opacitySlider) opacitySlider.addEventListener('input', (e) => { this.app.vizSettings.butterchurnOpacity = parseFloat(e.target.value); this.updateRangeDisplay('butterchurnOpacity', e.target.value); if(this.app.butterchurnMaterial) this.app.butterchurnMaterial.opacity = e.target.value; });
+        
+        const tintColor = document.getElementById('butterchurnTintColor');
+        if (tintColor) tintColor.addEventListener('input', (e) => { this.app.vizSettings.butterchurnTintColor = e.target.value; if(this.app.butterchurnMaterial) this.app.butterchurnMaterial.color.set(e.target.value); });
+        
+        const enableCycle = document.getElementById('butterchurnEnableCycle');
+        if (enableCycle) enableCycle.addEventListener('change', (e) => { this.app.vizSettings.butterchurnEnableCycle = e.target.checked; this.app.ButterchurnManager.updateCycleInterval(); });
+        
+        document.getElementById('butterchurnPrevPreset').addEventListener('click', () => this.app.ButterchurnManager.prevPreset());
+        document.getElementById('butterchurnRandomPreset').addEventListener('click', () => this.app.ButterchurnManager.randomPreset());
+        document.getElementById('butterchurnNextPreset').addEventListener('click', () => this.app.ButterchurnManager.nextPreset());
+        document.getElementById('butterchurnSearchButton').addEventListener('click', () => this.filterButterchurnPresets());
+        document.getElementById('butterchurnPresetSearch').addEventListener('keyup', (e) => { if (e.key === 'Enter') this.filterButterchurnPresets(); });
+        document.getElementById('butterchurnPresetList').addEventListener('change', (e) => { const selectedIndex = parseInt(e.target.value); if (!isNaN(selectedIndex)) this.app.ButterchurnManager.loadPresetByIndex(selectedIndex); });
     },
+
     filterButterchurnPresets() {
-        // ... implementation
+        const searchTerm = document.getElementById('butterchurnPresetSearch').value.toLowerCase();
+        const listElement = document.getElementById('butterchurnPresetList');
+        const allKeys = this.app.ButterchurnManager.presetKeys;
+
+        if (!allKeys || allKeys.length === 0) {
+            listElement.innerHTML = '<option disabled>No presets loaded.</option>';
+            return;
+        }
+
+        listElement.innerHTML = '';
+        const filteredKeys = searchTerm === '' ? allKeys : allKeys.filter(key => key.toLowerCase().includes(searchTerm));
+
+        if (filteredKeys.length === 0) {
+            listElement.innerHTML = '<option disabled>No matching presets found.</option>';
+        } else {
+            filteredKeys.forEach(key => {
+                const originalIndex = allKeys.indexOf(key);
+                const option = document.createElement('option');
+                option.value = originalIndex;
+                option.textContent = key.split(" - ").pop();
+                listElement.appendChild(option);
+            });
+        }
+        
+        document.getElementById('butterchurnTotalPresets').textContent = filteredKeys.length;
+
+        const currentPresetIsVisible = filteredKeys.some(key => allKeys.indexOf(key) === this.app.ButterchurnManager.currentPresetIndex);
+        if (currentPresetIsVisible) {
+            listElement.value = this.app.ButterchurnManager.currentPresetIndex;
+        } else if (listElement.options.length > 0 && !listElement.options[0].disabled) {
+            listElement.selectedIndex = 0;
+        }
+        this.refreshAccordion(listElement);
     },
+
     updateButterchurnPresetDisplay(presetKey, index) {
-        // ... implementation
+        document.getElementById('butterchurnCurrentPresetName').textContent = presetKey.split(" - ").pop();
+        const listElement = document.getElementById('butterchurnPresetList');
+        if (listElement) listElement.value = index;
     },
+
     handleFileSelect(event, id) {
-        // ... implementation
+        const file = event.target.files[0]; 
+        if (!file) return; 
+
+        if (id.startsWith('iChannel')) {
+            const channelIndex = parseInt(id.charAt(id.length - 1));
+            this.app.ShaderManager.loadChannelTexture(channelIndex, file);
+            return;
+        }
+
+        switch (id) {
+            case 'mainTextureInput': 
+            case 'videoTextureInput':
+                this.updateFileNameDisplay(id === 'videoTextureInput' ? 'video' : 'image', file.name);
+                this.app.ImagePlaneManager.loadTexture(file);
+                this.setGlowTarget('audio');
+                break;
+            case 'audioFileInput': 
+                this.updateFileNameDisplay('audio', file.name); // THIS LINE IS THE FIX
+                if (this.app.AudioProcessor) this.app.AudioProcessor.loadAudioFile(file);
+                this.setGlowTarget('play');
+                break;
+            case 'hdriInput': 
+                this.updateFileNameDisplay('hdri', file.name);
+                if(this.app.SceneManager) this.app.SceneManager.loadHDRI(file);
+                break;
+            case 'gltfModelInput':
+                this.updateFileNameDisplay('gltf', file.name);
+                this.app.ModelManager.loadGLTFModel(file);
+                break;
+        }
     },
     updateFileNameDisplay(type, name) {
-       // ... implementation
+       const idMap = {
+            'image': 'imageFileName', 'video': 'videoFileName',
+            'audio': 'audioFileName', 'hdri': 'hdriFileName', 'gltf': 'gltfFileName'
+        };
+        const elementId = idMap[type];
+        if (elementId) {
+            const el = document.getElementById(elementId);
+            if (el) el.textContent = name;
+        }
     },
     updateAudioStatus(sourceType, statusText = '') {
-        // ... implementation
+        if (!this.audioStatusP) { return; }
+        const playButton = document.getElementById('playPauseAudioButton'); 
+        let message = '';
+        switch (sourceType) {
+            case 'none': message = "AUDIO: IDLE"; break; 
+            case 'mic': message = "AUDIO: Mic/System"; this.setGlowTarget(null); break;
+            case 'file_ready': message = "AUDIO: File Ready"; if (playButton) playButton.textContent = "Play File"; break; 
+            case 'file_playing': message = "AUDIO: Playing"; if (playButton) playButton.textContent = "Pause File"; break; 
+            case 'file_paused': message = "AUDIO: Paused"; if (playButton) playButton.textContent = "Play File"; break; 
+            case 'testTone': message = "AUDIO: Test Tone"; this.setGlowTarget(null); break;
+            case 'error': message = `ERROR: ${statusText}`; break;
+        }
+        this.audioStatusP.textContent = message;
     },
     setupEQCanvas() {
         this.eqCanvas = document.getElementById('eqVisualizerCanvas'); 
