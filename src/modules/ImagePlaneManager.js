@@ -25,6 +25,11 @@ export const ImagePlaneManager = {
 
     autopilot: {
         active: false,
+        isTransitioningIn: false,
+        transitionStartPos: new THREE.Vector3(),
+        transitionStartQuat: new THREE.Quaternion(),
+        transitionProgress: 0,
+        transitionDuration: 10.0,
     },
 
     init(appInstance) {
@@ -47,12 +52,32 @@ export const ImagePlaneManager = {
         this.landscape.position.copy(this.homePosition);
     },
 
+    startAutopilot(presetId) {
+        if (!this.landscape) return;
+        const ap = this.autopilot;
+        
+        ap.isTransitioningIn = true;
+        ap.transitionProgress = 0;
+        ap.transitionStartPos.copy(this.landscape.position);
+        ap.transitionStartQuat.copy(this.landscape.quaternion);
+        ap.active = false; // Stop current logic immediately
+        ap.mode = presetId;
+        console.log(`Landscape autopilot started with preset: ${presetId}`);
+    },
+
+    stopAutopilot() {
+        this.autopilot.active = false;
+        this.autopilot.isTransitioningIn = false;
+        this.autopilot.mode = null;
+        console.log("Landscape autopilot stopped.");
+    },
+
     returnToHome() {
         if (!this.landscape) {
             this.transition.active = false;
             return;
         }
-        // this.stopAutopilot();
+        this.stopAutopilot();
         this.transition.active = true;
         this.transition.progress = 0;
         this.transition.start.copy(this.landscape.position);
@@ -189,18 +214,30 @@ export const ImagePlaneManager = {
     update(cappedDelta) {
         if (!this.landscape) return;
         const S = this.app.vizSettings;
+        const ap = this.autopilot;
 
         this.landscape.visible = S.enableLandscape;
 
         if (!this.landscape.visible) {
-            // if(this.autopilot.active) this.stopAutopilot();
+            if(ap.active) this.stopAutopilot();
             return;
         }
 
         this.landscape.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
+        const speed = S.landscapeAutopilotSpeed;
         
-        if (S.landscapeAutopilotOn) {
-            // Autopilot logic will go here
+        if (ap.isTransitioningIn) {
+            ap.transitionProgress = Math.min(1.0, ap.transitionProgress + (cappedDelta * speed) / ap.transitionDuration);
+            const ease = 0.5 - 0.5 * Math.cos(ap.transitionProgress * Math.PI);
+            this.landscape.position.lerpVectors(ap.transitionStartPos, this.homePosition, ease);
+            this.landscape.quaternion.slerpQuaternions(ap.transitionStartQuat, new THREE.Quaternion(), ease);
+            if (ap.transitionProgress >= 1.0) {
+                ap.isTransitioningIn = false;
+                ap.active = true;
+                // Waypoint generation will go here
+            }
+        } else if (S.landscapeAutopilotOn && ap.active) {
+            // Active autopilot logic will go here
         } else {
              if (S.activeControl === 'landscape') {
                 if (this.transition.active) {
@@ -217,10 +254,7 @@ export const ImagePlaneManager = {
         }
         
         if (S.enableLandscapeSpin && !S.landscapeAutopilotOn) {
-            const orientation = S.planeOrientation;
-            if (orientation === 'xy') { this.landscape.rotation.z -= S.landscapeSpinSpeed * cappedDelta; } 
-            else if (orientation === 'xz') { this.landscape.rotation.y -= S.landscapeSpinSpeed * cappedDelta; } 
-            else if (orientation === 'yz') { this.landscape.rotation.x -= S.landscapeSpinSpeed * cappedDelta; }
+            this.landscape.rotation.z -= S.landscapeSpinSpeed * cappedDelta;
         }
 
         if (this.app.ComputeManager) {

@@ -123,7 +123,6 @@ const App = {
     async preloadDevAssets() {
         console.log("Attempting to preload developer assets...");
         try {
-            // FIX: Updated path to load audio file from /public/ directory.
             const audioPath = '/WH21 #9 42825-music.mp3';
             const audioResponse = await fetch(audioPath);
             if (!audioResponse.ok) throw new Error(`HTTP error! Status: ${audioResponse.status}`);
@@ -151,9 +150,7 @@ const App = {
     },
 
     init() {
-        // Deep copy the default settings to prevent mutation
         this.vizSettings = JSON.parse(JSON.stringify(this.defaultVisualizerSettings));
-        // Re-create Vector3 objects as they are not cloned by JSON methods
         this.vizSettings.manualLandscapePosition = new THREE.Vector3().copy(this.defaultVisualizerSettings.manualLandscapePosition);
         this.vizSettings.manualModelPosition = new THREE.Vector3().copy(this.defaultVisualizerSettings.manualModelPosition);
         
@@ -183,7 +180,6 @@ const App = {
         const planeResX = 128;
         const planeResY = 128;
 
-        // Initialize managers in dependency order
         this.SceneManager.init(this);
         this.CameraManager.init(this);
         this.AudioProcessor.init(this);
@@ -195,7 +191,6 @@ const App = {
         this.ShaderManager.init(this);
         this.GPGPUDebugger.init(this);
         
-        // UIManager is last as it needs other managers to be ready
         this.UIManager.init(this);
 
         
@@ -245,12 +240,9 @@ const App = {
 
     switchActiveControl(newControlTarget) {
         if (this.vizSettings.activeControl === newControlTarget) return;
-
         const oldTarget = this.vizSettings.activeControl;
-        
         if (oldTarget === 'landscape') this.ImagePlaneManager.returnToHome();
         else if (oldTarget === 'model') this.ModelManager.returnToHome();
-        
         this.vizSettings.activeControl = newControlTarget;
         this.UIManager.updateMasterControls();
     },
@@ -273,38 +265,31 @@ const App = {
         
         const S = this.vizSettings;
         
+        // UPDATE LOGIC
         this.AudioProcessor.updateAudioData();
         this.ComputeManager.update(cappedDelta);
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
-        
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
         
-        // Determine the camera's look-at target based on the active control
         let lookAtTargetPosition;
         if (S.activeControl === 'landscape') {
-            lookAtTargetPosition = this.ImagePlaneManager.landscape.position;
-        } else { // 'model'
+            lookAtTargetPosition = this.ImagePlaneManager.landscape ? this.ImagePlaneManager.landscape.position : new THREE.Vector3();
+        } else {
             lookAtTargetPosition = this.ModelManager.gltfModel ? this.ModelManager.gltfModel.position : new THREE.Vector3();
         }
         this.CameraManager.setLookAt(lookAtTargetPosition);
-
         this.CameraManager.update(cappedDelta); 
         this.SceneManager.update(cappedDelta);
         this.BackgroundManager.update();
+        this.GPGPUDebugger.update(); // Update the debugger's texture map
 
-        // --- Render sequence ---
+        // RENDER SEQUENCE
         this.renderer.clear();
-        
-        // 1. Render background first
         this.BackgroundManager.render();
-        
-        // 2. Clear only the depth buffer before rendering the main scene on top
         this.renderer.clearDepth();
         this.renderer.render(this.scene, this.camera);
-        
-        // 3. Render the debugger last so it appears on top
-        this.GPGPUDebugger.update();
+        this.GPGPUDebugger.render(); // Explicitly render the debugger last
     }
 };
 

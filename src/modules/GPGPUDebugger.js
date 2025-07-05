@@ -8,14 +8,13 @@ export const GPGPUDebugger = {
     mesh: null,
     
     // --- Configuration ---
-    size: 128,      // On-screen size in pixels
-    margin: 10,     // Margin from the edge of the screen
+    size: 128,
+    margin: 10,
 
     init(appInstance) {
         this.app = appInstance;
         this.renderer = this.app.renderer;
 
-        // Don't initialize if the core components aren't ready
         if (!this.app.ComputeManager || !this.renderer || !this.app.ComputeManager.gpuCompute) {
             console.error("GPGPUDebugger: ComputeManager or Renderer not available on init.");
             return;
@@ -23,7 +22,6 @@ export const GPGPUDebugger = {
 
         this.scene = new THREE.Scene();
         
-        // Use an OrthographicCamera for a 2D, pixel-perfect view
         this.camera = new THREE.OrthographicCamera(
             -this.size / 2, this.size / 2, 
              this.size / 2, -this.size / 2, 
@@ -33,12 +31,10 @@ export const GPGPUDebugger = {
 
         const geometry = new THREE.PlaneGeometry(this.size, this.size);
         
-        // The material's map will be the GPGPU texture.
-        // We get the initial texture to start with.
-        const positionTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable).texture;
-
+        // As a diagnostic, let's start with a bright red color.
+        // If we see a red square, we know the rendering is correct.
         const material = new THREE.MeshBasicMaterial({
-            map: positionTexture,
+            color: 0xff0000,
             side: THREE.DoubleSide
         });
 
@@ -49,33 +45,41 @@ export const GPGPUDebugger = {
     },
 
     update() {
-        // Don't render if disabled via the UI or if not properly initialized
+        // The only job of update is to make sure the material is showing the latest texture.
         if (!this.app.vizSettings.enableGPGPUDebugger || !this.mesh || !this.app.ComputeManager.gpuCompute) {
             return;
         }
-
-        // CRITICAL: On each frame, update the material's map to point to the *current* 
-        // result of the GPGPU computation. This is how we see the live changes.
+        
+        // Point the material's map to the live GPGPU texture.
         this.mesh.material.map = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable).texture;
+        this.mesh.material.color.set(0xffffff); // Set to white to see texture colors.
+        this.mesh.material.needsUpdate = true;
+    },
+
+    // NEW: A dedicated render function to be called by the main loop.
+    render() {
+        if (!this.app.vizSettings.enableGPGPUDebugger || !this.mesh) {
+            return;
+        }
         
         const { width, height } = this.renderer.domElement;
-
-        // Store current renderer state so we don't interfere with the main scene
+        
+        // Save state
         const currentViewport = new THREE.Vector4();
         this.renderer.getViewport(currentViewport);
         const currentScissor = new THREE.Vector4();
         this.renderer.getScissor(currentScissor);
         const isScissorTest = this.renderer.getScissorTest();
 
-        // Set the viewport and scissor to render the debugger in the top-left corner.
+        // Set viewport for top-left corner
         this.renderer.setViewport(this.margin, height - this.size - this.margin, this.size, this.size);
         this.renderer.setScissor(this.margin, height - this.size - this.margin, this.size, this.size);
         this.renderer.setScissorTest(true);
 
-        // Render the debug scene on top of everything else.
+        // Render the debug scene
         this.renderer.render(this.scene, this.camera);
 
-        // IMPORTANT: Restore the original viewport and scissor state for the next frame's main render.
+        // Restore state
         this.renderer.setViewport(currentViewport);
         this.renderer.setScissor(currentScissor);
         this.renderer.setScissorTest(isScissorTest);
