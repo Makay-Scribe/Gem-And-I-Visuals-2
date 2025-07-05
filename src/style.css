@@ -431,7 +431,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--sub-header-hover-bg);
 }
 
-/* Autopilot Preset Button Style */
 .model-preset-buttons {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

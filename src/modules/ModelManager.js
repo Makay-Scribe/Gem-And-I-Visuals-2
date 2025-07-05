@@ -26,6 +26,7 @@ export const ModelManager = {
         transitionDuration: 10.0,
         
         mode: null,
+        subMode: null, // For multi-state presets like "Curious Observer"
         randomBounds: null,
         startPosition: new THREE.Vector3(),
         targetPosition: new THREE.Vector3(),
@@ -103,17 +104,30 @@ export const ModelManager = {
         ap.transitionStartQuat.copy(this.gltfModel.quaternion);
         ap.active = false;
         ap.mode = presetId;
-        
+        ap.subMode = null;
+
         const boundsSize = new THREE.Vector3(30, 20, 20);
         ap.randomBounds = new THREE.Box3(
             this.homePosition.clone().sub(boundsSize),
             this.homePosition.clone().add(boundsSize)
         );
+
+        if (presetId === 'autopilotPreset1') { // Close Encounter
+            ap.randomBounds.min.z = this.app.camera.position.z - 5;
+            ap.randomBounds.max.z = this.homePosition.z + 20;
+        } else if (presetId === 'autopilotPreset2') { // Curious Observer
+            ap.subMode = 'roaming';
+        } else if (presetId === 'autopilotPreset3' || presetId === 'autopilotPreset4') { // Aerobatics
+             ap.randomBounds.expandByVector(new THREE.Vector3(15, 10, 15));
+        }
         console.log(`Model autopilot started with preset: ${presetId}`);
     },
     
-    generateNewRandomWaypoint() {
+    generateNewRandomWaypoint(options = {}) {
+        const { aerobatics = false, audioReactive = false } = options;
         const ap = this.autopilot;
+        const audio = this.app.AudioProcessor;
+
         ap.startPosition.copy(this.gltfModel.position);
         ap.startQuaternion.copy(this.gltfModel.quaternion);
         
@@ -126,9 +140,42 @@ export const ModelManager = {
         const tempMatrix = new THREE.Matrix4();
         tempMatrix.lookAt(ap.targetPosition, ap.startPosition, this.gltfModel.up);
         ap.targetQuaternion.setFromRotationMatrix(tempMatrix);
+
+        if (aerobatics) {
+            let rollAmount = (Math.random() - 0.5) * Math.PI;
+            if (audioReactive && audio.triggers.beat) {
+                rollAmount = (Math.random() > 0.5 ? 1 : -1) * Math.PI * 2.5;
+            }
+            const rollQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), rollAmount);
+            ap.targetQuaternion.multiply(rollQuat);
+        }
         
         ap.transitionProgress = 0;
-        ap.holdTimer = ap.holdDuration * Math.random();
+        
+        if(audioReactive) {
+            ap.waypointTransitionDuration = Math.max(1, 15 / (1 + audio.energy.overall * 5));
+            ap.holdTimer = Math.max(0, ap.holdDuration / (1 + audio.energy.overall * 3));
+        } else {
+            ap.waypointTransitionDuration = 15.0;
+            ap.holdTimer = ap.holdDuration * Math.random();
+        }
+    },
+
+    generateObserveWaypoint() {
+        const ap = this.autopilot;
+        ap.startPosition.copy(this.gltfModel.position);
+        ap.startQuaternion.copy(this.gltfModel.quaternion);
+
+        const landscapePos = this.app.ImagePlaneManager.landscape.position;
+        const offset = new THREE.Vector3((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 10 - 5);
+        ap.targetPosition.copy(landscapePos).add(offset);
+        
+        const tempMatrix = new THREE.Matrix4();
+        tempMatrix.lookAt(landscapePos, ap.startPosition, this.gltfModel.up);
+        ap.targetQuaternion.setFromRotationMatrix(tempMatrix);
+
+        ap.transitionProgress = 0;
+        ap.holdTimer = ap.holdDuration * (1 + Math.random());
     },
 
     stopAutopilot() {
@@ -173,7 +220,7 @@ export const ModelManager = {
             if (ap.transitionProgress >= 1.0) {
                 ap.isTransitioningIn = false;
                 ap.active = true;
-                this.generateNewRandomWaypoint(); // Generate first waypoint
+                this.generateNewRandomWaypoint({ aerobatics: (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4'), audioReactive: ap.mode === 'autopilotPreset4' });
             }
         } else if (S.modelAutopilotOn && ap.active) {
             if (ap.holdTimer > 0) {
@@ -187,7 +234,13 @@ export const ModelManager = {
                 this.gltfModel.position.lerpVectors(ap.startPosition, ap.targetPosition, easeProgress);
                 this.gltfModel.quaternion.slerpQuaternions(ap.startQuaternion, ap.targetQuaternion, easeProgress);
             } else {
-                this.generateNewRandomWaypoint();
+                 if (ap.mode === 'autopilotPreset1' || ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4') {
+                    this.generateNewRandomWaypoint({ aerobatics: (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4'), audioReactive: ap.mode === 'autopilotPreset4' });
+                } else if (ap.mode === 'autopilotPreset2') {
+                    ap.subMode = (ap.subMode === 'roaming') ? 'observing' : 'roaming';
+                    if (ap.subMode === 'roaming') this.generateNewRandomWaypoint({ aerobatics: false });
+                    else this.generateObserveWaypoint();
+                }
             }
         } else {
             if (S.activeControl === 'model') {

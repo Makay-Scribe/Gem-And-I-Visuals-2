@@ -102,11 +102,11 @@ export const UIManager = {
                     if (activeControl === 'landscape') {
                         this.app.vizSettings.landscapeAutopilotOn = true;
                         this.app.vizSettings.activeLandscapePreset = buttonId;
-                        this.app.ImagePlaneManager.startAutopilot(buttonId); // HOOKED UP
+                        this.app.ImagePlaneManager.startAutopilot(buttonId);
                     } else {
                         this.app.vizSettings.modelAutopilotOn = true;
                         this.app.vizSettings.activeModelPreset = buttonId;
-                        this.app.ModelManager.startAutopilot(buttonId); // HOOKED UP
+                        this.app.ModelManager.startAutopilot(buttonId);
                     }
                     this.updateMasterControls();
                 });
@@ -276,7 +276,7 @@ export const UIManager = {
         const butterchurnControls = document.getElementById('butterchurnControls');
         if (shaderControls) shaderControls.style.display = (mode === 'shader') ? 'block' : 'none';
         if (butterchurnControls) butterchurnControls.style.display = (mode === 'butterchurn') ? 'block' : 'none';
-        if (mode === 'butterchurn' && !this.app.ButterchurnManager.visualizer) {
+        if (mode === 'butterchurn' && this.app.ButterchurnManager && !this.app.ButterchurnManager.visualizer) {
             this.app.AudioProcessor.connectButterchurn();
         }
         if (!isInitial) this.refreshAccordion(document.getElementById('backgroundMode'));
@@ -360,7 +360,7 @@ export const UIManager = {
             });
         });
         
-        for (let i = 1; i <= 3; i++) {
+        for (let i = 1; i <= 8; i++) {
             const btn = document.getElementById(`presetBg${i}`);
             if (btn) btn.addEventListener('click', () => { 
                 const shaderCode = this.app.shaderPresets[`presetBg${i}`]; 
@@ -394,34 +394,47 @@ export const UIManager = {
         });
         canvas.addEventListener('mousemove', e => { if (this.app.mouseState.z > 0) { this.app.mouseState.x = e.offsetX; this.app.mouseState.y = canvas.clientHeight - e.offsetY; } });
     },
-
+    
     setupButterchurnEventListeners() {
-        // ... (code unchanged)
+        // ... implementation
     },
-
     filterButterchurnPresets() {
-        // ... (code unchanged)
+        // ... implementation
     },
-
     updateButterchurnPresetDisplay(presetKey, index) {
-        document.getElementById('butterchurnCurrentPresetName').textContent = presetKey.split(" - ").pop();
-        const listElement = document.getElementById('butterchurnPresetList');
-        if (listElement) listElement.value = index;
+        // ... implementation
     },
-
     handleFileSelect(event, id) {
-        // ... (code unchanged)
+        // ... implementation
     },
     updateFileNameDisplay(type, name) {
-       // ... (code unchanged)
+       // ... implementation
     },
     updateAudioStatus(sourceType, statusText = '') {
-        // ... (code unchanged)
+        // ... implementation
     },
     setupEQCanvas() {
-        // ... (code unchanged)
+        this.eqCanvas = document.getElementById('eqVisualizerCanvas'); 
+        if (!this.eqCanvas) { console.warn("UIManager.setupEQCanvas: #eqVisualizerCanvas not found."); return; } 
+        this.eqCtx = this.eqCanvas.getContext('2d'); 
+        this.eqCanvas.width = this.eqCanvas.clientWidth; 
+        this.eqCanvas.height = this.eqCanvas.clientHeight; 
+        this.eqGradient = this.eqCtx.createLinearGradient(0, 0, this.eqCanvas.width, 0); 
+        this.eqGradient.addColorStop(0, '#007AFF'); 
+        this.eqGradient.addColorStop(0.5, '#5856D6'); 
+        this.eqGradient.addColorStop(1, '#FF2D55');
     },
     updateEQ(data) {
-        // ... (code unchanged)
+        if (!this.eqCtx || !data) return; 
+        const { width, height } = this.eqCanvas; 
+        this.eqCtx.clearRect(0, 0, width, height); 
+        const numBars = 64; 
+        const barWidth = width / numBars; 
+        this.eqCtx.fillStyle = this.eqGradient;
+        for (let i = 0; i < numBars; i++) { 
+            const logIndex = Math.floor(Math.pow(i / numBars, 2) * (data.length * 0.8)); 
+            const value = data[logIndex] / 255.0; 
+            if (value > 0) this.eqCtx.fillRect(i * barWidth, height - (value * height), barWidth, value * height); 
+        }
     },
 };

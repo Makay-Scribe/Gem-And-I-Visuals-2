@@ -208,42 +208,6 @@
                     <input type="number" id="modelSpinSpeed" min="-1.0" max="1.0" step="0.01" value="0.0">
                 </div>
                 
-                <p class="sub-group-title">DISTANCE OVERRIDE</p>
-                <div class="button-row">
-                    <div class="checkbox-label-container" style="justify-content: center; flex: 1;">
-                        <label for="enableModelDistanceMinus">FOV -</label>
-                        <input type="checkbox" id="enableModelDistanceMinus">
-                    </div>
-                    <div class="checkbox-label-container" style="justify-content: center; flex: 1;">
-                        <label for="enableModelDistancePlus">FOV +</label>
-                        <input type="checkbox" id="enableModelDistancePlus">
-                    </div>
-                </div>
-
-                <div class="accordion-item">
-                    <button class="accordion-header">Autopilot</button>
-                    <div class="accordion-content">
-                        <div class="checkbox-label-container">
-                            <label for="enableModelAutopilot">Enable</label>
-                            <input type="checkbox" id="enableModelAutopilot">
-                        </div>
-                        <label for="modelAutopilotMode">Mode</label>
-                        <select id="modelAutopilotMode">
-                            <option value="random" selected>Random Waypoint</option>
-                            <option value="orbitCenter">Orbit Center</option>
-                            <option value="returnHome">Return to Home</option>
-                        </select>
-                        <label>Speed: <span id="modelAutopilotSpeedValue" class="range-value-display"></span></label>
-                        <input type="range" id="modelAutopilotSpeed" min="0.01" max="1.0" step="0.01" value="0.1">
-                        
-                        <p class="sub-group-title">LIVE COORDINATES</p>
-                        <label>Distance: <span id="modelLiveDistanceValue" class="range-value-display">0.0</span></label>
-                        <input type="range" id="modelLiveDistance" min="1" max="50" step="0.1" value="20" disabled>
-                        <label>Height: <span id="modelLiveHeightValue" class="range-value-display">0.0</span></label>
-                        <input type="range" id="modelLiveHeight" min="-20" max="30" step="0.1" value="5" disabled>
-                    </div>
-                </div>
-
                 <p class="sub-group-title">ASSETS</p>
                 <div class="file-input-row">
                     <button class="browse-btn" data-target="gltfModelInput">Load Model...</button>
@@ -252,13 +216,19 @@
                 </div>
 
                 <p class="sub-group-title">MODEL PRESETS</p>
-                <div class="model-preset-buttons">
+                <div class="model-preset-grid">
                     <button id="modelPreset1">1</button>
                     <button id="modelPreset2">2</button>
                     <button id="modelPreset3">3</button>
                     <button id="modelPreset4">4</button>
                     <button id="modelPreset5">5</button>
                     <button id="modelPreset6">6</button>
+                    <button id="modelPreset7">7</button>
+                    <button id="modelPreset8">8</button>
+                    <button id="modelPreset9">9</button>
+                    <button id="modelPreset10">10</button>
+                    <button id="modelPreset11">11</button>
+                    <button id="modelPreset12">12</button>
                 </div>
             </div>
         </div>
@@ -373,10 +343,15 @@
                     </div>
                     
                     <p class="sub-group-title">PRESETS</p>
-                    <div class="button-row preset-buttons">
+                    <div class="preset-buttons">
                         <button id="presetBg1">Preset 1</button>
                         <button id="presetBg2">Preset 2</button>
                         <button id="presetBg3">Preset 3</button>
+                        <button id="presetBg4">Preset 4</button>
+                        <button id="presetBg5">Preset 5</button>
+                        <button id="presetBg6">Preset 6</button>
+                        <button id="presetBg7">Preset 7</button>
+                        <button id="presetBg8">Preset 8</button>
                     </div>
                     <div id="debugDisplay"></div>
                 </div>
