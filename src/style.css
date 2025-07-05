@@ -1,0 +1,612 @@
+:root {
+    --panel-bg: #1B1D1E;         
+    --content-bg: #1B1D1E;      
+    --header-bg: #4A586A;       
+    --header-hover-bg: #5a687a;  
+    --sub-header-bg: #004B54;    
+    --sub-header-hover-bg: #00606b;
+    --accent-color: #007AFF;     
+    --accent-color-hover: #0056b3; /* Darker blue for hover */
+    --text-color: #E0E0E0;        
+    --label-color: #AAAAAA;      
+    --border-color: #333333;     
+    --input-bg: #2C2F31;         
+    --error-bg: #5A2D2D;
+    --error-border: #FF3B30;
+    --success-bg: #2D5A3D;
+    --success-border: #34C759;
+    --button-secondary-bg: #3A3D3F; /* Grey for presets */
+    --button-secondary-hover-bg: #4A4D4F; /* Lighter grey for preset hover */
+    --highlight-color: #ffc107;  /* Added for Butterchurn preset name */
+    --reset-button-bg: #3A5943;  /* Pale yellow-green for reset */
+    --reset-button-hover-bg: #4A6953; /* Lighter version for hover */
+    --special-control-bg: #3A5943; /* Greenish-yellow for special dropdowns/buttons */
+    --special-control-hover-bg: #4A6953; /* Lighter version for hover */
+    --glow-color-yellow: rgba(255, 255, 150, 0.7); /* Color for the new glow effect */
+}
+
+/* --- GLOW ANIMATION --- */
+@keyframes slow-yellow-glow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255, 255, 150, 0);
+    }
+    50% {
+        box-shadow: 0 0 10px 2px var(--glow-color-yellow);
+    }
+}
+
+.button-glow-effect {
+    animation: slow-yellow-glow 3s ease-in-out infinite;
+    border: 1px solid var(--glow-color-yellow) !important;
+}
+
+
+/* GENERAL & LAYOUT */
+body { margin: 0; overflow: hidden; background-color: #000; color: var(--text-color); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10px; }
+canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1;}
+
+#controlsToggleButton {
+    position: fixed; 
+    top: 5px; 
+    left: 5px;
+    padding: 3px 7px;
+    background-color: var(--sub-header-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    cursor: pointer;
+    z-index: 1001;
+    font-size: 10px;
+    font-weight: 500;
+}
+#controlsToggleButton:hover { background-color: var(--sub-header-hover-bg); }
+
+.controls-panel {
+    position: fixed; 
+    top: 0; 
+    left: -320px;
+    width: 300px; 
+    height: 100vh;
+    background: var(--panel-bg);
+    padding: 30px 4px 4px 4px;
+    border-right: 1px solid var(--border-color);
+    box-sizing: border-box;
+    transition: left 0.3s ease-in-out;
+    z-index: 1000;
+    overflow-y: auto;
+}
+.controls-panel.visible { left: 0; }
+
+
+/* ACCORDION STYLES */
+.accordion-item {
+    background: var(--content-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    margin-bottom: 2px;
+    overflow: hidden;
+}
+.accordion-item .accordion-item {
+     border: none;
+     border-bottom: 1px solid #111;
+     border-radius: 0; 
+     margin-bottom: 0;
+}
+.accordion-item .accordion-item:last-child {
+    border-bottom: none;
+}
+
+.accordion-header {
+    background-color: var(--header-bg);
+    color: var(--text-color);
+    cursor: pointer;
+    padding: 2px 5px;
+    width: 100%;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 10px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 20px;
+}
+.accordion-header:hover { background-color: var(--header-hover-bg); }
+
+.accordion-item .accordion-item .accordion-header {
+    background-color: var(--sub-header-bg);
+    font-weight: normal;
+    font-size: 9px;
+    padding: 1px 5px;
+    min-height: 18px;
+}
+.accordion-item .accordion-item .accordion-header:hover {
+    background-color: var(--sub-header-hover-bg);
+}
+
+.accordion-header .header-title { flex-grow: 1; }
+.accordion-header::after { content: ''; }
+
+.accordion-content {
+    padding: 0 4px;
+    background-color: var(--content-bg);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out, padding 0.2s ease-out;
+    position: relative; /* Needed for the ::after overlay */
+}
+.accordion-content.open { padding: 4px; }
+
+/* "Coming Soon" Overlay Style */
+.disabled-feature::after {
+    content: 'COMING SOON';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(27, 29, 30, 0.85); /* Semi-transparent panel background */
+    color: var(--label-color);
+    font-size: 14px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none; /* Allows clicks to go through if needed, though content is disabled */
+    z-index: 2;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.disabled-feature > * {
+    filter: blur(2px);
+    pointer-events: none; /* Disable all interactions with children */
+}
+
+
+/* FORM ELEMENTS & CONTROLS */
+.accordion-content label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+    width: 100%;
+    box-sizing: border-box;
+    color: var(--label-color);
+    font-size: 9px;
+}
+.accordion-content .range-value-display { 
+    color: var(--text-color); 
+    padding-left: 4px;
+    font-size: 9px;
+}
+.accordion-content p {
+    margin: 2px 0 2px 0;
+    width: 100%;
+    box-sizing: border-box;
+    color: var(--label-color);
+    font-size: 9px;
+}
+
+.accordion-content input, .accordion-content button, .accordion-content select, .accordion-content textarea {
+    width: 100%;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 2px 4px;
+    box-sizing: border-box;
+    font-size: 9px;
+    margin-bottom: 3px;
+    font-family: inherit;
+    min-height: 20px;
+}
+.accordion-content input:disabled, .accordion-content button:disabled {
+    background-color: #222;
+    color: #666;
+    cursor: not-allowed;
+}
+.accordion-content label[style*="color: #666"] {
+    color: #666 !important;
+}
+
+
+.accordion-content input[type="range"] {
+    padding: 0;
+    height: 10px;
+    margin-top: 1px;
+}
+.accordion-content input[type="color"] {
+    padding: 1px;
+    min-height: 18px;
+    height: 18px;
+}
+
+.accordion-content button {
+    background-color: var(--sub-header-bg);
+    cursor: pointer;
+}
+.accordion-content button:hover { background-color: var(--sub-header-hover-bg); }
+
+/* Special override for important controls */
+#cameraControlMode, #autopilotMode, #warpMode {
+    background-color: var(--special-control-bg);
+}
+#cameraControlMode:hover, #autopilotMode:hover, #warpMode:hover {
+    background-color: var(--special-control-hover-bg);
+}
+
+
+.button-row { display: flex; gap: 3px; }
+.button-row button { flex-grow: 1; margin-bottom: 2px; }
+
+.checkbox-label-container { display: flex; align-items: center; margin-bottom: 3px; }
+.checkbox-label-container label { margin-bottom: 0; width: auto; margin-right: 5px; justify-content: flex-start; }
+.checkbox-label-container input[type="checkbox"] { width: auto; min-height: unset; }
+
+.single-line-control {
+    display: grid;
+    grid-template-columns: auto 35px 1fr;
+    gap: 5px;
+    align-items: center;
+    margin-bottom: 3px;
+}
+.single-line-control label {
+    margin-bottom: 0;
+    width: auto;
+    justify-content: flex-start;
+}
+.single-line-control input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+.single-line-control input[type="number"] {
+    width: 100%;
+    margin: 0;
+    padding: 2px 4px;
+    min-height: 18px;
+    text-align: center;
+}
+
+/* Jolt-specific UI compaction */
+.jolt-header-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+.jolt-header-row label {
+    width: auto;
+    margin-bottom: 0;
+}
+.jolt-header-row .on-text {
+    color: var(--label-color);
+    font-size: 9px;
+    margin: 0 -2px; /* Tighten spacing */
+}
+.jolt-header-row input[type="checkbox"] {
+    width: auto;
+    margin-bottom: 0;
+}
+.jolt-header-row select {
+    flex-grow: 1;
+    margin-bottom: 0;
+}
+
+
+.sub-group-title {
+    font-size: 8px;
+    color: var(--header-bg);
+    margin-top: 5px;
+    margin-bottom: 2px;
+    font-weight: bold;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1px;
+}
+.sub-group-title.sub-group-with-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+#audioStatusP {
+    color: var(--label-color);
+    font-weight: normal;
+    text-transform: none;
+    font-size: 8px;
+    padding: 0;
+    margin: 0;
+    background: none;
+}
+
+#eqVisualizerCanvas {
+    width: 100%;
+    height: 40px;
+    background-color: #000;
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    margin-bottom: 4px; 
+    box-sizing: border-box;
+    display: block;
+}
+
+.file-input-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 3px;
+}
+.file-input-row .browse-btn {
+    flex-grow: 0;
+    width: 65px;
+    padding: 2px;
+    margin-bottom: 0;
+}
+.file-input-row .file-name-display {
+    flex-grow: 1;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 2px 4px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 9px;
+    color: var(--label-color);
+    height: 20px;
+    box-sizing: border-box;
+    line-height: 14px;
+}
+
+
+/* SHADERTOY & DEBUG */
+#shaderToyGLSL {
+    height: 150px;
+    resize: vertical;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 10px;
+    white-space: pre;
+}
+
+#debugDisplay {
+    margin-top: 4px;
+    padding: 4px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--text-color);
+    border: 1px solid transparent;
+    word-wrap: break-word;
+    min-height: 22px;
+}
+#debugDisplay.error { background-color: var(--error-bg); border-color: var(--error-border); }
+#debugDisplay.success { background-color: var(--success-bg); border-color: var(--success-border); }
+
+.channel-input-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 6px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.channel-input-grid label { justify-self: end; margin-bottom: 0; }
+.channel-input-grid .channel-input { margin-bottom: 0; padding: 2px 4px; font-size: 9px; min-height: 18px; }
+
+#shaderToyControls .button-row button { padding: 3px 6px; font-size: 10px; min-height: 22px; }
+
+#loadShaderCode { background-color: var(--accent-color); font-weight: bold; }
+#loadShaderCode:hover { background-color: var(--accent-color-hover); }
+
+.preset-buttons { margin-top: 2px; }
+.preset-buttons button { background-color: var(--button-secondary-bg); }
+.preset-buttons button:hover { background-color: var(--button-secondary-hover-bg); }
+
+#shaderToyControls .preset-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    margin-bottom: 4px;
+}
+
+#shaderToyControls .preset-buttons button {
+    background-color: var(--sub-header-bg);
+    font-size: 10px;
+    padding: 3px 2px;
+    min-height: 22px;
+    font-weight: bold;
+}
+#shaderToyControls .preset-buttons button:hover {
+    background-color: var(--sub-header-hover-bg);
+}
+
+/* Autopilot Preset Button Style */
+.model-preset-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    margin-bottom: 4px;
+}
+.model-preset-buttons button {
+    background-color: var(--sub-header-bg);
+    font-size: 10px;
+    padding: 3px 2px;
+    min-height: 22px;
+    font-weight: bold;
+}
+.model-preset-buttons button:hover {
+    background-color: var(--sub-header-hover-bg);
+}
+
+/* 3D Model Preset Grid */
+.model-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 3px;
+    margin-bottom: 4px;
+}
+.model-preset-grid button {
+    background-color: var(--sub-header-bg);
+    font-size: 10px;
+    padding: 3px 2px;
+    min-height: 22px;
+    font-weight: bold;
+}
+.model-preset-grid button:hover {
+    background-color: var(--sub-header-hover-bg);
+}
+
+
+/* Reset Button Style */
+#landscapeResetButton {
+    background-color: var(--reset-button-bg);
+    font-weight: normal;
+    font-size: 10px;
+    padding: 2px 6px;
+    min-height: 20px;
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+#landscapeResetButton:hover {
+    background-color: var(--reset-button-hover-bg);
+}
+
+
+/* BUTTERCHURN STYLES */
+#butterchurnControls hr {
+    border-color: #333; 
+    margin: 6px 0;
+    border-style: solid;
+    border-width: 1px 0 0 0;
+}
+
+#butterchurnPresetList {
+    height: 110px; /* Use a fixed height for the select box */
+}
+
+#butterchurnCurrentPresetName {
+    font-size: 10px;
+    color: var(--highlight-color);
+    font-style: italic;
+    word-wrap: break-word;
+    min-height: 12px;
+}
+
+/* --- TOGGLE SWITCH STYLES (CORRECTED) --- */
+.toggle-switch-container {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 6px;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 6px;
+    padding: 2px 4px;
+    box-sizing: border-box;
+}
+
+.toggle-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--label-color);
+}
+
+/* New alignment rules for labels */
+.toggle-switch-container .toggle-label:first-child {
+    justify-self: end;
+}
+.toggle-switch-container .toggle-label:last-child {
+    justify-self: start;
+}
+
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 18px;
+}
+
+.switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--button-secondary-bg);
+    transition: .3s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 12px;
+    width: 12px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+}
+
+input:checked + .slider {
+    background-color: var(--accent-color);
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px var(--accent-color);
+}
+
+input:checked + .slider:before {
+    transform: translateX(16px);
+}
+
+.slider.round {
+    border-radius: 18px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+/* --- NEW SEGMENTED CONTROL STYLES --- */
+.segmented-control {
+    display: flex;
+    width: 100%;
+    margin-bottom: 6px;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.segmented-control-button {
+    flex: 1;
+    padding: 3px 5px;
+    background-color: var(--button-secondary-bg);
+    color: var(--label-color);
+    border: none;
+    border-right: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.segmented-control-button:last-child {
+    border-right: none;
+}
+
+.segmented-control-button:hover {
+    background-color: var(--button-secondary-hover-bg);
+}
+
+.segmented-control-button.active {
+    background-color: var(--accent-color);
+    color: var(--text-color);
+}

@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizer - Rebuilt Foundation</title>
+    <!-- Three.js and Addons -->
+
+    <!-- Butterchurn Libraries (Local) -->
+    <script src="butterchurn.min.js"></script>
+    <script src="butterchurnPresets.min.js"></script>
+    <script src="butterchurnPresetsMinimal.min.js"></script>
+    <script src="butterchurnPresetsNonMinimal.min.js"></script>
+    <script src="butterchurnPresetsExtra.min.js"></script>
+    <script src="butterchurnPresetsExtra2.min.js"></script>
+    <script src="butterchurnPresetsMD1.min.js"></script>
+    
+</head><body>
+
+    <button id="controlsToggleButton">Show</button>
+    <div id="controlsPanel" class="controls-panel">
+        
+        <canvas id="eqVisualizerCanvas"></canvas>
+
+        <!-- Media Section -->
+        <div class="accordion-item">
+            <button class="accordion-header">Media</button>
+            <div class="accordion-content">
+                <p class="sub-group-title sub-group-with-status">
+                    <span>SOURCES</span>
+                    <span id="audioStatusP">AUDIO: IDLE</span>
+                </p>
+                <div class="file-input-row">
+                    <button class="browse-btn" data-target="mainTextureInput">Image...</button>
+                    <span id="imageFileName" class="file-name-display">No file selected.</span>
+                    <input type="file" id="mainTextureInput" accept="image/*" style="display:none;">
+                </div>
+                <div class="file-input-row">
+                    <button class="browse-btn" data-target="videoTextureInput">Video...</button>
+                    <span id="videoFileName" class="file-name-display">No file selected.</span>
+                    <input type="file" id="videoTextureInput" accept="video/*" style="display:none;">
+                </div>
+                <div class="file-input-row">
+                    <button class="browse-btn" data-target="audioFileInput">Audio...</button>
+                    <span id="audioFileName" class="file-name-display">No file selected.</span>
+                    <input type="file" id="audioFileInput" accept="audio/*" style="display:none;">
+                </div>
+                
+                <p class="sub-group-title">PLAYBACK & ANALYSIS</p>
+                <button id="toggleMicInput">Use Mic/System</button>
+                <div class="button-row">
+                    <button id="playPauseAudioButton">Play File</button>
+                    <button id="playTestToneButton">Toggle Tone</button>
+                </div>
+
+                <p class="sub-group-title">TEST TONE</p>
+                <select id="testToneMode">
+                    <option value="dynamicPulse">Dynamic Pulse</option>
+                    <option value="steady">Steady Beep</option>
+                    <option value="warble">Warble</option>
+                </select>
+
+                <p class="sub-group-title">PLANE SETUP</p>
+                <label for="planeAspectRatio">Aspect Ratio</label>
+                <select id="planeAspectRatio">
+                    <option value="1.0" selected>1:1 (Square)</option>
+                    <option value="1.777777">16:9 (Widescreen)</option>
+                </select>
+                <label for="planeOrientation">Orientation</label>
+                <select id="planeOrientation">
+                    <option value="xy" selected>XY (Wall)</option>
+                    <option value="xz">XZ (Floor)</option>
+                    <option value="yz">YZ (Side Wall)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Camera Section -->
+        <div class="accordion-item">
+            <button class="accordion-header">Camera Options</button>
+            <div class="accordion-content">
+                <label for="cameraTarget">Camera Target</label>
+                <select id="cameraTarget">
+                    <option value="imagePlane" selected>Image Plane</option>
+                    <option value="model">3D Model</option>
+                </select>
+                <hr style="border-color: #444; margin: 8px 0;">
+
+                <label for="cameraControlMode">Control Mode</label>
+                <select id="cameraControlMode">
+                    <option value="manual" selected>Manual Sliders</option>
+                    <option value="freelook">Free Look (Debug)</option>
+                    <option value="autopilot">Autopilot</option>
+                </select>
+                <hr style="border-color: #444; margin: 8px 0;">
+
+                <!-- MANUAL SLIDER CONTROLS -->
+                <div id="manualControlsContainer">
+                    <label>Distance: <span id="cameraDistanceValue" class="range-value-display"></span></label>
+                    <input type="range" id="cameraDistance" min="1" max="50" step="0.1" value="30">
+                    <label>Height: <span id="cameraHeightValue" class="range-value-display"></span></label>
+                    <input type="range" id="cameraHeight" min="-20" max="30" step="0.1" value="0">
+                    <label>LookAt Y: <span id="cameraLookAtYValue" class="range-value-display"></span></label>
+                    <input type="range" id="cameraLookAtY" min="-10" max="10" step="0.1" value="0">
+                    <label>Field of View: <span id="cameraFOVValue" class="range-value-display"></span></label>
+                    <input type="range" id="cameraFOV" min="20" max="120" step="1" value="75">
+                </div>
+
+                <!-- FREE LOOK CONTROLS -->
+                <div id="freeLookControlsContainer" style="display: none;">
+                    <p>Use mouse to orbit/pan/zoom. Sliders will update.</p>
+                    <label>Azimuth (H): <span id="freeLookAzimuthValue" class="range-value-display"></span></label>
+                    <input type="range" id="freeLookAzimuth" min="-180" max="180" step="1" value="0">
+                    
+                    <label>Polar (V): <span id="freeLookPolarValue" class="range-value-display"></span></label>
+                    <input type="range" id="freeLookPolar" min="1" max="179" step="1" value="90">
+
+                    <label>Distance: <span id="freeLookDistanceValue" class="range-value-display"></span></label>
+                    <input type="range" id="freeLookDistance" min="1" max="150" step="0.5" value="30">
+                </div>
+                
+                <!-- AUTOPILOT CONTROLS -->
+                <div id="autopilotControlsContainer" style="display: none;">
+                    <label for="autopilotMode">Mode</label>
+                    <select id="autopilotMode">
+                        <option value="stage" selected>Stage</option>
+                        <option value="waypoint">Waypoint</option>
+                        <option value="random1">Random 1 (Tight)</option>
+                        <option value="random2">Random 2 (Loose)</option>
+                        <option value="birdseye">Bird's Eye</option>
+                    </select>
+                    <label>Speed: <span id="autopilotSpeedValue" class="range-value-display"></span></label>
+                    <input type="range" id="autopilotSpeed" min="0.01" max="1.0" step="0.01" value="0.1">
+                    <p class="sub-group-title">FOV OVERRIDE</p>
+                    <div class="button-row">
+                        <div class="checkbox-label-container" style="justify-content: center; flex: 1;">
+                            <label for="enableFovMinus">FOV-</label>
+                            <input type="checkbox" id="enableFovMinus">
+                        </div>
+                        <div class="checkbox-label-container" style="justify-content: center; flex: 1;">
+                            <label for="enableFovPlus">FOV+</label>
+                            <input type="checkbox" id="enableFovPlus">
+                        </div>
+                    </div>
+                     <p class="sub-group-title">LIVE COORDINATES</p>
+                    <label>Distance: <span id="autopilotDistanceValue" class="range-value-display">0.0</span></label>
+                    <input type="range" id="autopilotDistance" min="1" max="50" step="0.1" value="30" disabled>
+                    <label>Height: <span id="autopilotHeightValue" class="range-value-display">0.0</span></label>
+                    <input type="range" id="autopilotHeight" min="-20" max="30" step="0.1" value="0" disabled>
+                    <label>LookAt Y: <span id="autopilotLookAtYValue" class="range-value-display">0.0</span></label>
+                    <input type="range" id="autopilotLookAtY" min="-10" max="10" step="0.1" value="0" disabled>
+                </div>
+
+                <!-- GENERIC CAMERA CONTROLS -->
+                <hr style="border-color: #444; margin: 8px 0;">
+                 <div class="single-line-control">
+                    <input type="checkbox" id="enableCameraPulse">
+                    <label for="enableCameraPulse">Pulse</label>
+                    <input type="number" id="cameraPulseStrength" min="0.0" max="20.0" step="0.5" value="5.0">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Landscape Section -->
+        <div class="accordion-item">
+            <button class="accordion-header">Landscape</button>
+            <div class="accordion-content">
+                 <div class="checkbox-label-container">
+                    <label for="enableLandscape">Enable</label>
+                    <input type="checkbox" id="enableLandscape" checked>
+                </div>
+                <div class="single-line-control">
+                    <input type="checkbox" id="enableLandscapeSpin">
+                    <label for="enableLandscapeSpin">Spin</label>
+                    <input type="number" id="landscapeSpinSpeed" min="-1.0" max="1.0" step="0.05" value="0.0">
+                </div>
+                <div class="accordion-item">
+                    <button class="accordion-header">Peel Deformer</button>
+                    <div class="accordion-content">
+                        <div class="checkbox-label-container">
+                            <label for="enablePeel">Enable Peel</label>
+                            <input type="checkbox" id="enablePeel">
+                        </div>
+                        <p class="sub-group-title">MAIN CONTROLS</p>
+                        <label>Peel Amount: <span id="peelAmountValue" class="range-value-display"></span></label>
+                        <input type="range" id="peelAmount" min="0.0" max="1.0" step="0.01" value="0.2">
+                        <label>Peel Curl: <span id="peelCurlValue" class="range-value-display"></span></label>
+                        <input type="range" id="peelCurl" min="0.0" max="1.0" step="0.01" value="0.4">
+                        
+                        <p class="sub-group-title">ANIMATION & AUDIO</p>
+                        <label for="peelAnimationStyle">Animation Style</label>
+                        <select id="peelAnimationStyle">
+                            <option value="0" selected>Synchronized</option>
+                            <option value="1">Asynchronous (Rolling)</option>
+                        </select>
+                        <label>Peel Drift: <span id="peelDriftValue" class="range-value-display"></span></label>
+                        <input type="range" id="peelDrift" min="0.0" max="0.2" step="0.005" value="0.05">
+                        <label>Peel Texture: <span id="peelTextureAmountValue" class="range-value-display"></span></label>
+                        <input type="range" id="peelTextureAmount" min="0.0" max="0.2" step="0.005" value="0.0">
+                        <label for="peelAudioSource">Audio Source</label>
+                        <select id="peelAudioSource">
+                            <option value="continuous" selected>Lows (Continuous)</option>
+                            <option value="onBeat">Lows (On Beat)</option>
+                            <option value="on2ndBeat">Lows (On 2nd Beat)</option>
+                            <option value="on4thBeat">Lows (On 4th Beat)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="accordion-item">
+                    <button class="accordion-header">Base Warp (Legacy)</button>
+                    <div class="accordion-content">
+                        <label for="warpMode">Mode</label>
+                        <select id="warpMode">
+                            <option value="none" selected>None</option>
+                            <option value="cylinder">Cylinder</option>
+                            <option value="bend">Bend</option>
+                            <option value="sag">Sag</option>
+                            <option value="droop">Droop</option>
+                            <option value="fold">Fold</option>
+                        </select>
+                        <!-- --- FOLD CONTROLS (v2 - Corrected Logic) --- -->
+                        <div id="warpFoldControls" style="display: none;">
+                            <label>Angle: <span id="foldAngleValue" class="range-value-display"></span></label>
+                            <input type="range" id="foldAngle" min="-90" max="90" step="1" value="0">
+                            
+                            <label>Depth: <span id="foldDepthValue" class="range-value-display"></span></label>
+                            <input type="range" id="foldDepth" min="0.01" max="0.49" step="0.01" value="0.2">
+                            
+                            <label>Fold Roundness: <span id="foldRoundnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="foldRoundness" min="0.0" max="0.1" step="0.001" value="0.0">
+
+                            <label>Audio Strength: <span id="foldAudioInfluenceValue" class="range-value-display"></span></label>
+                            <input type="range" id="foldAudioInfluence" min="0.0" max="45.0" step="1" value="0">
+                            
+                            <label>Nudge (Arch): <span id="foldNudgeValue" class="range-value-display"></span></label>
+                            <input type="range" id="foldNudge" min="-0.6" max="0.6" step="0.01" value="0.0">
+                            
+                            <div class="checkbox-label-container"><label for="enableFoldCrease">Crease</label><input type="checkbox" id="enableFoldCrease"></div>
+                            <label>Crease Depth: <span id="foldCreaseDepthValue" class="range-value-display"></span></label>
+                            <input type="range" id="foldCreaseDepth" min="-1.6" max="1.6" step="0.01" value="0.0">
+                            <label>Crease Sharpness: <span id="foldCreaseSharpnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="foldCreaseSharpness" min="1.0" max="10.0" step="0.1" value="3.0">
+                            
+                            <div class="checkbox-label-container"><label for="enableFoldTuck">Tuck (Stretch)</label><input type="checkbox" id="enableFoldTuck"></div>
+                            <label>Tuck Amount: <span id="foldTuckAmountValue" class="range-value-display"></span></label>
+                            <input type="range" id="foldTuckAmount" min="-1.0" max="1.0" step="0.01" value="0.0">
+                            <label>Tuck Reach: <span id="foldTuckReachValue" class="range-value-display"></span></label>
+                            <input type="range" id="foldTuckReach" min="0.01" max="0.4" step="0.005" value="0.15">
+                        </div>
+                        <!-- --- SAG CONTROLS --- -->
+                        <div id="warpSagControls" style="display: none;">
+                            <label>Amount: <span id="sagAmountValue" class="range-value-display"></span></label>
+                            <input type="range" id="sagAmount" min="0.0" max="10.0" step="0.1" value="2.0">
+                            <label>Falloff Sharpness: <span id="sagFalloffSharpnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="sagFalloffSharpness" min="0.1" max="5.0" step="0.1" value="1.5">
+                            <label>Audio Strength: <span id="sagAudioInfluenceValue" class="range-value-display"></span></label>
+                            <input type="range" id="sagAudioInfluence" min="0.0" max="1.0" step="0.05" value="0.2">
+                        </div>
+                        <!-- --- BEND CONTROLS --- -->
+                        <div id="warpBendControls" style="display: none;">
+                            <label>Angle: <span id="bendAngleValue" class="range-value-display"></span></label>
+                            <input type="range" id="bendAngle" min="-180" max="180" step="1" value="0">
+                            <label>Audio Strength: <span id="bendAudioInfluenceValue" class="range-value-display"></span></label>
+                            <input type="range" id="bendAudioInfluence" min="0.0" max="1.0" step="0.05" value="0.0">
+                            <label>Falloff Sharpness: <span id="bendFalloffSharpnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="bendFalloffSharpness" min="0.1" max="5.0" step="0.1" value="1.0">
+                            <label>Axis:</label>
+                            <select id="bendAxis">
+                                <option value="primary" selected>Primary</option>
+                                <option value="secondary">Secondary</option>
+                            </select>
+                        </div>
+                        <!-- --- CYLINDER CONTROLS --- -->
+                        <div id="warpCylinderControls" style="display: none;">
+                            <label>Radius: <span id="cylinderRadiusValue" class="range-value-display"></span></label>
+                            <input type="range" id="cylinderRadius" min="0.5" max="20.0" step="0.1" value="5.0">
+                            <label>Height Scale: <span id="cylinderHeightScaleValue" class="range-value-display"></span></label>
+                            <input type="range" id="cylinderHeightScale" min="0.1" max="5.0" step="0.1" value="1.0">
+                            <label>Axis:</label>
+                            <select id="cylinderAxisAlignment">
+                                <option value="y" selected>Y</option>
+                                <option value="x">X</option>
+                                <option value="z">Z</option>
+                            </select>
+                            <label>Arc Angle: <span id="cylinderArcAngleValue" class="range-value-display"></span></label>
+                            <input type="range" id="cylinderArcAngle" min="1" max="360" step="1" value="360">
+                            <label>Arc Offset: <span id="cylinderArcOffsetValue" class="range-value-display"></span></label>
+                            <input type="range" id="cylinderArcOffset" min="0" max="359" step="1" value="0">
+                        </div>
+                        <!-- --- DROOP CONTROLS --- -->
+                        <div id="warpDroopControls" style="display: none;">
+                            <label>Amount: <span id="landscapeDroopAmountValue" class="range-value-display"></span></label>
+                            <input type="range" id="landscapeDroopAmount" min="0.0" max="15.0" step="0.01" value="0.3">
+                            <label>Audio Strength: <span id="landscapeDroopAudioStrengthValue" class="range-value-display"></span></label>
+                            <input type="range" id="landscapeDroopAudioStrength" min="0.0" max="5.0" step="0.01" value="1.0">
+                            <label>Falloff Sharpness: <span id="landscapeDroopFalloffSharpnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="landscapeDroopFalloffSharpness" min="0.1" max="10.0" step="0.1" value="2.5">
+                            <label>Supported Width: <span id="landscapeDroopSupportedWidthFactorValue" class="range-value-display"></span></label>
+                            <input type="range" id="landscapeDroopSupportedWidthFactor" min="0.0" max="1.0" step="0.01" value="0.6">
+                            <label>Supported Depth: <span id="landscapeDroopSupportedDepthFactorValue" class="range-value-display"></span></label>
+                            <input type="range" id="landscapeDroopSupportedDepthFactor" min="0.0" max="1.0" step="0.01" value="0.5">
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <button class="accordion-header">Audio Deformation</button>
+                    <div class="accordion-content">
+                        <label>Strength: <span id="deformationStrengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="deformationStrength" min="0.0" max="10.0" step="0.1" value="1.5">
+                        <label>Smoothing: <span id="audioSmoothingValue" class="range-value-display"></span></label>
+                        <input type="range" id="audioSmoothing" min="0.0" max="0.99" step="0.01" value="0.8">
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <button class="accordion-header">Texture Jolt</button>
+                    <div class="accordion-content">
+                        <div class="jolt-header-row">
+                            <label for="enableJolt">Enable Jolt</label>
+                            <input type="checkbox" id="enableJolt">
+                            <span class="on-text">on</span>
+                            <select id="joltBeatDivision">
+                                <option value="1" selected>Every Beat</option>
+                                <option value="2">Every 2nd Beat</option>
+                                <option value="4">Every 4th Beat</option>
+                            </select>
+                        </div>
+                        
+                        <label for="joltSensitivity">Beat Threshold: <span id="joltSensitivityValue" class="range-value-display"></span></label>
+                        <input type="range" id="joltSensitivity" min="1.0" max="3.0" step="0.05" value="1.8">
+
+                        <label>Horizontal Position: <span id="joltTargetXValue" class="range-value-display"></span></label>
+                        <input type="range" id="joltTargetX" min="-0.2" max="0.2" step="0.01" value="0.0">
+                        
+                        <label>Audio Influence: <span id="joltStrengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="joltStrength" min="0.0" max="0.25" step="0.001" value="0.05">
+
+                        <label>Return Speed: <span id="joltReturnSpeedValue" class="range-value-display"></span></label>
+                        <input type="range" id="joltReturnSpeed" min="1.0" max="50.0" step="0.5" value="50.0">
+                    </div>
+                </div>
+                <!-- === BALLOON EFFECT (REPLACES BUBBLE) === -->
+                <div class="accordion-item">
+                    <button class="accordion-header">Balloon (Point-based)</button>
+                    <div class="accordion-content">
+                        <div class="checkbox-label-container">
+                            <label for="enableBalloon">Enable</label>
+                            <input type="checkbox" id="enableBalloon">
+                        </div>
+                        <p class="sub-group-title">PARAMETERS</p>
+                        <p>Click on the main image to place effect points.</p>
+                        <label>Amount/Strength: <span id="balloonStrengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="balloonStrength" min="0.0" max="1.0" step="0.01" value="0.3">
+                        
+                        <label>Radius/Scale: <span id="balloonRadiusValue" class="range-value-display"></span></label>
+                        <input type="range" id="balloonRadius" min="0.0" max="1.0" step="0.01" value="0.4">
+                        
+                        <label>Audio Influence: <span id="balloonAudioInfluenceValue" class="range-value-display"></span></label>
+                        <input type="range" id="balloonAudioInfluence" min="0.0" max="2.0" step="0.05" value="0.5">
+
+                        <button id="clearBalloonPointsButton" style="margin-top: 8px;">Clear All Effect Points</button>
+                    </div>
+                </div>
+
+                <button id="landscapeResetButton">Reset Landscape</button>
+            </div>
+        </div>
+
+        <!-- 3D Model Section -->
+        <div class="accordion-item">
+            <button class="accordion-header">3D Model</button>
+            <div class="accordion-content">
+                <div class="checkbox-label-container">
+                    <label for="enableModel">Enable</label>
+                    <input type="checkbox" id="enableModel" checked>
+                </div>
+                
+                <p class="sub-group-title">CONTROLS</p>
+                <div class="single-line-control">
+                    <input type="checkbox" id="enableModelSpin">
+                    <label for="enableModelSpin">Spin</label>
+                    <input type="number" id="modelSpinSpeed" min="-1.0" max="1.0" step="0.01" value="0.0">
+                </div>
+                
+                <p class="sub-group-title">DISTANCE OVERRIDE</p>
+                <div class="button-row">
+                    <div class="checkbox-label-container" style="justify-content: center; flex: 1;">
+                        <label for="enableModelDistanceMinus">FOV -</label>
+                        <input type="checkbox" id="enableModelDistanceMinus">
+                    </div>
+                    <div class="checkbox-label-container" style="justify-content: center; flex: 1;">
+                        <label for="enableModelDistancePlus">FOV +</label>
+                        <input type="checkbox" id="enableModelDistancePlus">
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <button class="accordion-header">Autopilot</button>
+                    <div class="accordion-content">
+                        <div class="checkbox-label-container">
+                            <label for="enableModelAutopilot">Enable</label>
+                            <input type="checkbox" id="enableModelAutopilot">
+                        </div>
+                        <label for="modelAutopilotMode">Mode</label>
+                        <select id="modelAutopilotMode">
+                            <option value="random" selected>Random Waypoint</option>
+                            <option value="orbitCenter">Orbit Center</option>
+                            <option value="returnHome">Return to Home</option>
+                        </select>
+                        <label>Speed: <span id="modelAutopilotSpeedValue" class="range-value-display"></span></label>
+                        <input type="range" id="modelAutopilotSpeed" min="0.01" max="1.0" step="0.01" value="0.1">
+                        
+                        <p class="sub-group-title">LIVE COORDINATES</p>
+                        <label>Distance: <span id="modelLiveDistanceValue" class="range-value-display">0.0</span></label>
+                        <input type="range" id="modelLiveDistance" min="1" max="50" step="0.1" value="20" disabled>
+                        <label>Height: <span id="modelLiveHeightValue" class="range-value-display">0.0</span></label>
+                        <input type="range" id="modelLiveHeight" min="-20" max="30" step="0.1" value="5" disabled>
+                    </div>
+                </div>
+
+                <p class="sub-group-title">ASSETS</p>
+                <div class="file-input-row">
+                    <button class="browse-btn" data-target="gltfModelInput">Load Model...</button>
+                    <span id="gltfFileName" class="file-name-display">No model selected.</span>
+                    <input type="file" id="gltfModelInput" accept=".gltf,.glb" style="display:none;">
+                </div>
+
+                <p class="sub-group-title">MODEL PRESETS</p>
+                <div class="model-preset-buttons">
+                    <button id="modelPreset1">1</button>
+                    <button id="modelPreset2">2</button>
+                    <button id="modelPreset3">3</button>
+                    <button id="modelPreset4">4</button>
+                    <button id="modelPreset5">5</button>
+                    <button id="modelPreset6">6</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Material Section -->
+        <div class="accordion-item">
+            <button class="accordion-header">Material</button>
+            <div class="accordion-content">
+                <p class="sub-group-title">PBR SURFACE</p>
+                <label for="metalness">Metalness: <span id="metalnessValue" class="range-value-display"></span></label>
+                <input type="range" id="metalness" min="0.0" max="1.0" step="0.01" value="0.0">
+                <label for="roughness">Roughness: <span id="roughnessValue" class="range-value-display"></span></label>
+                <input type="range" id="roughness" min="0.0" max="1.0" step="0.01" value="0.35">
+
+                <p class="sub-group-title">COLOR & TONE</p>
+                <div class="checkbox-label-container">
+                    <label for="enablePBRColor" title="Enables physically correct color space for textures. Uncheck for a softer, legacy look.">Correct Color (PBR)</label>
+                    <input type="checkbox" id="enablePBRColor" checked>
+                </div>
+                <label for="toneMappingMode">Tone Mapping</label>
+                <select id="toneMappingMode">
+                    <option value="Reinhard" selected>Reinhard (Balanced)</option>
+                    <option value="ACESFilmic">ACES Filmic (Cinematic)</option>
+                    <option value="Linear">Linear (Bold/Unprocessed)</option>
+                </select>
+                <label for="toneMappingExposure">Exposure: <span id="toneMappingExposureValue" class="range-value-display"></span></label>
+                <input type="range" id="toneMappingExposure" min="0.0" max="3.0" step="0.01" value="1.2">
+
+                <div class="accordion-item">
+                    <button class="accordion-header">Reflections</button>
+                    <div class="accordion-content">
+                        <div class="checkbox-label-container" style="margin-top: 4px;">
+                            <label for="enableReflections">Enable</label>
+                            <input type="checkbox" id="enableReflections" checked>
+                        </div>
+                        <label>Strength: <span id="reflectionStrengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="reflectionStrength" min="0.0" max="2.0" step="0.01" value="1.0">
+                        <div class="file-input-row">
+                            <button class="browse-btn" data-target="hdriInput">Custom HDRI...</button>
+                            <span id="hdriFileName" class="file-name-display">Using default.</span>
+                            <input type="file" id="hdriInput" accept=".hdr" style="display:none;">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Lighting Section -->
+        <div class="accordion-item">
+            <button class="accordion-header">Lighting</button>
+            <div class="accordion-content"><label for="lightColor">Directional Color:</label><input type="color" id="lightColor" value="#FFF5E1"><label for="ambientLightColor">Ambient Color:</label><input type="color" id="ambientLightColor" value="#663300"><p class="sub-group-title">DIRECTION</p><div class="checkbox-label-container"><label for="enableLightOrbit">Enable Orbit</label><input type="checkbox" id="enableLightOrbit" checked></div><label>Orbit Speed: <span id="lightOrbitSpeedValue" class="range-value-display"></span></label><input type="range" id="lightOrbitSpeed" min="0.0" max="1.0" step="0.01" value="0.2"><hr style="border-color: #444; margin: 10px 0;"><label>Direction X: <span id="lightDirectionXValue" class="range-value-display"></span></label><input type="range" id="lightDirectionX" min="-1.0" max="1.0" step="0.05" value="0.5"><label>Direction Y: <span id="lightDirectionYValue" class="range-value-display"></span></label><input type="range" id="lightDirectionY" min="-1.0" max="1.0" step="0.05" value="0.8"><label>Direction Z: <span id="lightDirectionZValue" class="range-value-display"></span></label><input type="range" id="lightDirectionZ" min="-1.0" max="1.0" step="0.05" value="0.5"><p class="sub-group-title">VISUALS</p><div class="checkbox-label-container"><label for="enableGuideLaser">Enable Guide Laser</label><input type="checkbox" id="enableGuideLaser"></div></div>
+        </div>
+
+        <!-- Background FX Section -->
+        <div class="accordion-item">
+            <button class="accordion-header">Background FX</button>
+            <div class="accordion-content">
+                <label for="backgroundMode">Mode</label>
+                <select id="backgroundMode">
+                    <option value="shader">ShaderToy</option>
+                    <option value="butterchurn">Butterchurn</option>
+                    <option value="greenscreen">Green Screen</option>
+                    <option value="black" selected>Black (None)</option>
+                </select>
+
+                <!-- Container for ShaderToy specific controls -->
+                <div id="shaderToyControls" style="display: none;">
+                    <hr style="border-color: #444; margin: 15px 0;">
+                    <p class="sub-group-title">SHADER CHANNELS</p>
+                    <div class="channel-input-grid">
+                        <label for="iChannel0Input">iChannel0:</label><input type="file" id="iChannel0Input" class="channel-input" accept="image/*">
+                        <label for="iChannel1Input">iChannel1:</label><input type="file" id="iChannel1Input" class="channel-input" accept="image/*">
+                        <label for="iChannel2Input">iChannel2:</label><input type="file" id="iChannel2Input" class="channel-input" accept="image/*">
+                        <label for="iChannel3Input">iChannel3:</label><input type="file" id="iChannel3Input" class="channel-input" accept="image/*">
+                    </div>
+                    <p class="sub-group-title">SHADER CODE</p>
+                    <textarea id="shaderToyGLSL"></textarea>
+                    <div class="button-row">
+                        <button id="clearShaderCode">Clear</button>
+                        <button id="pasteShaderCode">Paste</button>
+                        <button id="loadShaderCode">Load</button>
+                    </div>
+                    
+                    <p class="sub-group-title">AUDIO REACTIVITY</p>
+                    <div id="shaderAudioControlsContainer">
+                        <div class="button-row" style="align-items: center;">
+                            <div class="checkbox-label-container" style="flex-grow:0; margin-right: 10px;">
+                                <label for="shaderAudioLink">Link</label>
+                                <input type="checkbox" id="shaderAudioLink">
+                            </div>
+                            <select id="shaderAudioSource" style="flex-grow: 1;">
+                                <option value="lows" selected>Lows</option>
+                                <option value="mids">Mids</option>
+                                <option value="highs">Highs</option>
+                                <option value="beat">Beat</option>
+                                <option value="volume">Volume</option>
+                            </select>
+                        </div>
+                        <label>Strength: <span id="shaderAudioStrengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="shaderAudioStrength" min="0.0" max="5.0" step="0.1" value="1.0">
+
+                        <label>Smoothing: <span id="shaderAudioSmoothingValue" class="range-value-display"></span></label>
+                        <input type="range" id="shaderAudioSmoothing" min="0.0" max="0.99" step="0.01" value="0.5">
+                    </div>
+                    
+                    <p class="sub-group-title">PRESETS</p>
+                    <div class="button-row preset-buttons">
+                        <button id="presetBg1">Preset 1</button>
+                        <button id="presetBg2">Preset 2</button>
+                        <button id="presetBg3">Preset 3</button>
+                    </div>
+                    <div id="debugDisplay"></div>
+                </div>
+
+                <!-- Container for Butterchurn specific controls -->
+                <div id="butterchurnControls" style="display: none;">
+                    <hr>
+                    <p class="sub-group-title">BUTTERCHURN CONTROLS</p>
+                    <label for="butterchurnSpeed">Speed:<span id="butterchurnSpeedValue" class="range-value-display">Normal</span></label>
+                    <input type="range" id="butterchurnSpeed" min="1" max="10" step="1" value="10">
+                    
+                    <label for="butterchurnAudioInfluence">Audio Influence:<span id="butterchurnAudioInfluenceValue" class="range-value-display">1.00</span></label>
+                    <input type="range" id="butterchurnAudioInfluence" min="0.0" max="2.5" step="0.05" value="1.0">
+                    
+                    <label for="butterchurnBlendTime">Blend Time (s):<span id="butterchurnBlendTimeValue" class="range-value-display"></span></label>
+                    <input type="range" id="butterchurnBlendTime" min="0.0" max="10.0" step="0.1" value="5.0">
+
+                    <label for="butterchurnTintColor">Tint:</label>
+                    <input type="color" id="butterchurnTintColor" value="#ffffff">
+
+                    <label for="butterchurnOpacity">Opacity:<span id="butterchurnOpacityValue" class="range-value-display">1.00</span></label>
+                    <input type="range" id="butterchurnOpacity" min="0.0" max="1.0" step="0.01" value="1.0">
+
+                    <hr>
+                    <p class="sub-group-title">PRESET SELECTION</p>
+                    <div class="button-row">
+                        <button id="butterchurnPrevPreset" title="Previous Preset">Prev</button>
+                        <button id="butterchurnRandomPreset" title="Random Preset">?</button>
+                        <button id="butterchurnNextPreset" title="Next Preset">Next</button>
+                    </div>
+                    <p style="margin-top: 4px;">Current: <span id="butterchurnCurrentPresetName">None</span></p>
+                    <p style="margin-top: -2px; font-size: 10px; color: #888;">Total Presets: <span id="butterchurnTotalPresets">0</span></p>
+
+                    <label for="butterchurnPresetSearch">Search Presets:</label>
+                    <div class="button-row" style="margin-bottom: 6px;">
+                        <input type="text" id="butterchurnPresetSearch" placeholder="Filter by name..." style="margin-bottom: 0;">
+                        <button id="butterchurnSearchButton" style="flex-grow: 0; width: 70px; margin-bottom: 0;">Search</button>
+                    </div>
+                    <select id="butterchurnPresetList" size="5"></select>
+
+                    <div class="checkbox-label-container">
+                        <label for="butterchurnEnableCycle">Auto-Cycle:</label>
+                        <input type="checkbox" id="butterchurnEnableCycle">
+                    </div>
+                    <label for="butterchurnCycleTime">Cycle Time (s):<span id="butterchurnCycleTimeValue" class="range-value-display"></span></label>
+                    <input type="range" id="butterchurnCycleTime" min="5" max="60" step="1" value="15">
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <canvas id="glCanvas"></canvas>
+    <video id="videoSourceElement" loop muted playsinline style="display:none;"></video>
+    <audio id="audioSourceElement" loop style="display:none;"></audio>
+    
+    <script type="module" src="/src/main.js"></script>
+
+</body>
+</html>
