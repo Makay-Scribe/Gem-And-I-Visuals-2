@@ -27,9 +27,7 @@ const App = {
     },
     shaderAudioValue: 0.0,
     hdrTexture: null, audioTexture: null,
-    placeholderEnvMap: null,
     backgroundScene: null, backgroundCamera: null, backgroundPlane: null,
-    landscapeScene: null, 
     shaderMaterial: null, butterchurnMaterial: null, butterchurnTexture: null,
     guideLaser: null, directionalLight: null, ambientLight: null,
     clock: new THREE.Clock(), currentTime: 0, frame: 0,
@@ -42,9 +40,8 @@ const App = {
         presetBg3: `const float cloudscale = 1.1;\nconst float speed = 0.03;\nconst float clouddark = 0.5;\nconst float cloudlight = 0.3;\nconst float cloudcover = 0.2;\nconst float cloudalpha = 8.0;\nconst float skytint = 0.5;\nconst vec3 skycolour1 = vec3(0.2, 0.4, 0.6);\nconst vec3 skycolour2 = vec3(0.4, 0.7, 1.0);\n\nconst mat2 m = mat2( 1.6,  1.2, -1.2,  1.6 );\n\nvec2 hash( vec2 p )\n{\n\tp = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));\n\treturn -1.0 + 2.0*fract(sin(p)*43758.5453123);\n}\n\nfloat noise( in vec2 p )\n{\n    const float K1 = 0.366025404;\n    const float K2 = 0.211324865;\n\tvec2 i = floor(p + (p.x+p.y)*K1);\t\n    vec2 a = p - i + (i.x+i.y)*K2;\n    vec2 o = (a.x>a.y) ? vec2(1.0,0.0) : vec2(0.0,1.0);\n    vec2 b = a - o + K2;\n\tvec2 c = a - 1.0 + 2.0*K2;\n    vec3 h = max(0.5-vec3(dot(a,a), dot(b,b), dot(c,c) ), 0.0 );\n\tvec3 n = h*h*h*h*vec3( dot(a,hash(i+0.0)), dot(b,hash(i+o)), dot(c,hash(i+1.0)));\n    return dot(n, vec3(70.0));\t\n}\n\nfloat fbm(vec2 n) {\n\tfloat total = 0.0, amplitude = 0.1;\n\tfor (int i = 0; i < 7; i++) {\n\t\ttotal += noise(n) * amplitude;\n\t\tn = m * n;\n\t\tamplitude *= 0.4;\n\t}\n\treturn total;\n}\n\nvoid mainImage( out vec4 fragColor, in vec2 fragCoord ) {\n    vec2 p = fragCoord.xy / iResolution.xy;\n\tvec2 uv = p*vec2(iResolution.x/iResolution.y,1.0);\n    float time = iTime * speed;\n    float r = 0.0;\n\tuv *= cloudscale;\n    float q = fbm(uv * cloudscale);\n    float f = fbm(uv+q +time);\n    r = fbm(uv+f+vec2(1.2,1.2)+time);\n    float c = fbm(uv+r-time);\n    vec3 cloudcolour = vec3(0.0);\n    cloudcolour = mix(skycolour1, skycolour2, max(0.0,q)*skytint );\n    cloudcolour = mix(cloudcolour, vec3(1.0), min(max(r,0.0),1.0)*cloudlight); \n    cloudcolour = mix(cloudcolour, vec3(0.0), min(max(c,0.0),1.0)*clouddark); \n\tfloat cloudfinal = r + c;\n\tcloudcolour = mix(skycolour2, cloudcolour, smoothstep(0.0,1.0,cloudfinal));\n    fragColor = vec4(cloudcolour, 1.0);\n}`
     },
     vizSettings: {},
-    isTransitioning: false,
-    transitionTarget: null, 
 
+    // --- MANAGERS ---
     UIManager: UIManager,
     ButterchurnManager: ButterchurnManager,
     AudioProcessor: AudioProcessor,
@@ -58,18 +55,42 @@ const App = {
     GPGPUDebugger: GPGPUDebugger,
 
     defaultVisualizerSettings: {
-        cameraTarget: 'imagePlane',
+        // Master Controls
+        activeControl: 'landscape', // 'landscape' or 'model'
+        landscapeAutopilotOn: false,
+        modelAutopilotOn: false,
+        activeLandscapePreset: null,
+        activeModelPreset: null,
+        
+        // Manual Positions for each actor (controlled by sliders)
+        manualLandscapePosition: new THREE.Vector3(0, 0, -5),
+        manualModelPosition: new THREE.Vector3(0, 5, 5), // Changed Z to be in front
+
+        // Autopilot/Shared Properties
+        landscapeScale: 1.0,
+        modelScale: 1.0,
+        landscapeAutopilotSpeed: 1.0,
+        modelAutopilotSpeed: 1.0,
+        
+        // Model-Specific
         enableModel: true,
         enableModelSpin: false,
         modelSpinSpeed: 0.0,
-        enableModelAutopilot: false,
-        modelAutopilotMode: 'random',
-        modelAutopilotSpeed: 0.1,
         enableModelDistancePlus: false,
         enableModelDistanceMinus: false,
+
+        // Landscape-Specific
+        enableLandscape: true,
+        enableLandscapeSpin: false,
+        landscapeSpinSpeed: 0.0,
+        planeAspectRatio: '1.0',
+        planeOrientation: 'xy',
+        deformationStrength: 1.5,
+        
+        // Background
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
-        enableShaderMouse: false, // <-- New setting for mouse control
+        enableShaderMouse: false,
         shaderAudioLink: false,
         shaderAudioSource: 'lows',
         shaderAudioStrength: 1.0,
@@ -77,60 +98,12 @@ const App = {
         butterchurnSpeed: 1, butterchurnAudioInfluence: 1.0, butterchurnBlendTime: 5.0,
         butterchurnTintColor: '#ffffff', butterchurnOpacity: 1.0,
         butterchurnEnableCycle: false, butterchurnCycleTime: 15,
+        
+        // Audio
         audioSmoothing: 0.8,
         testToneMode: 'dynamicPulse',
-        enableLandscape: true,
-        enableLandscapeSpin: false,
-        landscapeSpinSpeed: 0.0,
-        planeAspectRatio: '1.0',
-        planeOrientation: 'xy',
-        enablePeel: false,
-        peelAmount: 0.2,
-        peelCurl: 0.4,
-        peelAnimationStyle: '1',
-        peelDrift: 0.05,
-        peelTextureAmount: 0.0,
-        peelAudioSource: 'onBeat',
-        warpMode: 'none',
-        landscapeDroopAmount: 0.3,
-        landscapeDroopAudioStrength: 1.0,
-        landscapeDroopFalloffSharpness: 2.5,
-        landscapeDroopSupportedWidthFactor: 0.6,
-        landscapeDroopSupportedDepthFactor: 0.5,
-        cylinderRadius: 5.0,
-        cylinderHeightScale: 1.0,
-        cylinderAxisAlignment: "y",
-        cylinderArcAngle: 360,
-        cylinderArcOffset: 0,
-        bendAngle: 0,
-        bendAudioInfluence: 0.0,
-        bendFalloffSharpness: 1.0,
-        bendAxis: 'primary',
-        sagAmount: 2.0,
-        sagFalloffSharpness: 1.5,
-        sagAudioInfluence: 0.2,
-        foldAngle: 0,
-        foldDepth: 0.2,
-        foldRoundness: 0.0,
-        foldAudioInfluence: 0.0,
-        foldNudge: 0.0,
-        enableFoldCrease: false,
-        foldCreaseDepth: -0.15,
-        foldCreaseSharpness: 3.0,
-        enableFoldTuck: false,
-        foldTuckAmount: 0.0,
-        foldTuckReach: 0.15,
-        deformationStrength: 0.0,
-        enableJolt: true,
-        joltBeatDivision: '1',
-        joltSensitivity: 1.8,
-        joltTargetX: 0.0,
-        joltStrength: 0.05,
-        joltReturnSpeed: 50.0,
-        enableBalloon: false,
-        balloonStrength: 0.3, 
-        balloonRadius: 0.4,
-        balloonAudioInfluence: 0.5,
+
+        // Material & Lighting
         metalness: 1.0,
         roughness: 0.10,
         enablePBRColor: true,
@@ -138,24 +111,13 @@ const App = {
         toneMappingExposure: 1.0,
         enableReflections: true,
         reflectionStrength: 1.0,
-        // FIX: Set default light colors to white
         lightColor: "#ffffff",
         ambientLightColor: "#ffffff",
         lightDirectionX: 0.5, lightDirectionY: 0.8, lightDirectionZ: 0.5,
         enableLightOrbit: true, lightOrbitSpeed: 0.2, enableGuideLaser: false,
-        cameraControlMode: 'manual', 
-        cameraDistance: 30, cameraHeight: 0, cameraLookAtY: 0, cameraFOV: 75,
-        autopilotMode: 'stage',
-        autopilotSpeeds: {
-            stage: 1.0,
-            waypoint: 0.2,
-            random1: 0.2,
-            random2: 0.2,
-            birdseye: 1.0,
-        },
-        enableFovPlus: false, enableFovMinus: false,
-        enableCameraPulse: false, cameraPulseStrength: 5.0,
-        enableGPGPUDebugger: true, // <-- ADDED: Control for the debug plane
+        
+        // GPGPU Debug
+        enableGPGPUDebugger: true, 
     },
 
     async preloadDevAssets() {
@@ -189,8 +151,11 @@ const App = {
     },
 
     init() {
-        this.vizSettings = { ...this.defaultVisualizerSettings };
-        this.vizSettings.autopilotSpeeds = { ...this.defaultVisualizerSettings.autopilotSpeeds };
+        // Deep copy the default settings to prevent mutation
+        this.vizSettings = JSON.parse(JSON.stringify(this.defaultVisualizerSettings));
+        // Re-create Vector3 objects as they are not cloned by JSON methods
+        this.vizSettings.manualLandscapePosition = new THREE.Vector3().copy(this.defaultVisualizerSettings.manualLandscapePosition);
+        this.vizSettings.manualModelPosition = new THREE.Vector3().copy(this.defaultVisualizerSettings.manualModelPosition);
         
         window.onerror = (message, source, lineno, colno, error) => {
             console.error("Uncaught Error (Global Handler):", message, source, lineno, colno, error);
@@ -218,38 +183,20 @@ const App = {
         const planeResX = 128;
         const planeResY = 128;
 
-        if (this.SceneManager) this.SceneManager.init(this);
-        else console.error("FATAL: SceneManager not found.");
+        // Initialize managers in dependency order
+        this.SceneManager.init(this);
+        this.CameraManager.init(this);
+        this.AudioProcessor.init(this);
+        this.ComputeManager.init(this, planeWidth, planeHeight, planeResX, planeResY);
+        this.ImagePlaneManager.init(this, planeWidth, planeHeight, planeResX, planeResY);
+        this.BackgroundManager.init(this);
+        this.ModelManager.init(this);
+        this.ButterchurnManager.init(this);
+        this.ShaderManager.init(this);
+        this.GPGPUDebugger.init(this);
         
-        if (this.CameraManager) this.CameraManager.init(this);
-        else console.error("FATAL: CameraManager not found.");
-        
-        if (this.UIManager) this.UIManager.init(this);
-        else console.error("FATAL: UIManager not found. Cannot initialize application.");
-        
-        if (this.ComputeManager) this.ComputeManager.init(this, planeWidth, planeHeight, planeResX, planeResY);
-        else console.error("FATAL: ComputeManager not found.");
-
-        if (this.ImagePlaneManager) this.ImagePlaneManager.init(this, planeWidth, planeHeight, planeResX, planeResY);
-        else console.error("FATAL: ImagePlaneManager not found.");
-        
-        if (this.BackgroundManager) this.BackgroundManager.init(this);
-        else console.error("FATAL: BackgroundManager not found.");
-
-        if (this.ModelManager) this.ModelManager.init(this);
-        else console.error("FATAL: ModelManager not found.");
-
-        if (this.ButterchurnManager) this.ButterchurnManager.init(this);
-        else console.error("FATAL: ButterchurnManager not found.");
-
-        if (this.AudioProcessor) this.AudioProcessor.init(this);
-        else console.error("FATAL: AudioProcessor not found.");
-
-        if (this.ShaderManager) this.ShaderManager.init(this);
-        else console.error("FATAL: ShaderManager not found.");
-
-        if (this.GPGPUDebugger) this.GPGPUDebugger.init(this);
-        else console.error("FATAL: GPGPUDebugger not found.");
+        // UIManager is last as it needs other managers to be ready
+        this.UIManager.init(this);
 
         
         setTimeout(() => {
@@ -279,7 +226,6 @@ const App = {
 
         window.addEventListener('resize', this.onWindowResize.bind(this));
         
-        // Add mouse listeners that are conditional on the new setting
         window.addEventListener('mousemove', (event) => {
             if (!this.vizSettings.enableShaderMouse) return;
             this.mouseState.x = event.clientX;
@@ -297,37 +243,16 @@ const App = {
         this.animate();
     },
 
-    startTransitionTo(newTarget) {
-        if (this.isTransitioning) return;
-        console.log(`Starting transition to: ${newTarget}`);
-        this.isTransitioning = true;
-        this.transitionTarget = newTarget;
+    switchActiveControl(newControlTarget) {
+        if (this.vizSettings.activeControl === newControlTarget) return;
 
-        this.vizSettings.enableModelAutopilot = false;
-        const enableModelAutopilotEl = document.getElementById('enableModelAutopilot');
-        if (enableModelAutopilotEl) enableModelAutopilotEl.checked = false;
+        const oldTarget = this.vizSettings.activeControl;
         
-        this.vizSettings.enableModelSpin = false;
-        const enableModelSpinEl = document.getElementById('enableModelSpin');
-        if (enableModelSpinEl) enableModelSpinEl.checked = false;
-
-        this.UIManager.setTransitioning(true);
-        this.CameraManager.returnToHome();
-        this.ModelManager.returnToHome();
-    },
-
-    checkTransitionStatus() {
-        const cameraReady = !this.CameraManager._masterReturnTransition.active;
-        const modelReady = !this.ModelManager.autopilot.active;
-
-        if (cameraReady && modelReady) {
-            console.log("Transition complete.");
-            this.isTransitioning = false;
-            this.vizSettings.cameraTarget = this.transitionTarget;
-            this.transitionTarget = null;
-            this.UIManager.setTransitioning(false);
-            this.UIManager.updateSliderStates();
-        }
+        if (oldTarget === 'landscape') this.ImagePlaneManager.returnToHome();
+        else if (oldTarget === 'model') this.ModelManager.returnToHome();
+        
+        this.vizSettings.activeControl = newControlTarget;
+        this.UIManager.updateMasterControls();
     },
 
     onWindowResize() {
@@ -335,7 +260,7 @@ const App = {
         this.camera.aspect = window.innerWidth / window.innerHeight;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        if (this.BackgroundManager) this.BackgroundManager.onWindowResize(); 
+        this.BackgroundManager.onWindowResize(); 
         if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
     },
 
@@ -346,48 +271,40 @@ const App = {
         this.currentTime = this.clock.getElapsedTime(); 
         this.frame++;
         
-        if (this.AudioProcessor) this.AudioProcessor.updateAudioData();
+        const S = this.vizSettings;
         
-        if (this.ComputeManager) this.ComputeManager.update(cappedDelta);
-        
+        this.AudioProcessor.updateAudioData();
+        this.ComputeManager.update(cappedDelta);
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
-        if (this.ModelManager) this.ModelManager.update(cappedDelta);
         
-        if (this.ImagePlaneManager && this.ImagePlaneManager.material && this.ComputeManager && this.ComputeManager.gpuCompute) {
-            this.ImagePlaneManager.material.uniforms.u_positionTexture.value = 
-                this.ComputeManager.gpuCompute.getCurrentRenderTarget(this.ComputeManager.positionVariable).texture;
-        }
-
-        if (this.ImagePlaneManager) this.ImagePlaneManager.update(cappedDelta);
+        this.ImagePlaneManager.update(cappedDelta);
+        this.ModelManager.update(cappedDelta);
         
-        if (this.isTransitioning) {
-            this.checkTransitionStatus();
-        } else {
-            if (this.vizSettings.cameraTarget === 'model') {
-                if (this.ModelManager && this.ModelManager.gltfModel && this.CameraManager && this.CameraManager._controls) {
-                    this.CameraManager._controls.target.lerp(this.ModelManager.gltfModel.position, 0.05);
-                }
-            } else { 
-                 if (this.CameraManager && this.CameraManager._controls) {
-                    this.CameraManager._controls.target.lerp(new THREE.Vector3(0,0,0), 0.05);
-                 }
-            }
+        // Determine the camera's look-at target based on the active control
+        let lookAtTargetPosition;
+        if (S.activeControl === 'landscape') {
+            lookAtTargetPosition = this.ImagePlaneManager.landscape.position;
+        } else { // 'model'
+            lookAtTargetPosition = this.ModelManager.gltfModel ? this.ModelManager.gltfModel.position : new THREE.Vector3();
         }
-        if (this.CameraManager) this.CameraManager.update(cappedDelta); 
-        if (this.SceneManager) this.SceneManager.update(cappedDelta);
-        if (this.BackgroundManager) {
-            this.BackgroundManager.update();
-        }
+        this.CameraManager.setLookAt(lookAtTargetPosition);
 
+        this.CameraManager.update(cappedDelta); 
+        this.SceneManager.update(cappedDelta);
+        this.BackgroundManager.update();
+
+        // --- Render sequence ---
         this.renderer.clear();
-        if (this.BackgroundManager) this.BackgroundManager.render();
+        
+        // 1. Render background first
+        this.BackgroundManager.render();
+        
+        // 2. Clear only the depth buffer before rendering the main scene on top
         this.renderer.clearDepth();
         this.renderer.render(this.scene, this.camera);
         
-        // Render the debugger last so it appears on top of the main scene
-        if (this.GPGPUDebugger) this.GPGPUDebugger.update();
-
-        this.renderer.setClearColor(new THREE.Color('#000000'), 0);
+        // 3. Render the debugger last so it appears on top
+        this.GPGPUDebugger.update();
     }
 };
 

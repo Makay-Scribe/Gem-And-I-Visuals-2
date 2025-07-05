@@ -10,15 +10,27 @@ export const ImagePlaneManager = {
     landscape: null,
     landscapeMaterial: null,
     
-    planeDimensions: new THREE.Vector2(40, 40), // Actual size of the plane
-    planeResolution: new THREE.Vector2(128, 128), // Number of vertices in the plane
+    planeDimensions: new THREE.Vector2(40, 40),
+    planeResolution: new THREE.Vector2(128, 128),
+
+    homePosition: new THREE.Vector3(0, 0, -5),
+
+    transition: {
+        active: false,
+        start: new THREE.Vector3(),
+        end: new THREE.Vector3(),
+        progress: 0,
+        duration: 2.0
+    },
+
+    autopilot: {
+        active: false,
+    },
 
     init(appInstance) {
         this.app = appInstance;
-        
         this.raycaster = new THREE.Raycaster();
         
-        // Initialize ComputeManager first, as ImagePlaneManager will depend on it
         if (this.app.ComputeManager) {
             this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
         } else {
@@ -27,20 +39,33 @@ export const ImagePlaneManager = {
             return; 
         }
         
+        this.homePosition.copy(this.app.defaultVisualizerSettings.manualLandscapePosition);
+        
         this.createMaterials(); 
-        this.createDefaultLandscape(); 
+        this.createDefaultLandscape();
+        
+        this.landscape.position.copy(this.homePosition);
     },
 
-    // --- Object & Material Creation ---
+    returnToHome() {
+        if (!this.landscape) {
+            this.transition.active = false;
+            return;
+        }
+        // this.stopAutopilot();
+        this.transition.active = true;
+        this.transition.progress = 0;
+        this.transition.start.copy(this.landscape.position);
+        this.transition.end.copy(this.homePosition);
+    },
+
     createMaterials() {
         const S = this.app.vizSettings;
-        
         const placeholderMapTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
         placeholderMapTexture.needsUpdate = true;
 
         const positionRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
         const normalRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.normalVariable);
-
 
         this.landscapeMaterial = new THREE.ShaderMaterial({
             uniforms: {
@@ -59,7 +84,6 @@ export const ImagePlaneManager = {
                 u_ambientLightColor: { value: new THREE.Color(S.ambientLightColor) },
                 u_lightDirection: { value: new THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
                 u_cameraPosition: { value: this.app.camera.position },
-                // Use the app-level hdrTexture which is now guaranteed to exist
                 t_envMap: { value: this.app.hdrTexture }, 
             },
             vertexShader: landscapeRenderVertexShader,
@@ -90,7 +114,6 @@ export const ImagePlaneManager = {
         landGeom.setAttribute('uv_gpgpu', new THREE.BufferAttribute(uv_gpgpu, 2));
 
         this.landscape = new THREE.Mesh(landGeom, this.landscapeMaterial);
-        this.landscape.position.z = -5; // Move it slightly back from the center
         this.app.scene.add(this.landscape);
         this.applyOrientation();
     },
@@ -133,24 +156,16 @@ export const ImagePlaneManager = {
     
     applyOrientation() {
         if (!this.landscape) return;
-        const orientation = this.app.vizSettings.planeOrientation;
         this.landscape.rotation.set(0, 0, 0);
-        if (orientation === 'xz') { this.landscape.rotation.x = -Math.PI / 2; } 
-        else if (orientation === 'yz') { this.landscape.rotation.y = Math.PI / 2; }
     },
 
     updateDeformationUniforms() {
-        if (!this.landscapeMaterial || !this.app.ComputeManager || !this.app.ComputeManager.gpuCompute ||
-            !this.app.ComputeManager.positionVariable || !this.app.ComputeManager.normalVariable) {
-            return;
-        }
+        if (!this.landscapeMaterial || !this.app.ComputeManager || !this.app.ComputeManager.gpuCompute) { return; }
 
         const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
         const normalTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.normalVariable);
 
-        if (!positionTarget || !normalTarget) {
-            return; 
-        }
+        if (!positionTarget || !normalTarget) return; 
 
         const S = this.app.vizSettings;
         const U = this.landscapeMaterial.uniforms;
@@ -159,17 +174,13 @@ export const ImagePlaneManager = {
         U.u_beat.value = this.app.AudioProcessor.triggers.beat ? 1.0 : 0.0;
         U.u_audioLow.value = this.app.AudioProcessor.energy.low;
         U.u_audioMid.value = this.app.AudioProcessor.energy.mid;
-
         U.u_positionTexture.value = positionTarget.texture;
         U.u_normalTexture.value = normalTarget.texture;
-
         U.u_metalness.value = S.metalness;
         U.u_roughness.value = S.roughness;
         U.u_envMapIntensity.value = S.reflectionStrength;
-        // This now correctly updates every frame with the latest HDRI
         U.t_envMap.value = this.app.hdrTexture; 
         U.u_cameraPosition.value = this.app.camera.position;
-
         U.u_lightColor.value.set(S.lightColor);
         U.u_ambientLightColor.value.set(S.ambientLightColor);
         U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
@@ -178,45 +189,42 @@ export const ImagePlaneManager = {
     update(cappedDelta) {
         if (!this.landscape) return;
         const S = this.app.vizSettings;
-        const A = this.app.AudioProcessor;
 
         this.landscape.visible = S.enableLandscape;
-        if (!this.landscape.visible) return;
 
-        this.landscape.scale.set(parseFloat(S.planeAspectRatio), 1, 1);
+        if (!this.landscape.visible) {
+            // if(this.autopilot.active) this.stopAutopilot();
+            return;
+        }
+
+        this.landscape.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
-        if (S.enableLandscapeSpin) {
+        if (S.landscapeAutopilotOn) {
+            // Autopilot logic will go here
+        } else {
+             if (S.activeControl === 'landscape') {
+                if (this.transition.active) {
+                    this.transition.progress = Math.min(1.0, this.transition.progress + cappedDelta / this.transition.duration);
+                    const ease = 0.5 - 0.5 * Math.cos(this.transition.progress * Math.PI);
+                    this.landscape.position.lerpVectors(this.transition.start, this.transition.end, ease);
+                    if (this.transition.progress >= 1.0) {
+                        this.transition.active = false;
+                    }
+                } else {
+                    this.landscape.position.copy(S.manualLandscapePosition);
+                }
+             }
+        }
+        
+        if (S.enableLandscapeSpin && !S.landscapeAutopilotOn) {
             const orientation = S.planeOrientation;
             if (orientation === 'xy') { this.landscape.rotation.z -= S.landscapeSpinSpeed * cappedDelta; } 
             else if (orientation === 'xz') { this.landscape.rotation.y -= S.landscapeSpinSpeed * cappedDelta; } 
             else if (orientation === 'yz') { this.landscape.rotation.x -= S.landscapeSpinSpeed * cappedDelta; }
         }
 
-        if (this.landscapeMaterial.uniforms.u_map.value) {
-            let targetOffset = 0;
-            if (S.enableJolt) {
-                const restingOffset = S.joltTargetX;
-                targetOffset = restingOffset;
-                let beatTrigger = false;
-                if (S.joltBeatDivision === '1' && A.triggers.beat) beatTrigger = true;
-                if (S.joltBeatDivision === '2' && A.triggers.beat2) beatTrigger = true;
-                if (S.joltBeatDivision === '4' && A.triggers.beat4) beatTrigger = true;
-                if (beatTrigger && restingOffset !== 0) {
-                    targetOffset = restingOffset + (S.joltStrength * Math.sign(restingOffset));
-                }
-            }
-            const returnSpeed = S.joltReturnSpeed;
-            const decayFactor = 1.0 - Math.exp(-returnSpeed * cappedDelta);
-            this.app.jolt_currentOffset = THREE.MathUtils.lerp(this.app.jolt_currentOffset, targetOffset, decayFactor);
-            if (this.landscapeMaterial.uniforms.u_map.value.offset) {
-                this.landscapeMaterial.uniforms.u_map.value.offset.x = this.app.jolt_currentOffset;
-            }
-        }
-
         if (this.app.ComputeManager) {
             this.app.ComputeManager.update(cappedDelta); 
-        } else {
-            console.warn("ImagePlaneManager: ComputeManager not available, skipping GPGPU update.");
         }
         
         this.updateDeformationUniforms();
