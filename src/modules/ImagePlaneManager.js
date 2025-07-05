@@ -30,6 +30,12 @@ export const ImagePlaneManager = {
         transitionStartQuat: new THREE.Quaternion(),
         transitionProgress: 0,
         transitionDuration: 10.0,
+        
+        mode: null,
+        waypoints: [],
+        currentWaypointIndex: 0,
+        waypointTransitionDuration: 15.0,
+        waypointProgress: 0,
     },
 
     init(appInstance) {
@@ -60,8 +66,22 @@ export const ImagePlaneManager = {
         ap.transitionProgress = 0;
         ap.transitionStartPos.copy(this.landscape.position);
         ap.transitionStartQuat.copy(this.landscape.quaternion);
-        ap.active = false; // Stop current logic immediately
+        ap.active = false;
         ap.mode = presetId;
+        
+        if (presetId === 'autopilotPreset2') {
+            const home = { pos: this.homePosition.clone(), rot: new THREE.Quaternion() };
+            ap.waypoints = [
+                { pos: new THREE.Vector3(-15, 8, -10), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -0.2, 0)) },
+                home, { pos: new THREE.Vector3(15, -8, 10), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.2, 0)) },
+                home, { pos: new THREE.Vector3(0, 15, 5), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.1, 0, 0)) },
+                home,
+            ];
+            ap.currentWaypointIndex = 0;
+            ap.waypointProgress = 0;
+        } else {
+            ap.waypoints = [];
+        }
         console.log(`Landscape autopilot started with preset: ${presetId}`);
     },
 
@@ -234,10 +254,25 @@ export const ImagePlaneManager = {
             if (ap.transitionProgress >= 1.0) {
                 ap.isTransitioningIn = false;
                 ap.active = true;
-                // Waypoint generation will go here
             }
         } else if (S.landscapeAutopilotOn && ap.active) {
-            // Active autopilot logic will go here
+            if (ap.waypoints.length > 0) {
+                const currentIndex = ap.currentWaypointIndex;
+                const nextIndex = (currentIndex + 1) % ap.waypoints.length;
+                const startPoint = ap.waypoints[currentIndex];
+                const endPoint = ap.waypoints[nextIndex];
+
+                ap.waypointProgress = Math.min(1.0, ap.waypointProgress + (cappedDelta * speed) / ap.waypointTransitionDuration);
+                const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
+
+                this.landscape.position.lerpVectors(startPoint.pos, endPoint.pos, ease);
+                this.landscape.quaternion.slerpQuaternions(startPoint.rot, endPoint.rot, ease);
+
+                if (ap.waypointProgress >= 1.0) {
+                    ap.currentWaypointIndex = nextIndex;
+                    ap.waypointProgress = 0;
+                }
+            }
         } else {
              if (S.activeControl === 'landscape') {
                 if (this.transition.active) {
@@ -254,7 +289,10 @@ export const ImagePlaneManager = {
         }
         
         if (S.enableLandscapeSpin && !S.landscapeAutopilotOn) {
-            this.landscape.rotation.z -= S.landscapeSpinSpeed * cappedDelta;
+            const orientation = S.planeOrientation;
+            if (orientation === 'xy') { this.landscape.rotation.z -= S.landscapeSpinSpeed * cappedDelta; } 
+            else if (orientation === 'xz') { this.landscape.rotation.y -= S.landscapeSpinSpeed * cappedDelta; } 
+            else if (orientation === 'yz') { this.landscape.rotation.x -= S.landscapeSpinSpeed * cappedDelta; }
         }
 
         if (this.app.ComputeManager) {
