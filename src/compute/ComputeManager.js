@@ -13,6 +13,8 @@ export const ComputeManager = {
     HEIGHT: 0,
     AREA: 0,
 
+    _rotationMatrix: new THREE.Matrix4(),
+
     init(appInstance, planeWidth, planeHeight, planeResX, planeResY) {
         this.app = appInstance;
         const renderer = this.app.renderer;
@@ -76,6 +78,7 @@ export const ComputeManager = {
             u_time: { value: 0 },
             u_audioLow: { value: 0 },
             u_planeDimensions: { value: planeDimensionsVec2 },
+            u_rotationMatrix: { value: new THREE.Matrix4() },
             u_deformationStrength: { value: 0.0 },
             u_planeOrientation: { value: 0 },
             u_enablePeel: { value: 0.0 },
@@ -133,7 +136,11 @@ export const ComputeManager = {
 
         const S = this.app.vizSettings;
         const A = this.app.AudioProcessor;
+        const IM = this.app.ImagePlaneManager;
         const uniforms = this.positionVariable.material.uniforms;
+
+        this._rotationMatrix.makeRotationFromEuler(IM.rotation);
+        uniforms.u_rotationMatrix.value.copy(this._rotationMatrix);
 
         const orientationMap = { 'xy': 0, 'xz': 1, 'yz': 2 };
         uniforms.u_planeOrientation.value = orientationMap[S.planeOrientation] || 0;
@@ -374,13 +381,12 @@ export const ComputeManager = {
     `,
 
     get positionShader() { return `
-        // All uniforms are now declared in the normalShader's getter
-        // and shared, so they are available here automatically.
         ${this.commonShaderCode}
-        // Declare all uniforms again for this specific shader program
+
         uniform float u_time;
         uniform float u_audioLow;
         uniform vec2 u_planeDimensions;
+        uniform mat4 u_rotationMatrix;
         uniform float u_deformationStrength;
         uniform int u_planeOrientation;
         uniform float u_enablePeel;
@@ -431,6 +437,9 @@ export const ComputeManager = {
                 else if (u_planeOrientation == 2) { pos = vec3(0.0, (uv.y - 0.5) * u_planeDimensions.y, (uv.x - 0.5) * u_planeDimensions.x); } 
                 else { pos = vec3((uv.x - 0.5) * u_planeDimensions.x, (uv.y - 0.5) * u_planeDimensions.y, 0.0); }
 
+                // Apply rotation first
+                pos = (u_rotationMatrix * vec4(pos, 1.0)).xyz;
+
                 if (u_warpMode == 1) { // Fold
                     pos = calculateFold(pos, uv, u_audioLow, u_planeOrientation, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
                 } else {
@@ -457,9 +466,12 @@ export const ComputeManager = {
     `},
 
     get normalShader() { return `
+        ${this.commonShaderCode}
+
         uniform float u_time;
         uniform float u_audioLow;
         uniform vec2 u_planeDimensions;
+        uniform mat4 u_rotationMatrix;
         uniform float u_deformationStrength;
         uniform int u_planeOrientation;
         uniform float u_enablePeel;
@@ -499,8 +511,6 @@ export const ComputeManager = {
         uniform float u_foldTuckAmount;
         uniform float u_foldTuckReach;
         
-        ${this.commonShaderCode}
-
         vec3 getDeformedPosition(vec2 uv) {
             vec3 pos;
             
@@ -510,6 +520,8 @@ export const ComputeManager = {
                 if (u_planeOrientation == 1) { pos = vec3((uv.x - 0.5) * u_planeDimensions.x, 0.0, (uv.y - 0.5) * u_planeDimensions.y); }
                 else if (u_planeOrientation == 2) { pos = vec3(0.0, (uv.y - 0.5) * u_planeDimensions.y, (uv.x - 0.5) * u_planeDimensions.x); }
                 else { pos = vec3((uv.x - 0.5) * u_planeDimensions.x, (uv.y - 0.5) * u_planeDimensions.y, 0.0); }
+
+                pos = (u_rotationMatrix * vec4(pos, 1.0)).xyz;
 
                 if (u_warpMode == 1) {
                     pos = calculateFold(pos, uv, u_audioLow, u_planeOrientation, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);

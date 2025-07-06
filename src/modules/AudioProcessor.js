@@ -65,11 +65,7 @@ export const AudioProcessor = {
             this.muteNode.connect(this.audioContext.destination);
             this.butterchurnGainNode.connect(this.muteNode);
             this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
-            if (this.app.SceneManager && typeof this.app.SceneManager.createAudioTexture === 'function') {
-                this.app.SceneManager.createAudioTexture();
-            } else {
-                if(this.app.UIManager) this.app.UIManager.logError("SceneManager.createAudioTexture not available. Audio texture won't be created.");
-            }
+            // this.app.SceneManager.createAudioTexture(); // REMOVED: This function no longer exists in SceneManager
             return true;
         } catch (e) {
             console.error("Could not initialize AudioContext.", e);
@@ -235,7 +231,7 @@ export const AudioProcessor = {
             historySum += this._energyHistory[i];
         }
         const averageEnergy = historySum / this._HISTORY_LENGTH;
-        const dynamicThreshold = averageEnergy * this.app.vizSettings.joltSensitivity;
+        const dynamicThreshold = averageEnergy * (this.app.vizSettings.joltSensitivity || 1.8); // Use default if not set
 
         if (currentMidEnergy > this._MINIMUM_BEAT_ENERGY &&
             currentMidEnergy > dynamicThreshold && 
