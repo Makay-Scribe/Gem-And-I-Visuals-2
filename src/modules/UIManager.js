@@ -104,15 +104,25 @@ export const UIManager = {
             
             if (activeControl === 'landscape') {
                 this.app.vizSettings.landscapeAutopilotOn = isAuto;
-                if (!isAuto) {
-                    this.app.vizSettings.activeLandscapePreset = null;
-                    if(this.app.ImagePlaneManager) this.app.ImagePlaneManager.returnToHome();
+                if (isAuto) {
+                    if (this.app.vizSettings.activeLandscapePreset) {
+                        this.app.ImagePlaneManager.startAutopilot(this.app.vizSettings.activeLandscapePreset);
+                    } else {
+                        document.getElementById('autopilotPreset1').click();
+                    }
+                } else {
+                    this.app.ImagePlaneManager.stopAutopilot();
                 }
             } else if (activeControl === 'model') {
                 this.app.vizSettings.modelAutopilotOn = isAuto;
-                if (!isAuto) {
-                    this.app.vizSettings.activeModelPreset = null;
-                    if(this.app.ModelManager) this.app.ModelManager.returnToHome();
+                if (isAuto) {
+                     if (this.app.vizSettings.activeModelPreset) {
+                        this.app.ModelManager.startAutopilot(this.app.vizSettings.activeModelPreset);
+                    } else {
+                        document.getElementById('autopilotPreset1').click();
+                    }
+                } else {
+                    this.app.ModelManager.stopAutopilot();
                 }
             }
             this.updateMasterControls();
@@ -124,11 +134,6 @@ export const UIManager = {
             if(button) {
                 button.addEventListener('click', () => {
                     const activeControl = this.app.vizSettings.activeControl;
-                    const toggle = UIElements.manualAutoToggle;
-                    if (!toggle.checked) {
-                        toggle.checked = true;
-                        toggle.dispatchEvent(new Event('change'));
-                    }
                     if (activeControl === 'landscape') {
                         this.app.vizSettings.landscapeAutopilotOn = true;
                         this.app.vizSettings.activeLandscapePreset = buttonId;
@@ -206,7 +211,6 @@ export const UIManager = {
         
         UIElements.manualAutoToggle.checked = isAutopilotOn;
         UIElements.manualContainer.style.display = isAutopilotOn ? 'none' : 'block';
-        UIElements.autopilotContainer.style.display = isAutopilotOn ? 'block' : 'none';
         UIElements.masterSpeedContainer.style.display = isAutopilotOn ? 'block' : 'none';
 
         if(UIElements.masterScaleSlider) {
@@ -384,8 +388,11 @@ export const UIManager = {
                 if (id === 'backgroundMode') this.updateBackgroundControlsVisibility();
                 if (id === 'warpMode') this.updateWarpControlsVisibility();
                 if (id === 'enableLightOrbit') this.toggleLightSliders();
-                if (id === 'planeAspectRatio') {
+                if (id === 'planeAspectRatio' || id === 'planeOrientation') {
                     this.app.ImagePlaneManager.createDefaultLandscape();
+                    if (this.app.vizSettings.landscapeAutopilotOn && this.app.vizSettings.activeLandscapePreset) {
+                        this.app.ImagePlaneManager.startAutopilot(this.app.vizSettings.activeLandscapePreset);
+                    }
                 }
             });
         });

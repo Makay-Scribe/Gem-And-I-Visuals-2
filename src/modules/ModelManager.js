@@ -6,7 +6,7 @@ export const ModelManager = {
     gltfModel: null,
     animationMixer: null,
     baseScale: new THREE.Vector3(1, 1, 1),
-    boundingSphere: new THREE.Sphere(), // For collision detection
+    boundingSphere: new THREE.Sphere(),
 
     homePosition: new THREE.Vector3(0, 5, 5),
     
@@ -68,14 +68,14 @@ export const ModelManager = {
                 this.app.gltfModel = gltf.scene;
 
                 const box = new THREE.Box3().setFromObject(this.gltfModel);
-                box.getBoundingSphere(this.boundingSphere); // Calculate the bounding sphere for collision detection
+                box.getBoundingSphere(this.boundingSphere);
                 
                 const size = box.getSize(new THREE.Vector3());
                 const scale = 10 / Math.max(size.x, size.y, size.z);
                 this.baseScale.set(scale, scale, scale);
                 this.gltfModel.scale.copy(this.baseScale);
                 
-                this.boundingSphere.radius *= scale; // Scale the sphere radius too
+                this.boundingSphere.radius *= scale;
 
                 this.gltfModel.position.copy(this.homePosition);
 
@@ -129,18 +129,29 @@ export const ModelManager = {
     },
     
     generateNewRandomWaypoint(options = {}) {
-        const { aerobatics = false, audioReactive = false } = options;
+        const { aerobatics = false, audioReactive = false, sayHi = false } = options;
         const ap = this.autopilot;
         const audio = this.app.AudioProcessor;
 
         ap.startPosition.copy(this.gltfModel.position);
         ap.startQuaternion.copy(this.gltfModel.quaternion);
         
-        ap.targetPosition.set(
-            THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
-            THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
-            THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
-        );
+        if (sayHi) {
+            const cameraPos = this.app.camera.position;
+            ap.targetPosition.set(
+                cameraPos.x + (Math.random() - 0.5) * 10,
+                cameraPos.y + (Math.random() - 0.5) * 10,
+                cameraPos.z - 12 // Position it right in front of the camera
+            );
+            ap.holdTimer = 2.0 + Math.random(); // Hold for 2-3 seconds
+        } else {
+             ap.targetPosition.set(
+                THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
+                THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
+                THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
+            );
+            ap.holdTimer = ap.holdDuration * Math.random();
+        }
 
         const tempMatrix = new THREE.Matrix4();
         tempMatrix.lookAt(ap.targetPosition, ap.startPosition, this.gltfModel.up);
@@ -157,12 +168,12 @@ export const ModelManager = {
         
         ap.transitionProgress = 0;
         
+        const distance = ap.startPosition.distanceTo(ap.targetPosition);
+        ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance * 0.4, 15, 25);
+        
         if(audioReactive) {
-            ap.waypointTransitionDuration = Math.max(1, 15 / (1 + audio.energy.overall * 5));
-            ap.holdTimer = Math.max(0, ap.holdDuration / (1 + audio.energy.overall * 3));
-        } else {
-            ap.waypointTransitionDuration = 15.0;
-            ap.holdTimer = ap.holdDuration * Math.random();
+            ap.waypointTransitionDuration = Math.max(1, ap.waypointTransitionDuration / (1 + audio.energy.overall * 5));
+            ap.holdTimer = Math.max(0, ap.holdTimer / (1 + audio.energy.overall * 3));
         }
     },
 
@@ -180,13 +191,17 @@ export const ModelManager = {
         ap.targetQuaternion.setFromRotationMatrix(tempMatrix);
 
         ap.transitionProgress = 0;
+        const distance = ap.startPosition.distanceTo(ap.targetPosition);
+        ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance * 0.4, 15, 25);
         ap.holdTimer = ap.holdDuration * (1 + Math.random());
     },
 
     stopAutopilot() {
+        if (!this.autopilot.active && !this.autopilot.isTransitioningIn) return;
         this.autopilot.active = false;
         this.autopilot.isTransitioningIn = false;
         this.autopilot.mode = null;
+        this.returnToHome();
         console.log("Model autopilot stopped.");
     },
 
@@ -195,7 +210,6 @@ export const ModelManager = {
             this.transition.active = false;
             return;
         }
-        this.stopAutopilot();
         this.transition.active = true;
         this.transition.progress = 0;
         this.transition.start.copy(this.gltfModel.position);
@@ -209,71 +223,72 @@ export const ModelManager = {
         const ap = this.autopilot;
         const landscapeBox = this.app.ImagePlaneManager.boundingBox;
         
-        this.gltfModel.visible = S.enableModel;
-        if (!this.gltfModel.visible) {
-            if(ap.active) this.stopAutopilot();
-            return;
+        if (!S.enableModel) {
+             if (ap.active || ap.isTransitioningIn) this.stopAutopilot();
+             this.gltfModel.visible = false;
+             return;
         }
+        this.gltfModel.visible = true;
         
         this.gltfModel.scale.copy(this.baseScale).multiplyScalar(S.modelScale);
         const speed = S.modelAutopilotSpeed;
-        const finalPosition = new THREE.Vector3(); // A temporary vector for calculations
+        const finalPosition = new THREE.Vector3().copy(this.gltfModel.position);
 
-        if (ap.isTransitioningIn) {
-            ap.transitionProgress = Math.min(1.0, ap.transitionProgress + (delta * speed) / ap.transitionDuration);
-            const ease = 0.5 - 0.5 * Math.cos(ap.transitionProgress * Math.PI);
-            finalPosition.lerpVectors(ap.transitionStartPos, this.homePosition, ease);
-            this.gltfModel.quaternion.slerpQuaternions(ap.transitionStartQuat, new THREE.Quaternion(), ease);
-            if (ap.transitionProgress >= 1.0) {
-                ap.isTransitioningIn = false;
-                ap.active = true;
-                this.generateNewRandomWaypoint({ aerobatics: (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4'), audioReactive: ap.mode === 'autopilotPreset4' });
-            }
-        } else if (S.modelAutopilotOn && ap.active) {
-            if (ap.holdTimer > 0) {
-                ap.holdTimer -= delta;
-            } else if (ap.transitionProgress < 1.0) {
-                const duration = Math.max(0.1, ap.waypointTransitionDuration);
-                ap.transitionProgress = Math.min(1.0, ap.transitionProgress + (delta * speed) / duration);
-                const easeProgress = 0.5 - 0.5 * Math.cos(ap.transitionProgress * Math.PI);
-                
-                finalPosition.lerpVectors(ap.startPosition, ap.targetPosition, easeProgress);
-                const modelSphereAtNextPos = this.boundingSphere.clone().set(finalPosition, this.boundingSphere.radius * S.modelScale);
-                
-                if (this.app.ImagePlaneManager.landscape.visible && landscapeBox.intersectsSphere(modelSphereAtNextPos)) {
-                    console.log("Collision Detected! Deflecting...");
+        if (S.modelAutopilotOn) {
+            if (ap.isTransitioningIn) {
+                const distance = ap.transitionStartPos.distanceTo(this.homePosition);
+                ap.transitionDuration = THREE.MathUtils.clamp(distance * 0.3, 2, 10);
+                ap.transitionProgress = Math.min(1.0, ap.transitionProgress + (delta * speed) / ap.transitionDuration);
+                const ease = 0.5 - 0.5 * Math.cos(ap.transitionProgress * Math.PI);
+                finalPosition.lerpVectors(ap.transitionStartPos, this.homePosition, ease);
+                this.gltfModel.quaternion.slerpQuaternions(ap.transitionStartQuat, new THREE.Quaternion(), ease);
+                if (ap.transitionProgress >= 1.0) {
+                    ap.isTransitioningIn = false;
+                    ap.active = true;
                     this.generateNewRandomWaypoint({ aerobatics: (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4'), audioReactive: ap.mode === 'autopilotPreset4' });
-                } else {
-                    this.gltfModel.quaternion.slerpQuaternions(ap.startQuaternion, ap.targetQuaternion, easeProgress);
                 }
-            } else {
-                 if (ap.mode === 'autopilotPreset1' || ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4') {
-                    this.generateNewRandomWaypoint({ aerobatics: (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4'), audioReactive: ap.mode === 'autopilotPreset4' });
-                } else if (ap.mode === 'autopilotPreset2') {
-                    ap.subMode = (ap.subMode === 'roaming') ? 'observing' : 'roaming';
-                    if (ap.subMode === 'roaming') this.generateNewRandomWaypoint({ aerobatics: false });
-                    else this.generateObserveWaypoint();
-                }
-            }
-        } else {
-            if (S.activeControl === 'model') {
-                 if (this.transition.active) {
-                    this.transition.progress = Math.min(1.0, this.transition.progress + delta / this.transition.duration);
-                    const ease = 0.5 - 0.5 * Math.cos(this.transition.progress * Math.PI);
-                    finalPosition.lerpVectors(this.transition.start, this.transition.end, ease);
-                    if (this.transition.progress >= 1.0) {
-                        this.transition.active = false;
+            } else if (ap.active) {
+                if (ap.holdTimer > 0) {
+                    ap.holdTimer -= delta;
+                } else if (ap.transitionProgress < 1.0) {
+                    const duration = Math.max(0.1, ap.waypointTransitionDuration);
+                    ap.transitionProgress = Math.min(1.0, ap.transitionProgress + (delta * speed) / duration);
+                    const easeProgress = 0.5 - 0.5 * Math.cos(ap.transitionProgress * Math.PI);
+                    
+                    finalPosition.lerpVectors(ap.startPosition, ap.targetPosition, easeProgress);
+                    const modelSphereAtNextPos = this.boundingSphere.clone().set(finalPosition, this.boundingSphere.radius * S.modelScale);
+                    
+                    if (this.app.ImagePlaneManager.landscape.visible && landscapeBox.intersectsSphere(modelSphereAtNextPos)) {
+                        console.log("Collision Detected! Deflecting...");
+                        this.generateNewRandomWaypoint({ aerobatics: (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4'), audioReactive: ap.mode === 'autopilotPreset4' });
+                    } else {
+                        this.gltfModel.quaternion.slerpQuaternions(ap.startQuaternion, ap.targetQuaternion, easeProgress);
                     }
                 } else {
-                    finalPosition.copy(S.manualModelPosition);
+                    const sayHiChance = 0.2; // 20% chance to say hi on next waypoint
+                    const shouldSayHi = (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4') && (Math.random() < sayHiChance);
+
+                     if (ap.mode === 'autopilotPreset1' || ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4') {
+                        this.generateNewRandomWaypoint({ aerobatics: (ap.mode === 'autopilotPreset3' || ap.mode === 'autopilotPreset4'), audioReactive: ap.mode === 'autopilotPreset4', sayHi: shouldSayHi });
+                    } else if (ap.mode === 'autopilotPreset2') {
+                        ap.subMode = (ap.subMode === 'roaming') ? 'observing' : 'roaming';
+                        if (ap.subMode === 'roaming') this.generateNewRandomWaypoint({ sayHi: shouldSayHi });
+                        else this.generateObserveWaypoint();
+                    }
                 }
             }
+        } else if (this.transition.active) {
+            this.transition.progress = Math.min(1.0, this.transition.progress + delta / this.transition.duration);
+            const ease = 0.5 - 0.5 * Math.cos(this.transition.progress * Math.PI);
+            finalPosition.lerpVectors(this.transition.start, this.transition.end, ease);
+            if (this.transition.progress >= 1.0) {
+                this.transition.active = false;
+            }
+        } else {
+            finalPosition.copy(S.manualModelPosition);
         }
 
-        // Apply final position
-        if(!S.modelAutopilotOn || (S.modelAutopilotOn && !ap.holdTimer > 0)) {
-             this.gltfModel.position.copy(finalPosition);
-        }
+        this.gltfModel.position.copy(finalPosition);
 
         if (S.enableModelSpin && !S.modelAutopilotOn) {
             this.gltfModel.rotation.y += S.modelSpinSpeed * delta;

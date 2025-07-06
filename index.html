@@ -94,14 +94,18 @@
                     <span class="toggle-label">Auto</span>
                 </div>
                 
+                <!-- ** THE FIX IS HERE ** -->
+                <!-- Autopilot presets are now outside the container that gets hidden -->
+                <p class="sub-group-title">AUTOPILOT PRESETS</p>
+                <div class="model-preset-buttons" id="autopilotPresetContainer">
+                    <button id="autopilotPreset1">1</button>
+                    <button id="autopilotPreset2">2</button>
+                    <button id="autopilotPreset3">3</button>
+                    <button id="autopilotPreset4">4</button>
+                </div>
+
+                <!-- This container will now only hold future "auto-only" controls -->
                 <div id="autopilotControlsContainer" style="display: none;">
-                    <p class="sub-group-title">AUTOPILOT PRESETS</p>
-                    <div class="model-preset-buttons" id="autopilotPresetContainer">
-                        <button id="autopilotPreset1">1</button>
-                        <button id="autopilotPreset2">2</button>
-                        <button id="autopilotPreset3">3</button>
-                        <button id="autopilotPreset4">4</button>
-                    </div>
                 </div>
 
                 <div id="masterActorControls">

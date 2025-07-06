@@ -25,7 +25,10 @@ const App = {
         plane: new THREE.Plane(),
         offset: new THREE.Vector3(),
         intersection: new THREE.Vector3(),
+        startMouse: new THREE.Vector2(), // For rotation
+        startRotation: new THREE.Quaternion(), // For rotation
     },
+    stableLookAtPoint: new THREE.Vector3(0, 0, 0), // The fixed point for the camera to look at
     modelPresets: {
         'modelPreset1': { name: 'Dancing Planet', path: '/3dmodel/converted/Dancing planet.glb' },
         'modelPreset2': { name: 'Swimming Shark', path: '/3dmodel/converted/Swimming shark.glb' },
@@ -264,15 +267,16 @@ const App = {
         window.addEventListener('resize', this.onWindowResize.bind(this));
         
         canvas.addEventListener('mousemove', (event) => {
-            if (this.dragState.isDragging) return;
-            if (!this.vizSettings.enableShaderMouse) return;
-            this.mouseState.x = event.clientX;
-            this.mouseState.y = event.clientY;
+            if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
+                this.mouseState.x = event.clientX;
+                this.mouseState.y = event.clientY;
+            }
         });
-        canvas.addEventListener('mousedown', () => {
-             if (this.dragState.isDragging) return;
-             if (!this.vizSettings.enableShaderMouse) return;
-             this.mouseState.z = 1;
+        canvas.addEventListener('mousedown', (event) => {
+             if (event.target !== canvas) return;
+             if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
+                this.mouseState.z = 1;
+             }
         });
         canvas.addEventListener('mouseup', () => {
             this.mouseState.z = 0;
@@ -286,58 +290,76 @@ const App = {
     },
 
     onPointerDown(event) {
-        if (!this.vizSettings.enableShaderMouse) return;
-        if (this.vizSettings.landscapeAutopilotOn || this.vizSettings.modelAutopilotOn) return;
-
+        if (event.target !== this.renderer.domElement) return;
+        
         const S = this.vizSettings;
+        if (S.activeControl === 'landscape' && S.landscapeAutopilotOn) return;
+        if (S.activeControl === 'model' && S.modelAutopilotOn) return;
+
         const DS = this.dragState;
 
-        const mouse = new THREE.Vector2(
-            (event.clientX / window.innerWidth) * 2 - 1,
-            -(event.clientY / window.innerHeight) * 2 + 1
-        );
-        this.raycaster.setFromCamera(mouse, this.camera);
-        
-        let intersects;
+        let target = null;
         if (S.activeControl === 'landscape' && this.ImagePlaneManager.landscape) {
-             intersects = this.raycaster.intersectObject(this.ImagePlaneManager.landscape);
-             if (intersects.length > 0) DS.targetObject = this.ImagePlaneManager.landscape;
+            target = this.ImagePlaneManager.landscape;
         } else if (S.activeControl === 'model' && this.ModelManager.gltfModel) {
-            intersects = this.raycaster.intersectObject(this.ModelManager.gltfModel, true);
-            if (intersects.length > 0) DS.targetObject = this.ModelManager.gltfModel;
-        } else {
-            return;
+            target = this.ModelManager.gltfModel;
         }
         
-        if (intersects.length > 0 && DS.targetObject) {
+        if (target) {
             DS.isDragging = true;
-            DS.plane.setFromNormalAndCoplanarPoint(this.camera.getWorldDirection(DS.plane.normal), intersects[0].point);
-            DS.offset.copy(intersects[0].point).sub(DS.targetObject.position);
+            DS.targetObject = target;
+            DS.startMouse.set(event.clientX, event.clientY);
+
+            if (S.activeControl === 'landscape') {
+                DS.startRotation.copy(target.quaternion);
+            } else {
+                const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+                this.raycaster.setFromCamera(mouse, this.camera);
+                const intersects = this.raycaster.intersectObject(target, true);
+                if (intersects.length > 0) {
+                    DS.plane.setFromNormalAndCoplanarPoint(this.camera.getWorldDirection(DS.plane.normal), intersects[0].point);
+                    if (this.raycaster.ray.intersectPlane(DS.plane, DS.intersection)) {
+                        DS.offset.copy(intersects[0].point).sub(target.position);
+                    }
+                }
+            }
         }
     },
     
     onPointerMove(event) {
-        if (!this.dragState.isDragging) return;
+        if (!this.dragState.isDragging || !this.dragState.targetObject) return;
 
-        const mouse = new THREE.Vector2(
-            (event.clientX / window.innerWidth) * 2 - 1,
-            -(event.clientY / window.innerHeight) * 2 + 1
-        );
-        this.raycaster.setFromCamera(mouse, this.camera);
-
-        if (this.raycaster.ray.intersectPlane(this.dragState.plane, this.dragState.intersection)) {
-            const newPos = this.dragState.intersection.sub(this.dragState.offset);
+        const S = this.vizSettings;
+        const DS = this.dragState;
+        
+        if (S.activeControl === 'landscape') {
+            const deltaX = event.clientX - DS.startMouse.x;
+            const deltaY = event.clientY - DS.startMouse.y;
             
-            if (this.vizSettings.activeControl === 'landscape') {
-                this.vizSettings.manualLandscapePosition.copy(newPos);
-            } else if (this.vizSettings.activeControl === 'model') {
-                this.vizSettings.manualModelPosition.copy(newPos);
+            const rotSpeed = 0.005;
+            const rotationY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), deltaX * rotSpeed);
+            const rotationX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), deltaY * rotSpeed);
+            
+            DS.targetObject.quaternion.copy(DS.startRotation).multiply(rotationY).multiply(rotationX);
+        } else {
+            const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+            this.raycaster.setFromCamera(mouse, this.camera);
+            if (this.raycaster.ray.intersectPlane(DS.plane, DS.intersection)) {
+                const newPos = DS.intersection.sub(DS.offset);
+                S.manualModelPosition.copy(newPos);
+                DS.targetObject.position.copy(newPos);
+                this.UIManager.syncManualSliders();
             }
-            this.UIManager.syncManualSliders();
         }
     },
 
     onPointerUp(event) {
+        if (!this.dragState.isDragging) return;
+        
+        if (this.vizSettings.activeControl === 'landscape') {
+            this.ImagePlaneManager.returnToHome();
+        }
+        
         this.dragState.isDragging = false;
         this.dragState.targetObject = null;
     },
@@ -345,9 +367,6 @@ const App = {
 
     switchActiveControl(newControlTarget) {
         if (this.vizSettings.activeControl === newControlTarget) return;
-        const oldTarget = this.vizSettings.activeControl;
-        if (oldTarget === 'landscape') this.ImagePlaneManager.returnToHome();
-        else if (oldTarget === 'model') this.ModelManager.returnToHome();
         this.vizSettings.activeControl = newControlTarget;
         this.UIManager.updateMasterControls();
     },
@@ -378,12 +397,25 @@ const App = {
         
         // ** THE FIX IS HERE **
         let lookAtTargetPosition;
-        if (S.activeControl === 'landscape') {
-            // If dragging, look directly at the target position. Otherwise, use the object's current position.
-            lookAtTargetPosition = this.dragState.isDragging ? S.manualLandscapePosition : (this.ImagePlaneManager.landscape ? this.ImagePlaneManager.landscape.position : new THREE.Vector3());
+        const isLandscapeManual = S.activeControl === 'landscape' && !S.landscapeAutopilotOn;
+        const isModelManual = S.activeControl === 'model' && !S.modelAutopilotOn;
+
+        if (this.dragState.isDragging) {
+             if (S.activeControl === 'landscape') {
+                lookAtTargetPosition = this.ImagePlaneManager.landscape.position;
+             } else {
+                lookAtTargetPosition = this.ModelManager.gltfModel.position;
+             }
+        } else if (isLandscapeManual || isModelManual) {
+            if (isLandscapeManual) {
+                lookAtTargetPosition = S.manualLandscapePosition;
+            } else {
+                lookAtTargetPosition = S.manualModelPosition;
+            }
         } else {
-            lookAtTargetPosition = this.dragState.isDragging ? S.manualModelPosition : (this.ModelManager.gltfModel ? this.ModelManager.gltfModel.position : new THREE.Vector3());
+            lookAtTargetPosition = this.stableLookAtPoint;
         }
+
         this.CameraManager.setLookAt(lookAtTargetPosition);
         this.CameraManager.update(cappedDelta); 
         
@@ -398,11 +430,8 @@ const App = {
         }
         
         this.renderer.clear(true, true);
-
         this.BackgroundManager.render();
-        
         this.renderer.clearDepth();
-
         this.renderer.render(this.scene, this.camera);
     }
 };
