@@ -21,8 +21,14 @@ export const UIManager = {
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
             if (el && !el.closest('#cameraOptions')) { 
-                if (el.type === 'checkbox') el.checked = this.app.vizSettings[key];
-                else if (el.type !== 'range') el.value = this.app.vizSettings[key];
+                if (el.type === 'checkbox') {
+                    el.checked = this.app.vizSettings[key];
+                } else if (el.type === 'range') {
+                    el.value = this.app.vizSettings[key];
+                    this.updateRangeDisplay(key, el.value);
+                } else {
+                    el.value = this.app.vizSettings[key];
+                }
             }
         });
 
@@ -31,6 +37,7 @@ export const UIManager = {
         this.setupEventListeners();
         this.setupFollowerGlow();
         this.updateBackgroundControlsVisibility(true);
+        this.updateWarpControlsVisibility(true);
         
         this.updateMasterControls();
         this.openDebugAccordions(); 
@@ -46,6 +53,29 @@ export const UIManager = {
                 content.style.maxHeight = content.scrollHeight + 'px';
             }
         });
+    },
+
+    syncManualSliders() {
+        const S = this.app.vizSettings;
+        const UIElements = this.controlDOMElements;
+        let targetPosition;
+
+        if (S.activeControl === 'landscape') {
+            targetPosition = S.manualLandscapePosition;
+        } else if (S.activeControl === 'model') {
+            targetPosition = S.manualModelPosition;
+        } else {
+            return; 
+        }
+
+        if (targetPosition) {
+            UIElements.sliderX.value = targetPosition.x;
+            UIElements.sliderY.value = targetPosition.y;
+            UIElements.sliderZ.value = targetPosition.z;
+            this.updateRangeDisplay('actorX', targetPosition.x);
+            this.updateRangeDisplay('actorY', targetPosition.y);
+            this.updateRangeDisplay('actorDepth', targetPosition.z);
+        }
     },
 
     setupMasterControls() {
@@ -158,19 +188,17 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const activeControl = S.activeControl;
         const UIElements = this.controlDOMElements;
-        let targetPosition, isAutopilotOn, scaleProp, speedProp;
+        let isAutopilotOn, scaleProp, speedProp;
         
         UIElements.actorToggleContainer.querySelectorAll('button').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.actor === activeControl);
         });
 
         if (activeControl === 'landscape') {
-            targetPosition = S.manualLandscapePosition;
             isAutopilotOn = S.landscapeAutopilotOn;
             scaleProp = 'landscapeScale';
             speedProp = 'landscapeAutopilotSpeed';
         } else {
-            targetPosition = S.manualModelPosition;
             isAutopilotOn = S.modelAutopilotOn;
             scaleProp = 'modelScale';
             speedProp = 'modelAutopilotSpeed';
@@ -190,14 +218,7 @@ export const UIManager = {
             this.updateRangeDisplay('masterSpeed', S[speedProp]);
         }
         
-        if (targetPosition) {
-            UIElements.sliderX.value = targetPosition.x;
-            UIElements.sliderY.value = targetPosition.y;
-            UIElements.sliderZ.value = targetPosition.z;
-            this.updateRangeDisplay('actorX', targetPosition.x);
-            this.updateRangeDisplay('actorY', targetPosition.y);
-            this.updateRangeDisplay('actorDepth', targetPosition.z);
-        }
+        this.syncManualSliders();
 
         this.updatePresetGlow();
         this.refreshAccordion(UIElements.masterControlContainer);
@@ -259,12 +280,12 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence'].includes(id)) {
+             if (['masterScale', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach'].includes(id)) {
                 precision = 2;
-            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure'].includes(id)) {
+            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness'].includes(id)) {
                 precision = 2;
-            } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime') {
-                precision = 1;
+            } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod'].includes(id)) {
+                precision = 0;
             }
             display.textContent = parseFloat(value).toFixed(precision);
         }
@@ -280,6 +301,23 @@ export const UIManager = {
             this.app.AudioProcessor.connectButterchurn();
         }
         if (!isInitial) this.refreshAccordion(document.getElementById('backgroundMode'));
+    },
+    
+    updateWarpControlsVisibility(isInitial = false) {
+        const mode = this.app.vizSettings.warpMode;
+        const sagControls = document.getElementById('warpSagControls');
+        const droopControls = document.getElementById('warpDroopControls');
+        const cylinderControls = document.getElementById('warpCylinderControls');
+        const bendControls = document.getElementById('warpBendControls');
+        const foldControls = document.getElementById('warpFoldControls');
+        
+        if (sagControls) sagControls.style.display = (mode === 'sag') ? 'block' : 'none';
+        if (droopControls) droopControls.style.display = (mode === 'droop') ? 'block' : 'none';
+        if (cylinderControls) cylinderControls.style.display = (mode === 'cylinder') ? 'block' : 'none';
+        if (bendControls) bendControls.style.display = (mode === 'bend') ? 'block' : 'none';
+        if (foldControls) foldControls.style.display = (mode === 'fold') ? 'block' : 'none';
+
+        if (!isInitial) this.refreshAccordion(document.getElementById('warpMode'));
     },
 
     toggleLightSliders() { 
@@ -317,15 +355,12 @@ export const UIManager = {
             if (el) el.addEventListener('change', (e) => this.handleFileSelect(e, id));
         });
 
-        // ** THE FIX IS HERE **
-        // Listen to the GPGPU Debugger checkbox specifically.
         const gpgpuDebugCheckbox = document.getElementById('enableGPGPUDebugger');
         if (gpgpuDebugCheckbox) {
             gpgpuDebugCheckbox.addEventListener('change', (e) => {
                 this.app.vizSettings.enableGPGPUDebugger = e.target.checked;
             });
         }
-
 
         document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select').forEach(control => {
             if (control.closest('#cameraOptions')) return;
@@ -336,15 +371,22 @@ export const UIManager = {
                 const S = this.app.vizSettings;
                 let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
 
-                if (e.target.type === 'checkbox') S[id] = value;
-                else if (e.target.type === 'range' || e.target.type === 'number') S[id] = parseFloat(value);
-                else S[id] = value;
+                if (e.target.type === 'checkbox') {
+                    S[id] = value;
+                } else if (e.target.type === 'range' || e.target.type === 'number' || e.target.id === 'peelAnimationStyle') {
+                    S[id] = parseFloat(value);
+                } else {
+                    S[id] = value;
+                }
                 
                 if (e.target.type !== 'checkbox' || id === 'butterchurnEnableCycle') this.updateRangeDisplay(id, value);
                 
                 if (id === 'backgroundMode') this.updateBackgroundControlsVisibility();
+                if (id === 'warpMode') this.updateWarpControlsVisibility();
                 if (id === 'enableLightOrbit') this.toggleLightSliders();
-                if (id === 'planeAspectRatio') this.app.ImagePlaneManager.createDefaultLandscape();
+                if (id === 'planeAspectRatio') {
+                    this.app.ImagePlaneManager.createDefaultLandscape();
+                }
             });
         });
 
@@ -392,17 +434,6 @@ export const UIManager = {
                 });
             }
         });
-
-        const canvas = document.getElementById('glCanvas');
-        canvas.addEventListener('mousedown', e => {
-            this.app.mouseState.z = e.offsetX; this.app.mouseState.w = canvas.clientHeight - e.offsetY; this.app.mouseState.x = e.offsetX; this.app.mouseState.y = canvas.clientHeight - e.offsetY;
-        });
-        canvas.addEventListener('mouseup', () => {
-            if (this.app.mouseState.z > 0) {
-                 this.app.mouseState.z = -Math.abs(this.app.mouseState.z); this.app.mouseState.w = -Math.abs(this.app.mouseState.w);
-            }
-        });
-        canvas.addEventListener('mousemove', e => { if (this.app.mouseState.z > 0) { this.app.mouseState.x = e.offsetX; this.app.mouseState.y = canvas.clientHeight - e.offsetY; } });
     },
 
     setupButterchurnEventListeners() {
@@ -495,7 +526,7 @@ export const UIManager = {
                 this.setGlowTarget('audio');
                 break;
             case 'audioFileInput': 
-                this.updateFileNameDisplay('audio', file.name); // THIS LINE IS THE FIX
+                this.updateFileNameDisplay('audio', file.name); 
                 if (this.app.AudioProcessor) this.app.AudioProcessor.loadAudioFile(file);
                 this.setGlowTarget('play');
                 break;
@@ -526,7 +557,7 @@ export const UIManager = {
         let message = '';
         switch (sourceType) {
             case 'none': message = "AUDIO: IDLE"; break; 
-            case 'mic': message = "AUDIO: Mic/System"; this.setGlowTarget(null); break;
+            case 'mic': message = "AUDIO: Mic/System"; this.setGlowTarget(null); break; 
             case 'file_ready': message = "AUDIO: File Ready"; if (playButton) playButton.textContent = "Play File"; break; 
             case 'file_playing': message = "AUDIO: Playing"; if (playButton) playButton.textContent = "Pause File"; break; 
             case 'file_paused': message = "AUDIO: Paused"; if (playButton) playButton.textContent = "Play File"; break; 
@@ -559,4 +590,43 @@ export const UIManager = {
             if (value > 0) this.eqCtx.fillRect(i * barWidth, height - (value * height), barWidth, value * height); 
         }
     },
+    resetLandscapeSettings() {
+        const S = this.app.vizSettings;
+        const D = this.app.defaultVisualizerSettings;
+    
+        const landscapeKeys = [
+            'enableLandscape', 'landscapeSpinSpeed', 'planeAspectRatio', 'planeOrientation', 
+            'deformationStrength', 'enablePeel', 'peelAmount', 'peelCurl', 'peelAnimationStyle', 
+            'peelDrift', 'peelTextureAmount', 'peelAudioSource', 'warpMode', 
+            'sagAmount', 'sagFalloffSharpness', 'sagAudioMod', 
+            'droopAmount', 'droopAudioMod', 'droopFalloffSharpness', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor',
+            'cylinderRadius', 'cylinderHeightScale', 'cylinderAxisAlignment', 'cylinderArcAngle', 'cylinderArcOffset',
+            'bendAngle', 'bendAudioMod', 'bendFalloffSharpness', 'bendAxis',
+            'foldAngle', 'foldDepth', 'foldRoundness', 'foldAudioMod', 'foldNudge',
+            'enableFoldCrease', 'foldCreaseDepth', 'foldCreaseSharpness',
+            'enableFoldTuck', 'foldTuckAmount', 'foldTuckReach'
+        ];
+    
+        landscapeKeys.forEach(key => {
+            if (D[key] !== undefined) {
+                S[key] = D[key];
+                const el = document.getElementById(key);
+                if (el) {
+                    if (el.type === 'checkbox') {
+                        el.checked = D[key];
+                    } else {
+                        el.value = D[key];
+                    }
+                    if (el.type === 'range') {
+                        this.updateRangeDisplay(key, D[key]);
+                    }
+                }
+            }
+        });
+    
+        this.updateWarpControlsVisibility();
+        this.app.ImagePlaneManager.createDefaultLandscape();
+    
+        this.logSuccess("Landscape settings reset.");
+    }
 };

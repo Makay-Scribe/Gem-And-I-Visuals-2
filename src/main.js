@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { UIManager } from './modules/UIManager.js';
 import { ButterchurnManager } from './modules/ButterchurnManager.js';
 import { Debugger } from './modules/Debugger.js';
-import { shaderPresets } from './modules/ShaderPresets.js';
+import { shaderPresets } from './modules/shaderPresets.js';
 import { AudioProcessor } from './modules/AudioProcessor.js';
 import { CameraManager } from './modules/CameraManager.js';
 import { ShaderManager } from './modules/ShaderManager.js';
@@ -18,6 +18,14 @@ const App = {
     THREE: THREE, 
     renderer: null, camera: null, scene: null, 
     gltfModel: null, animationMixer: null,
+    raycaster: new THREE.Raycaster(),
+    dragState: {
+        isDragging: false,
+        targetObject: null,
+        plane: new THREE.Plane(),
+        offset: new THREE.Vector3(),
+        intersection: new THREE.Vector3(),
+    },
     modelPresets: {
         'modelPreset1': { name: 'Dancing Planet', path: '/3dmodel/converted/Dancing planet.glb' },
         'modelPreset2': { name: 'Swimming Shark', path: '/3dmodel/converted/Swimming shark.glb' },
@@ -59,23 +67,20 @@ const App = {
 
     defaultVisualizerSettings: {
         // Master Controls
-        activeControl: 'landscape', // 'landscape' or 'model'
+        activeControl: 'landscape',
         landscapeAutopilotOn: false,
         modelAutopilotOn: false,
         activeLandscapePreset: null,
         activeModelPreset: null,
         
-        // Manual Positions for each actor (controlled by sliders)
         manualLandscapePosition: new THREE.Vector3(0, 0, -5),
-        manualModelPosition: new THREE.Vector3(0, 5, 5), // Changed Z to be in front
+        manualModelPosition: new THREE.Vector3(0, 5, 5),
 
-        // Autopilot/Shared Properties
         landscapeScale: 1.0,
         modelScale: 1.0,
         landscapeAutopilotSpeed: 1.0,
         modelAutopilotSpeed: 1.0,
         
-        // Model-Specific
         enableModel: true,
         enableModelSpin: false,
         modelSpinSpeed: 0.0,
@@ -90,6 +95,48 @@ const App = {
         planeOrientation: 'xy',
         deformationStrength: 1.5,
         
+        enablePeel: false,
+        peelAmount: 0.2,
+        peelCurl: 0.4,
+        peelAnimationStyle: 1,
+        peelDrift: 0.05,
+        peelTextureAmount: 0.0,
+        peelAudioSource: 'onBeat',
+        
+        warpMode: 'none',
+        sagAmount: 2.0,
+        sagFalloffSharpness: 1.5,
+        sagAudioMod: 0.2,
+
+        droopAmount: 0.3,
+        droopAudioMod: 1.0,
+        droopFalloffSharpness: 2.5,
+        droopSupportedWidthFactor: 0.6,
+        droopSupportedDepthFactor: 0.5,
+
+        cylinderRadius: 5.0,
+        cylinderHeightScale: 1.0,
+        cylinderAxisAlignment: "y",
+        cylinderArcAngle: 360,
+        cylinderArcOffset: 0,
+
+        bendAngle: 0.0,
+        bendAudioMod: 0.0,
+        bendFalloffSharpness: 1.0,
+        bendAxis: 'primary',
+        
+        foldAngle: 0.0,
+        foldDepth: 0.2,
+        foldRoundness: 0.0,
+        foldAudioMod: 0.0,
+        foldNudge: 0.0,
+        enableFoldCrease: false,
+        foldCreaseDepth: -0.15,
+        foldCreaseSharpness: 3.0,
+        enableFoldTuck: false,
+        foldTuckAmount: 0.0,
+        foldTuckReach: 0.15,
+
         // Background
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
@@ -213,25 +260,88 @@ const App = {
             }
         }, 100);
 
-
+        const canvas = document.getElementById('glCanvas');
         window.addEventListener('resize', this.onWindowResize.bind(this));
         
-        window.addEventListener('mousemove', (event) => {
+        canvas.addEventListener('mousemove', (event) => {
+            if (this.dragState.isDragging) return;
             if (!this.vizSettings.enableShaderMouse) return;
             this.mouseState.x = event.clientX;
             this.mouseState.y = event.clientY;
         });
-        window.addEventListener('mousedown', () => {
-            if (!this.vizSettings.enableShaderMouse) return;
-            this.mouseState.z = 1;
+        canvas.addEventListener('mousedown', () => {
+             if (this.dragState.isDragging) return;
+             if (!this.vizSettings.enableShaderMouse) return;
+             this.mouseState.z = 1;
         });
-        window.addEventListener('mouseup', () => {
-            if (!this.vizSettings.enableShaderMouse) return;
+        canvas.addEventListener('mouseup', () => {
             this.mouseState.z = 0;
         });
         
+        canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
+        canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
+        canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
+
         this.animate();
     },
+
+    onPointerDown(event) {
+        if (!this.vizSettings.enableShaderMouse) return;
+        if (this.vizSettings.landscapeAutopilotOn || this.vizSettings.modelAutopilotOn) return;
+
+        const S = this.vizSettings;
+        const DS = this.dragState;
+
+        const mouse = new THREE.Vector2(
+            (event.clientX / window.innerWidth) * 2 - 1,
+            -(event.clientY / window.innerHeight) * 2 + 1
+        );
+        this.raycaster.setFromCamera(mouse, this.camera);
+        
+        let intersects;
+        if (S.activeControl === 'landscape' && this.ImagePlaneManager.landscape) {
+             intersects = this.raycaster.intersectObject(this.ImagePlaneManager.landscape);
+             if (intersects.length > 0) DS.targetObject = this.ImagePlaneManager.landscape;
+        } else if (S.activeControl === 'model' && this.ModelManager.gltfModel) {
+            intersects = this.raycaster.intersectObject(this.ModelManager.gltfModel, true);
+            if (intersects.length > 0) DS.targetObject = this.ModelManager.gltfModel;
+        } else {
+            return;
+        }
+        
+        if (intersects.length > 0 && DS.targetObject) {
+            DS.isDragging = true;
+            DS.plane.setFromNormalAndCoplanarPoint(this.camera.getWorldDirection(DS.plane.normal), intersects[0].point);
+            DS.offset.copy(intersects[0].point).sub(DS.targetObject.position);
+        }
+    },
+    
+    onPointerMove(event) {
+        if (!this.dragState.isDragging) return;
+
+        const mouse = new THREE.Vector2(
+            (event.clientX / window.innerWidth) * 2 - 1,
+            -(event.clientY / window.innerHeight) * 2 + 1
+        );
+        this.raycaster.setFromCamera(mouse, this.camera);
+
+        if (this.raycaster.ray.intersectPlane(this.dragState.plane, this.dragState.intersection)) {
+            const newPos = this.dragState.intersection.sub(this.dragState.offset);
+            
+            if (this.vizSettings.activeControl === 'landscape') {
+                this.vizSettings.manualLandscapePosition.copy(newPos);
+            } else if (this.vizSettings.activeControl === 'model') {
+                this.vizSettings.manualModelPosition.copy(newPos);
+            }
+            this.UIManager.syncManualSliders();
+        }
+    },
+
+    onPointerUp(event) {
+        this.dragState.isDragging = false;
+        this.dragState.targetObject = null;
+    },
+
 
     switchActiveControl(newControlTarget) {
         if (this.vizSettings.activeControl === newControlTarget) return;
@@ -266,20 +376,20 @@ const App = {
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
         
+        // ** THE FIX IS HERE **
         let lookAtTargetPosition;
         if (S.activeControl === 'landscape') {
-            lookAtTargetPosition = this.ImagePlaneManager.landscape ? this.ImagePlaneManager.landscape.position : new THREE.Vector3();
+            // If dragging, look directly at the target position. Otherwise, use the object's current position.
+            lookAtTargetPosition = this.dragState.isDragging ? S.manualLandscapePosition : (this.ImagePlaneManager.landscape ? this.ImagePlaneManager.landscape.position : new THREE.Vector3());
         } else {
-            lookAtTargetPosition = this.ModelManager.gltfModel ? this.ModelManager.gltfModel.position : new THREE.Vector3();
+            lookAtTargetPosition = this.dragState.isDragging ? S.manualModelPosition : (this.ModelManager.gltfModel ? this.ModelManager.gltfModel.position : new THREE.Vector3());
         }
         this.CameraManager.setLookAt(lookAtTargetPosition);
         this.CameraManager.update(cappedDelta); 
-        this.SceneManager.update(cappedDelta);
         
+        this.SceneManager.update(cappedDelta);
         this.BackgroundManager.update();
         this.GPGPUDebugger.update();
-
-        // --- NEW, CENTRALIZED RENDER LOGIC ---
 
         if (this.vizSettings.backgroundMode === 'greenscreen') {
             this.renderer.setClearColor('#00ff00');
@@ -294,10 +404,6 @@ const App = {
         this.renderer.clearDepth();
 
         this.renderer.render(this.scene, this.camera);
-        
-        // ** THE FIX IS HERE **
-        // The GPGPUDebugger.render() call is now removed, as it's just a regular
-        // object in the scene that gets rendered automatically by the line above.
     }
 };
 
