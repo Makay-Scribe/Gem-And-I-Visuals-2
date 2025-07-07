@@ -518,6 +518,11 @@
                     <label for="enableGPGPUDebugger">Enable Debug Plane</label>
                     <input type="checkbox" id="enableGPGPUDebugger" checked>
                 </div>
+                 <!-- ** THE FIX IS HERE ** - Add the toggle for the new on-screen display -->
+                <div class="checkbox-label-container">
+                    <label for="enableOnScreenDebugger">Enable On-Screen Text</label>
+                    <input type="checkbox" id="enableOnScreenDebugger" checked>
+                </div>
             </div>
         </div>
         
@@ -525,6 +530,9 @@
     <canvas id="glCanvas"></canvas>
     <video id="videoSourceElement" loop muted playsinline style="display:none;"></video>
     <audio id="audioSourceElement" loop style="display:none;"></audio>
+
+    <!-- ** THE FIX IS HERE ** - Add the new debugger element -->
+    <div id="onScreenDebugPanel" style="display: none;"></div>
     
     <script type="module" src="/src/main.js"></script>
 

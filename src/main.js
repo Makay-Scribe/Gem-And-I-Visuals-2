@@ -67,6 +67,7 @@ const App = {
     ModelManager: ModelManager,
     ComputeManager: ComputeManager,
     GPGPUDebugger: GPGPUDebugger,
+    Debugger: Debugger,
 
     defaultVisualizerSettings: {
         // Master Controls
@@ -239,6 +240,7 @@ const App = {
         this.ShaderManager.init(this);
         this.UIManager.init(this);
         this.GPGPUDebugger.init(this);
+        this.Debugger.init(this);
         
         setTimeout(() => {
             this.preloadDevAssets();
@@ -316,95 +318,17 @@ const App = {
         UIM.updateRangeDisplay('masterScale', newValue);
     },
 
+    // ** THE FIX IS HERE ** - All old logic is removed.
     onPointerDown(event) {
-        if (this.dragState.mode !== 'none') return;
-        if (event.target !== this.renderer.domElement) return;
-        
-        const S = this.vizSettings;
-        if (S.activeControl === 'landscape' && S.landscapeAutopilotOn) return;
-        if (S.activeControl === 'model' && S.modelAutopilotOn) return;
-
-        const DS = this.dragState;
-        
-        // Interrupt any ongoing return animations.
-        this.ImagePlaneManager.stopAllTransitions();
-        this.ModelManager.stopAllTransitions();
-
-        // Left-Click for Rotation
-        if (event.button === 0 && S.activeControl === 'landscape') {
-            DS.mode = 'rotating';
-            DS.targetObject = this.ImagePlaneManager.landscape;
-            DS.startMouse.set(event.clientX, event.clientY);
-            DS.startRotation.copy(this.ImagePlaneManager.rotation);
-        
-        // Right-Click for Position
-        } else if (event.button === 2) {
-            event.preventDefault();
-            let target = null;
-            if (S.activeControl === 'landscape' && this.ImagePlaneManager.landscape) {
-                target = this.ImagePlaneManager.landscape;
-            } else if (S.activeControl === 'model' && this.ModelManager.gltfModel) {
-                target = this.ModelManager.gltfModel;
-            }
-
-            if (target) {
-                const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
-                this.raycaster.setFromCamera(mouse, this.camera);
-                const intersects = this.raycaster.intersectObject(target, true);
-
-                if (intersects.length > 0) {
-                    DS.mode = 'dragging';
-                    DS.targetObject = target;
-                    DS.plane.setFromNormalAndCoplanarPoint(this.camera.getWorldDirection(DS.plane.normal), intersects[0].point);
-                    if (this.raycaster.ray.intersectPlane(DS.plane, DS.intersection)) {
-                        DS.offset.copy(intersects[0].point).sub(target.position);
-                    }
-                }
-            }
-        }
+        // This function is intentionally left empty.
     },
     
     onPointerMove(event) {
-        if (this.dragState.mode === 'none') return;
-
-        const DS = this.dragState;
-
-        if (DS.mode === 'rotating') {
-            const deltaX = event.clientX - DS.startMouse.x;
-            const deltaY = event.clientY - DS.startMouse.y;
-            const rotSpeed = 0.005;
-
-            this.ImagePlaneManager.rotation.y = DS.startRotation.y + deltaX * rotSpeed;
-            this.ImagePlaneManager.rotation.x = DS.startRotation.x + deltaY * rotSpeed;
-
-        } else if (DS.mode === 'dragging') {
-            const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
-            this.raycaster.setFromCamera(mouse, this.camera);
-
-            if (this.raycaster.ray.intersectPlane(DS.plane, DS.intersection)) {
-                const newPos = DS.intersection.sub(DS.offset);
-                // **THE CRITICAL CHANGE**: We only move the object's actual position.
-                // We DO NOT touch the vizSettings."home" position here.
-                DS.targetObject.position.copy(newPos);
-            }
-        }
+        // This function is intentionally left empty.
     },
 
     onPointerUp(event) {
-        if (this.dragState.mode === 'none') return;
-
-        if (this.dragState.mode === 'rotating') {
-            this.ImagePlaneManager.returnRotationToHome();
-        } else if (this.dragState.mode === 'dragging') {
-            if (this.dragState.targetObject === this.ImagePlaneManager.landscape) {
-                this.ImagePlaneManager.returnToHome(); 
-            } else if (this.dragState.targetObject === this.ModelManager.gltfModel) {
-                this.ModelManager.returnToHome();
-            }
-        }
-
-        this.dragState.mode = 'none';
-        this.dragState.targetObject = null;
+        // This function is intentionally left empty.
     },
 
     switchActiveControl(newControlTarget) {
@@ -419,6 +343,7 @@ const App = {
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.BackgroundManager.onWindowResize(); 
+        if (this.GPGPUDebugger && this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
         if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
     },
 
@@ -443,6 +368,7 @@ const App = {
         this.SceneManager.update(cappedDelta);
         this.BackgroundManager.update();
         this.GPGPUDebugger.update();
+        this.Debugger.update();
 
         if (this.vizSettings.backgroundMode === 'greenscreen') {
             this.renderer.setClearColor('#00ff00');
@@ -454,6 +380,7 @@ const App = {
         this.BackgroundManager.render();
         this.renderer.clearDepth();
         this.renderer.render(this.scene, this.camera);
+        this.GPGPUDebugger.render();
     }
 };
 

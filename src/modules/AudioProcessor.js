@@ -65,7 +65,6 @@ export const AudioProcessor = {
             this.muteNode.connect(this.audioContext.destination);
             this.butterchurnGainNode.connect(this.muteNode);
             this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
-            // this.app.SceneManager.createAudioTexture(); // REMOVED: This function no longer exists in SceneManager
             return true;
         } catch (e) {
             console.error("Could not initialize AudioContext.", e);

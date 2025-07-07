@@ -67,7 +67,7 @@ export const ComputeManager = {
         this.initialNormalTexture.needsUpdate = true;
 
         this.positionVariable = this.gpuCompute.addVariable('texturePosition', this.positionShader, this.initialPositionTexture);
-        this.normalVariable = this.gpuCompute.addVariable('textureNormal', this.normalShader, this.initialNormalTexture);
+        this.normalVariable = this.gpuCompute.addVariable('textureNormal', this.normalShader, this.initialPositionTexture);
 
         this.gpuCompute.setVariableDependencies(this.normalVariable, [this.positionVariable]);
         this.gpuCompute.setVariableDependencies(this.positionVariable, [this.positionVariable]);
@@ -78,9 +78,7 @@ export const ComputeManager = {
             u_time: { value: 0 },
             u_audioLow: { value: 0 },
             u_planeDimensions: { value: planeDimensionsVec2 },
-            u_rotationMatrix: { value: new THREE.Matrix4() },
             u_deformationStrength: { value: 0.0 },
-            u_planeOrientation: { value: 0 },
             u_enablePeel: { value: 0.0 },
             u_peelAmount: { value: 0.0 },
             u_peelCurl: { value: 0.0 },
@@ -139,12 +137,9 @@ export const ComputeManager = {
         const IM = this.app.ImagePlaneManager;
         const uniforms = this.positionVariable.material.uniforms;
 
-        this._rotationMatrix.makeRotationFromEuler(IM.rotation);
-        uniforms.u_rotationMatrix.value.copy(this._rotationMatrix);
+        // ** THE FIX IS HERE ** - u_rotationMatrix and u_planeOrientation are no longer used by GPGPU.
+        // The rotation is handled entirely by the ImagePlaneManager's object matrix during rendering.
 
-        const orientationMap = { 'xy': 0, 'xz': 1, 'yz': 2 };
-        uniforms.u_planeOrientation.value = orientationMap[S.planeOrientation] || 0;
-        
         const warpModeMap = { 'none': 0, 'sag': 2, 'droop': 5, 'cylinder': 4, 'bend': 3, 'fold': 1 };
         uniforms.u_warpMode.value = warpModeMap[S.warpMode] || 0;
 
@@ -235,13 +230,13 @@ export const ComputeManager = {
         vec2 safeNormalize(vec2 v) { float l = length(v); return (l > EPSILON_SHADER) ? v / l : vec2(0.0); }
         mat3 rotationMatrix3(vec3 axis, float angle){axis=normalize(axis);float s=sin(angle);float c=cos(angle);float oc=1.0-c;return mat3(oc*axis.x*axis.x+c,oc*axis.x*axis.y-axis.z*s,oc*axis.z*axis.x+axis.y*s,oc*axis.x*axis.y+axis.z*s,oc*axis.y*axis.y+c,oc*axis.y*axis.z-axis.x*s,oc*axis.z*axis.x-axis.y*s,oc*axis.y*axis.z+axis.x*s,oc*axis.z*axis.z+c);}
 
-        vec3 getDisplacementNormal(int orientation) {
-            if (orientation == 1) return vec3(0.0, 1.0, 0.0);
-            if (orientation == 2) return vec3(1.0, 0.0, 0.0);
+        // ** THE FIX IS HERE ** - This function is now simplified. 
+        // It always returns the normal for a flat XY plane.
+        vec3 getDisplacementNormal() {
             return vec3(0.0, 0.0, 1.0);
         }
 
-        vec3 calculatePeel(vec2 uv, float time, float audio, int corner_index, int peelAnimationStyle, float peelAmount, float peelCurl, float peelDrift, float peelTextureAmount, int planeOrientation) {
+        vec3 calculatePeel(vec2 uv, float time, float audio, int corner_index, int peelAnimationStyle, float peelAmount, float peelCurl, float peelDrift, float peelTextureAmount) {
             vec2 centeredUv = uv - 0.5;
             float cornerStrength = pow(length(centeredUv) * 1.414, 4.0);
             float time_offset = (peelAnimationStyle == 1) ? float(corner_index) * PI / 2.0 : 0.0;
@@ -253,24 +248,24 @@ export const ComputeManager = {
             float final_curl = peelCurl + drift_animation;
             vec2 offset_2d = safeNormalize(centeredUv) * -1.0 * displacement * final_curl;
             
-            vec3 displacement_vec = getDisplacementNormal(planeOrientation) * displacement;
-            if (planeOrientation == 0) { displacement_vec.xy += offset_2d; } 
-            else if (planeOrientation == 1) { displacement_vec.xz += offset_2d; } 
-            else { displacement_vec.yz += offset_2d; }
+            // ** THE FIX IS HERE ** - Displacement is now always in Z, with XY offset.
+            vec3 displacement_vec = getDisplacementNormal() * displacement;
+            displacement_vec.xy += offset_2d;
             return displacement_vec;
         }
 
-        vec3 calculateSag(vec2 uv, float audio, int planeOrientation, float sagAmount, float sagFalloffSharpness, float sagAudioMod) {
+        vec3 calculateSag(vec2 uv, float audio, float sagAmount, float sagFalloffSharpness, float sagAudioMod) {
             vec2 uv_centered = uv - 0.5;
             float dist_from_center = length(uv_centered) / 0.7071;
             dist_from_center = clamp(dist_from_center, 0.0, 1.0);
             float sag_mask = 1.0 - pow(dist_from_center, sagFalloffSharpness);
             float total_sag_amount = sagAmount * (1.0 + audio * sagAudioMod);
             float sag_displacement = total_sag_amount * sag_mask;
-            return getDisplacementNormal(planeOrientation) * -sag_displacement;
+            // ** THE FIX IS HERE ** - Sag is always in the negative Z direction.
+            return getDisplacementNormal() * -sag_displacement;
         }
 
-        vec3 calculateDroop(vec2 uv, float audio, int planeOrientation, float droopAmount, float droopAudioMod, float droopFalloffSharpness, float droopSupportedWidthFactor, float droopSupportedDepthFactor) {
+        vec3 calculateDroop(vec2 uv, float audio, float droopAmount, float droopAudioMod, float droopFalloffSharpness, float droopSupportedWidthFactor, float droopSupportedDepthFactor) {
             vec2 centered_uv = uv - 0.5;
             float supported_half_w = droopSupportedWidthFactor * 0.5;
             float supported_half_h = droopSupportedDepthFactor * 0.5;
@@ -286,7 +281,8 @@ export const ComputeManager = {
             float final_droop_mask = pow(combined_droop_factor, droopFalloffSharpness);
             float total_droop_amount = droopAmount * (1.0 + audio * droopAudioMod);
             float droop_displacement = total_droop_amount * final_droop_mask;
-            return getDisplacementNormal(planeOrientation) * -droop_displacement;
+            // ** THE FIX IS HERE ** - Droop is always in the negative Z direction.
+            return getDisplacementNormal() * -droop_displacement;
         }
 
         vec3 calculateCylinder(vec2 uv, float audio, vec2 planeDimensions, float cylinderRadius, float cylinderHeightScale, int cylinderAxisAlignment, float cylinderArcAngle, float cylinderArcOffset, float deformationStrength) {
@@ -296,6 +292,7 @@ export const ComputeManager = {
             vec3 p;
             vec3 normal_dir;
 
+            // This effect is fundamentally axis-dependent, so it retains its logic, but it's now warping a base XY plane.
             if (cylinderAxisAlignment == 1) { p = vec3(length_coord, cos(angle) * cylinderRadius, sin(angle) * cylinderRadius); normal_dir = normalize(vec3(0.0, p.y, p.z)); } 
             else if (cylinderAxisAlignment == 2) { p = vec3(cos(angle) * cylinderRadius, sin(angle) * cylinderRadius, length_coord); normal_dir = normalize(vec3(p.x, p.y, 0.0)); } 
             else { p = vec3(cos(angle) * cylinderRadius, length_coord, sin(angle) * cylinderRadius); normal_dir = normalize(vec3(p.x, 0.0, p.z)); }
@@ -304,30 +301,17 @@ export const ComputeManager = {
             return p;
         }
 
-        vec3 calculateBend(vec3 p, vec2 uv, float audio, int planeOrientation, vec2 planeSize, float bendAngle, float bendAudioMod, float bendFalloffSharpness, int bendAxis) {
+        vec3 calculateBend(vec3 p, vec2 uv, float audio, vec2 planeSize, float bendAngle, float bendAudioMod, float bendFalloffSharpness, int bendAxis) {
             float falloff_coord = (bendAxis == 0) ? abs(uv.y - 0.5) * 2.0 : abs(uv.x - 0.5) * 2.0;
             float falloff_multiplier = pow(falloff_coord, bendFalloffSharpness);
             float total_bend_angle = bendAngle * (1.0 + audio * bendAudioMod) * falloff_multiplier;
 
-            vec3 plane_normal = getDisplacementNormal(planeOrientation);
             if (abs(total_bend_angle) < EPSILON_SHADER) { return p; }
             
-            vec3 bend_axis_dir, segment_axis;
-            float segment_extent;
-
-            if (planeOrientation == 1) { // XZ Floor
-                segment_axis = (bendAxis == 0) ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
-                segment_extent = (bendAxis == 0) ? planeSize.y : planeSize.x;
-            } else { // XY and YZ Walls
-                segment_axis = (bendAxis == 0) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-                segment_extent = (bendAxis == 0) ? planeSize.y : planeSize.x;
-            }
-            if (planeOrientation == 2) { // YZ Wall special case
-                 segment_axis = (bendAxis == 0) ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
-                 segment_extent = (bendAxis == 0) ? planeSize.y : planeSize.x;
-            }
-
-            bend_axis_dir = normalize(cross(plane_normal, segment_axis));
+            // ** THE FIX IS HERE ** - Simplified axis logic, always assumes base XY plane.
+            vec3 segment_axis = (bendAxis == 0) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+            float segment_extent = (bendAxis == 0) ? planeSize.y : planeSize.x;
+            vec3 bend_axis_dir = normalize(cross(getDisplacementNormal(), segment_axis));
 
             float half_extent = segment_extent * 0.5;
             float bend_radius = half_extent / max(EPSILON_SHADER, abs(sin(total_bend_angle * 0.5)));
@@ -336,18 +320,19 @@ export const ComputeManager = {
             
             vec3 bent_position = bend_axis_dir * dot(p, bend_axis_dir);
             bent_position += segment_axis * (sin(angle_on_arc) * bend_radius);
-            bent_position += plane_normal * ((cos(angle_on_arc) - 1.0) * bend_radius * -sign(total_bend_angle));
+            bent_position += getDisplacementNormal() * ((cos(angle_on_arc) - 1.0) * bend_radius * -sign(total_bend_angle));
             
             return bent_position;
         }
 
-        vec3 calculateFold(vec3 flat_pos, vec2 uv_param, float audio, int planeOrientation, vec2 planeSize, float foldAngle, float foldDepth, float foldRoundness, float foldAudioMod, float foldNudge, bool enableFoldCrease, float foldCreaseDepth, float foldCreaseSharpness, bool enableFoldTuck, float foldTuckAmount, float foldTuckReach, float deformationStrength) {
+        vec3 calculateFold(vec3 flat_pos, vec2 uv_param, float audio, vec2 planeSize, float foldAngle, float foldDepth, float foldRoundness, float foldAudioMod, float foldNudge, bool enableFoldCrease, float foldCreaseDepth, float foldCreaseSharpness, bool enableFoldTuck, float foldTuckAmount, float foldTuckReach, float deformationStrength) {
             vec2 local_uv; int corner_index; 
             if(uv_param.x<0.5&&uv_param.y<0.5){local_uv=uv_param;corner_index=0;}else if(uv_param.x>0.5&&uv_param.y<0.5){local_uv=vec2(1.0-uv_param.x,uv_param.y);corner_index=1;}else if(uv_param.x<0.5&&uv_param.y>0.5){local_uv=vec2(uv_param.x,1.0-uv_param.y);corner_index=2;}else{local_uv=vec2(1.0-uv_param.x,1.0-uv_param.y);corner_index=3;}
             
-            vec3 axis_U,axis_V,axis_W;
-            axis_W = getDisplacementNormal(planeOrientation);
-            if(planeOrientation==1){axis_U=vec3(1,0,0);axis_V=vec3(0,0,1);}else if(planeOrientation==0){axis_U=vec3(1,0,0);axis_V=vec3(0,1,0);}else{axis_U=vec3(0,0,1);axis_V=vec3(0,1,0);}
+            // ** THE FIX IS HERE ** - Simplified axis logic, always assumes base XY plane.
+            vec3 axis_U = vec3(1.0, 0.0, 0.0);
+            vec3 axis_V = vec3(0.0, 1.0, 0.0);
+            vec3 axis_W = getDisplacementNormal();
 
             float uv_sum_diag=local_uv.x+local_uv.y;
             if(uv_sum_diag>=foldDepth+foldRoundness+EPSILON_SHADER){return flat_pos + axis_W * audio * deformationStrength;}
@@ -386,9 +371,7 @@ export const ComputeManager = {
         uniform float u_time;
         uniform float u_audioLow;
         uniform vec2 u_planeDimensions;
-        uniform mat4 u_rotationMatrix;
         uniform float u_deformationStrength;
-        uniform int u_planeOrientation;
         uniform float u_enablePeel;
         uniform float u_peelAmount;
         uniform float u_peelCurl;
@@ -430,25 +413,25 @@ export const ComputeManager = {
             vec2 uv = gl_FragCoord.xy / resolution.xy;
             vec3 pos;
 
-            if (u_warpMode == 4) {
+            if (u_warpMode == 4) { // Cylinder
                 pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
             } else {
-                if (u_planeOrientation == 1) { pos = vec3((uv.x - 0.5) * u_planeDimensions.x, 0.0, (uv.y - 0.5) * u_planeDimensions.y); } 
-                else if (u_planeOrientation == 2) { pos = vec3(0.0, (uv.y - 0.5) * u_planeDimensions.y, (uv.x - 0.5) * u_planeDimensions.x); } 
-                else { pos = vec3((uv.x - 0.5) * u_planeDimensions.x, (uv.y - 0.5) * u_planeDimensions.y, 0.0); }
-
-                // Apply rotation first
-                pos = (u_rotationMatrix * vec4(pos, 1.0)).xyz;
+                // ** THE FIX IS HERE ** - The base position is ALWAYS a flat XY plane. No more orientation logic.
+                pos = vec3((uv.x - 0.5) * u_planeDimensions.x, (uv.y - 0.5) * u_planeDimensions.y, 0.0);
 
                 if (u_warpMode == 1) { // Fold
-                    pos = calculateFold(pos, uv, u_audioLow, u_planeOrientation, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
+                    pos = calculateFold(pos, uv, u_audioLow, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
                 } else {
-                    if (u_warpMode == 3) {
-                        pos = calculateBend(pos, uv, u_audioLow, u_planeOrientation, u_planeDimensions, u_bendAngle, u_bendAudioMod, u_bendFalloffSharpness, u_bendAxis);
+                    if (u_warpMode == 3) { // Bend
+                        pos = calculateBend(pos, uv, u_audioLow, u_planeDimensions, u_bendAngle, u_bendAudioMod, u_bendFalloffSharpness, u_bendAxis);
                     }
-                    pos += getDisplacementNormal(u_planeOrientation) * u_audioLow * u_deformationStrength;
-                    if (u_warpMode == 2) { pos += calculateSag(uv, u_audioLow, u_planeOrientation, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); }
-                    else if (u_warpMode == 5) { pos += calculateDroop(uv, u_audioLow, u_planeOrientation, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); }
+                    pos += getDisplacementNormal() * u_audioLow * u_deformationStrength;
+                    if (u_warpMode == 2) { // Sag
+                        pos += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
+                    }
+                    else if (u_warpMode == 5) { // Droop
+                        pos += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
+                    }
                 }
             }
 
@@ -458,7 +441,7 @@ export const ComputeManager = {
                 if (distance(uv, vec2(1,0)) < min_dist) { min_dist = distance(uv, vec2(1,0)); corner_index = 1; }
                 if (distance(uv, vec2(0,1)) < min_dist) { min_dist = distance(uv, vec2(0,1)); corner_index = 2; }
                 if (distance(uv, vec2(1,1)) < min_dist) { min_dist = distance(uv, vec2(1,1)); corner_index = 3; }
-                pos += calculatePeel(uv, u_time, u_peelAudio, corner_index, u_peelAnimationStyle, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount, u_planeOrientation);
+                pos += calculatePeel(uv, u_time, u_peelAudio, corner_index, u_peelAnimationStyle, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
             }
 
             gl_FragColor = vec4(pos, 1.0);
@@ -468,12 +451,11 @@ export const ComputeManager = {
     get normalShader() { return `
         ${this.commonShaderCode}
 
+        // Uniforms are duplicated here for the normal calculation pass
         uniform float u_time;
         uniform float u_audioLow;
         uniform vec2 u_planeDimensions;
-        uniform mat4 u_rotationMatrix;
         uniform float u_deformationStrength;
-        uniform int u_planeOrientation;
         uniform float u_enablePeel;
         uniform float u_peelAmount;
         uniform float u_peelCurl;
@@ -512,27 +494,27 @@ export const ComputeManager = {
         uniform float u_foldTuckReach;
         
         vec3 getDeformedPosition(vec2 uv) {
-            vec3 pos;
-            
-            if (u_warpMode == 4) {
-                 pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
+             vec3 pos;
+
+            if (u_warpMode == 4) { // Cylinder
+                pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
             } else {
-                if (u_planeOrientation == 1) { pos = vec3((uv.x - 0.5) * u_planeDimensions.x, 0.0, (uv.y - 0.5) * u_planeDimensions.y); }
-                else if (u_planeOrientation == 2) { pos = vec3(0.0, (uv.y - 0.5) * u_planeDimensions.y, (uv.x - 0.5) * u_planeDimensions.x); }
-                else { pos = vec3((uv.x - 0.5) * u_planeDimensions.x, (uv.y - 0.5) * u_planeDimensions.y, 0.0); }
+                // ** THE FIX IS HERE ** - The base position is ALWAYS a flat XY plane. No more orientation logic.
+                pos = vec3((uv.x - 0.5) * u_planeDimensions.x, (uv.y - 0.5) * u_planeDimensions.y, 0.0);
 
-                pos = (u_rotationMatrix * vec4(pos, 1.0)).xyz;
-
-                if (u_warpMode == 1) {
-                    pos = calculateFold(pos, uv, u_audioLow, u_planeOrientation, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
+                if (u_warpMode == 1) { // Fold
+                    pos = calculateFold(pos, uv, u_audioLow, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
                 } else {
-                    if (u_warpMode == 3) {
-                        pos = calculateBend(pos, uv, u_audioLow, u_planeOrientation, u_planeDimensions, u_bendAngle, u_bendAudioMod, u_bendFalloffSharpness, u_bendAxis);
+                    if (u_warpMode == 3) { // Bend
+                        pos = calculateBend(pos, uv, u_audioLow, u_planeDimensions, u_bendAngle, u_bendAudioMod, u_bendFalloffSharpness, u_bendAxis);
                     }
-                    pos += getDisplacementNormal(u_planeOrientation) * u_audioLow * u_deformationStrength;
-
-                    if (u_warpMode == 2) { pos += calculateSag(uv, u_audioLow, u_planeOrientation, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); }
-                    else if (u_warpMode == 5) { pos += calculateDroop(uv, u_audioLow, u_planeOrientation, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); }
+                    pos += getDisplacementNormal() * u_audioLow * u_deformationStrength;
+                    if (u_warpMode == 2) { // Sag
+                        pos += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
+                    }
+                    else if (u_warpMode == 5) { // Droop
+                        pos += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
+                    }
                 }
             }
 
@@ -542,7 +524,7 @@ export const ComputeManager = {
                 if (distance(uv, vec2(1,0)) < min_dist) { min_dist = distance(uv, vec2(1,0)); corner_index = 1; }
                 if (distance(uv, vec2(0,1)) < min_dist) { min_dist = distance(uv, vec2(0,1)); corner_index = 2; }
                 if (distance(uv, vec2(1,1)) < min_dist) { min_dist = distance(uv, vec2(1,1)); corner_index = 3; }
-                pos += calculatePeel(uv, u_time, u_peelAudio, corner_index, u_peelAnimationStyle, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount, u_planeOrientation);
+                pos += calculatePeel(uv, u_time, u_peelAudio, corner_index, u_peelAnimationStyle, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
             }
 
             return pos;

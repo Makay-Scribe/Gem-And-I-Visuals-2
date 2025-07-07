@@ -42,7 +42,7 @@ export const UIManager = {
         this.updateMasterControls();
         this.openDebugAccordions(); 
         
-        setTimeout(() => this.filterButterchurnPresets(), 100);
+        // ** THE FIX IS HERE ** - The unreliable timeout has been removed.
     },
     
     openDebugAccordions() {

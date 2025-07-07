@@ -45,9 +45,11 @@ export const ButterchurnManager = {
         this.presetKeys = Object.keys(allPresets);
         this.presetKeys.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
         
-        // The error occurred here. We remove the call to the non-existent UIManager function.
-        // The UIManager will now pull this data when it needs it.
-        // this.app.UIManager.filterButterchurnPresets(); 
+        // ** THE FIX IS HERE **
+        // Directly notify UIManager that the presets are ready for display.
+        if (this.app.UIManager) {
+            this.app.UIManager.filterButterchurnPresets();
+        }
     },
 
     connectAudio(audioContext, audioSourceNode) {
