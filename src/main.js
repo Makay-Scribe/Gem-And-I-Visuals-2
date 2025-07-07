@@ -318,17 +318,83 @@ const App = {
         UIM.updateRangeDisplay('masterScale', newValue);
     },
 
-    // ** THE FIX IS HERE ** - All old logic is removed.
     onPointerDown(event) {
-        // This function is intentionally left empty.
+        if (this.dragState.mode !== 'none' || event.target !== this.renderer.domElement) return;
+
+        const S = this.vizSettings;
+        if ((S.activeControl === 'landscape' && S.landscapeAutopilotOn) || (S.activeControl === 'model' && S.modelAutopilotOn)) return;
+        
+        const DS = this.dragState;
+
+        this.ImagePlaneManager.stopAllTransitions();
+        this.ModelManager.stopAllTransitions();
+        
+        if (event.button === 0 && S.activeControl === 'landscape') {
+            DS.mode = 'rotating';
+            DS.targetObject = this.ImagePlaneManager.landscape;
+            DS.startMouse.set(event.clientX, event.clientY);
+            DS.startRotation.copy(this.ImagePlaneManager.rotation);
+        
+        } else if (event.button === 2) {
+            event.preventDefault();
+            const target = (S.activeControl === 'landscape') ? this.ImagePlaneManager.landscape : this.ModelManager.gltfModel;
+            if (!target) return;
+
+            const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+            this.raycaster.setFromCamera(mouse, this.camera);
+            
+            DS.plane.setFromNormalAndCoplanarPoint(
+                this.camera.getWorldDirection(DS.plane.normal),
+                target.position
+            );
+
+            if (this.raycaster.ray.intersectPlane(DS.plane, DS.intersection)) {
+                DS.mode = 'dragging';
+                DS.targetObject = target;
+                DS.offset.copy(DS.intersection).sub(target.position);
+            }
+        }
     },
     
     onPointerMove(event) {
-        // This function is intentionally left empty.
+        if (this.dragState.mode === 'none') return;
+
+        const DS = this.dragState;
+
+        if (DS.mode === 'rotating') {
+            const deltaX = event.clientX - DS.startMouse.x;
+            const deltaY = event.clientY - DS.startMouse.y;
+            const rotSpeed = 0.005;
+            this.ImagePlaneManager.rotation.y = DS.startRotation.y + deltaX * rotSpeed;
+            this.ImagePlaneManager.rotation.x = DS.startRotation.x + deltaY * rotSpeed;
+
+        } else if (DS.mode === 'dragging') {
+            const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+            this.raycaster.setFromCamera(mouse, this.camera);
+
+            if (this.raycaster.ray.intersectPlane(DS.plane, DS.intersection)) {
+                const newPos = DS.intersection.sub(DS.offset);
+                DS.targetObject.position.copy(newPos);
+            }
+        }
     },
 
     onPointerUp(event) {
-        // This function is intentionally left empty.
+        if (this.dragState.mode === 'none') return;
+        
+        // ** THE FIX IS HERE ** - On mouse up, trigger the appropriate "return to home" animation.
+        if (this.dragState.mode === 'rotating') {
+            this.ImagePlaneManager.returnRotationToHome();
+        } else if (this.dragState.mode === 'dragging') {
+            if (this.dragState.targetObject === this.ImagePlaneManager.landscape) {
+                this.ImagePlaneManager.returnToHome(); 
+            } else if (this.dragState.targetObject === this.ModelManager.gltfModel) {
+                this.ModelManager.returnToHome();
+            }
+        }
+        
+        this.dragState.mode = 'none';
+        this.dragState.targetObject = null;
     },
 
     switchActiveControl(newControlTarget) {
@@ -362,7 +428,7 @@ const App = {
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
         
-        this.CameraManager.setLookAt(this.stableLookAtPoint);
+        this.CameraManager._controls.target.lerp(this.stableLookAtPoint, 0.05);
         this.CameraManager.update(cappedDelta); 
         
         this.SceneManager.update(cappedDelta);

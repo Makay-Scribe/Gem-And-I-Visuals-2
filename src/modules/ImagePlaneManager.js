@@ -19,12 +19,17 @@ export const ImagePlaneManager = {
     rotationTransition: {
         active: false,
         progress: 0,
-        duration: 0.5, // Faster transition
+        duration: 0.5,
         start: new THREE.Euler(),
         end: new THREE.Euler(0, 0, 0)
     },
     
-    // ** THE FIX IS HERE ** - Old spring-physics system is removed.
+    positionTransition: {
+        active: false,
+        velocity: new THREE.Vector3(),
+        stiffness: 0.08,
+        damping: 0.15,
+    },
     
     state: {
         mode: 'manual', 
@@ -58,7 +63,8 @@ export const ImagePlaneManager = {
     },
 
     stopAllTransitions() {
-        // No more position transition to stop
+        this.positionTransition.active = false;
+        this.positionTransition.velocity.set(0,0,0);
         this.rotationTransition.active = false;
     },
 
@@ -67,10 +73,15 @@ export const ImagePlaneManager = {
         rt.active = true;
         rt.progress = 0;
         rt.start.copy(this.rotation); 
-        rt.end.setFromQuaternion(this.homeQuaternion, 'XYZ');
+        // **THE FIX IS HERE** - The target for the animation is now (0,0,0)
+        // because the 'home' part of the rotation is handled separately.
+        rt.end.set(0, 0, 0);
     },
 
-    // ** THE FIX IS HERE ** - Old returnToHome function is removed.
+    returnToHome() {
+        if (!this.landscape) return;
+        this.positionTransition.active = true;
+    },
 
     startAutopilot(presetId) {
         if (!this.landscape) return;
@@ -108,6 +119,7 @@ export const ImagePlaneManager = {
     },
 
     transitionToState(newState) {
+        this.positionTransition.active = false;
         this.state.progress = 0;
         this.state.startPos.copy(this.landscape.position);
         this.state.startQuat.copy(this.landscape.quaternion);
@@ -130,6 +142,7 @@ export const ImagePlaneManager = {
         if (!this.landscape) return;
         const S = this.app.vizSettings;
         const rt = this.rotationTransition;
+        const pt = this.positionTransition;
         
         this.positionAnchor.position.copy(S.manualLandscapePosition);
 
@@ -143,20 +156,36 @@ export const ImagePlaneManager = {
             rt.progress = Math.min(1.0, rt.progress + cappedDelta / rt.duration);
             const ease = 0.5 - 0.5 * Math.cos(rt.progress * Math.PI);
             
-            const startQuat = new THREE.Quaternion().setFromEuler(rt.start);
-            const endQuat = new THREE.Quaternion().setFromEuler(rt.end);
-            startQuat.slerp(endQuat, ease);
-            this.rotation.setFromQuaternion(startQuat, 'XYZ');
+            this.rotation.x = THREE.MathUtils.lerp(rt.start.x, rt.end.x, ease);
+            this.rotation.y = THREE.MathUtils.lerp(rt.start.y, rt.end.y, ease);
+            this.rotation.z = THREE.MathUtils.lerp(rt.start.z, rt.end.z, ease);
 
             if (rt.progress >= 1.0) {
                 rt.active = false;
-                this.rotation.copy(rt.end);
+                this.rotation.set(0,0,0);
             }
         }
-        this.landscape.rotation.copy(this.rotation);
+        
+        // ** THE FIX IS HERE **
+        // Create a temporary quaternion from the manual rotation (mouse drag)
+        const manualRotationQuat = new THREE.Quaternion().setFromEuler(this.rotation);
+        // Start with the base orientation and multiply the manual rotation on top of it.
+        this.landscape.quaternion.copy(this.homeQuaternion).multiply(manualRotationQuat);
 
-        // ** THE FIX IS HERE ** - All spring-physics logic is removed.
-        if (this.state.mode === 'transitioning') {
+        if (pt.active) {
+            const displacement = new THREE.Vector3().subVectors(this.positionAnchor.position, this.landscape.position);
+            const springForce = displacement.multiplyScalar(pt.stiffness);
+            const dampingForce = pt.velocity.clone().multiplyScalar(-pt.damping);
+            const acceleration = new THREE.Vector3().addVectors(springForce, dampingForce);
+            
+            pt.velocity.add(acceleration.multiplyScalar(cappedDelta));
+            this.landscape.position.add(pt.velocity.clone().multiplyScalar(cappedDelta));
+
+            if (this.app.dragState.mode !== 'dragging' && displacement.lengthSq() < 0.001 && pt.velocity.lengthSq() < 0.001) {
+                this.stopAllTransitions();
+                this.landscape.position.copy(this.positionAnchor.position);
+            }
+        } else if (this.state.mode === 'transitioning') {
             this.state.progress = Math.min(1.0, this.state.progress + cappedDelta / this.state.duration);
             const ease = 0.5 - 0.5 * Math.cos(this.state.progress * Math.PI);
 
@@ -184,26 +213,21 @@ export const ImagePlaneManager = {
             } else if (ap.preset === 'autopilotPreset2') {
                 this.runWaypointLogic(cappedDelta);
             } else if (ap.preset === 'autopilotPreset3' || ap.preset === 'autopilotPreset4') {
-                if (ap.holdTimer > 0) {
-                    ap.holdTimer -= cappedDelta;
-                } else if (ap.waypointProgress < 1.0) {
+                if (ap.holdTimer > 0) { ap.holdTimer -= cappedDelta; } 
+                else if (ap.waypointProgress < 1.0) {
                     ap.waypointProgress = Math.min(1.0, ap.waypointProgress + (S.landscapeAutopilotSpeed * cappedDelta) / ap.waypointTransitionDuration);
                     const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
                     
                     this.landscape.position.lerpVectors(this.state.startPos, this.state.endPos, ease);
                     this.landscape.quaternion.copy(this.state.startQuat).slerp(this.state.endQuat, ease);
 
-                } else {
-                    this.generateNewRandomWaypoint();
-                }
+                } else { this.generateNewRandomWaypoint(); }
             }
              this.rotation.setFromQuaternion(this.landscape.quaternion, 'XYZ');
         } else {
-            // When not in autopilot and not being dragged, the position is now directly controlled
-            // by the UI sliders via `manualLandscapePosition`.
-            if (this.app.dragState.targetObject !== this.landscape) {
-                 this.landscape.position.copy(S.manualLandscapePosition);
-            }
+             if (this.app.dragState.targetObject !== this.landscape) {
+                 this.landscape.position.copy(this.positionAnchor.position);
+             }
         }
 
         this.landscape.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);

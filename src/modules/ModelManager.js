@@ -89,7 +89,6 @@ export const ModelManager = {
                 if (this.app.UIManager) this.app.UIManager.logSuccess(`Model loaded: ${path.split('/').pop()}`);
                 
                 this.gltfModel.scale.multiplyScalar(this.app.defaultVisualizerSettings.modelScale);
-                // On load, place the model directly at its "home" position defined in vizSettings.
                 this.gltfModel.position.copy(this.app.vizSettings.manualModelPosition);
                 this.app.UIManager.syncManualSliders();
 
@@ -154,7 +153,7 @@ export const ModelManager = {
         this.gltfModel.scale.copy(this.baseScale).multiplyScalar(S.modelScale);
         
         if (pt.active) {
-            // The sacred "home" position from vizSettings is the target.
+            // **THE FIX IS HERE** - The spring now correctly targets the slider-defined "home".
             const targetPosition = S.manualModelPosition;
             const displacement = new THREE.Vector3().subVectors(targetPosition, this.gltfModel.position);
             
@@ -165,16 +164,15 @@ export const ModelManager = {
             pt.velocity.add(acceleration.multiplyScalar(delta));
             this.gltfModel.position.add(pt.velocity.clone().multiplyScalar(delta));
 
-            if (displacement.lengthSq() < 0.001 && pt.velocity.lengthSq() < 0.001) {
+            // Stop the animation if we're close to home AND not being dragged
+            if (this.app.dragState.targetObject !== this.gltfModel && displacement.lengthSq() < 0.001 && pt.velocity.lengthSq() < 0.001) {
                 this.stopAllTransitions();
                 this.gltfModel.position.copy(targetPosition);
             }
         } else if (S.modelAutopilotOn) {
             // Autopilot logic would go here
         } else {
-            // If not animating and not being dragged, stay where you are.
-            // The drag action directly manipulates model.position now.
-            // If sliders are used, vizSettings changes, and this snaps to it.
+            // When not animating and not being dragged, stay at the home position.
             if (this.app.dragState.targetObject !== this.gltfModel) {
                 this.gltfModel.position.copy(S.manualModelPosition);
             }
@@ -185,7 +183,6 @@ export const ModelManager = {
         }
     },
     
-    // Unchanged helper functions
     generateNewRandomWaypoint(options = {}) {
         // ...
     },
