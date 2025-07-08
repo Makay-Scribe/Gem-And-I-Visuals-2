@@ -104,7 +104,7 @@ const App = {
         enableModel: true,
         enableModelSpin: false,
         modelSpinSpeed: 0.0,
-        enableCollisionAvoidance: true, // NEW setting for the toggle
+        enableCollisionAvoidance: false, // Defaulting to OFF as requested
 
         // Landscape-Specific
         enableLandscape: true,

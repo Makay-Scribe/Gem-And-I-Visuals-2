@@ -7,11 +7,11 @@ export const ModelManager = {
     animationMixer: null,
     baseScale: new THREE.Vector3(1, 1, 1),
     boundingSphere: new THREE.Sphere(),
+    _waypointRetryCount: 0, // Counter to prevent infinite loops
     
     autopilot: {
         active: false,
         preset: null,
-        // State for transitions
         startPos: new THREE.Vector3(),
         endPos: new THREE.Vector3(),
         startQuat: new THREE.Quaternion(),
@@ -36,14 +36,12 @@ export const ModelManager = {
 
         const homePosition = this.app.vizSettings.homePositionModel;
 
-        // Define the bounds for random movement. Larger than landscape.
         const boundsSize = new THREE.Vector3(40, 30, 30);
         this.autopilot.randomBounds = new THREE.Box3(
             homePosition.clone().sub(boundsSize),
             homePosition.clone().add(boundsSize)
         );
 
-        // Make bounds even larger for the more dramatic presets
         if (presetId === 'autopilotPreset3' || presetId === 'autopilotPreset4') {
              this.autopilot.randomBounds.expandByVector(new THREE.Vector3(20, 15, 20));
         }
@@ -57,13 +55,12 @@ export const ModelManager = {
         this.autopilot.active = false;
         this.autopilot.preset = null;
         
-        // When stopping, smoothly return to its designated home offset
         this.autopilot.startPos.copy(this.gltfModel.position);
         this.autopilot.endPos.copy(this.app.vizSettings.homePositionModel);
         this.autopilot.startQuat.copy(this.gltfModel.quaternion);
-        this.autopilot.endQuat.set(0, 0, 0, 1); // Reset rotation
+        this.autopilot.endQuat.set(0, 0, 0, 1);
         this.autopilot.waypointProgress = 0;
-        this.autopilot.waypointTransitionDuration = 2.0; // Fast return
+        this.autopilot.waypointTransitionDuration = 2.0;
         
         console.log("Model Autopilot STOPPING, returning to home position.");
     },
@@ -81,7 +78,28 @@ export const ModelManager = {
             THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
         );
         
-        // The model should generally face the center of the scene
+        // --- NEW COLLISION AVOIDANCE LOGIC ---
+        if (this.app.vizSettings.enableCollisionAvoidance && this.app.ImagePlaneManager.landscape) {
+            const landscapeSphere = new THREE.Sphere();
+            this.app.ImagePlaneManager.boundingBox.getBoundingSphere(landscapeSphere);
+            
+            // Inflate the sphere slightly to give a buffer zone
+            landscapeSphere.radius *= 1.1;
+
+            if (landscapeSphere.containsPoint(ap.endPos)) {
+                if (this._waypointRetryCount < 1) {
+                    console.log("Model waypoint collision detected. Retrying once...");
+                    this._waypointRetryCount++;
+                    this.generateNewRandomWaypoint(); // Try again
+                    return; // Exit this attempt
+                } else {
+                    console.warn("Model waypoint collision retry failed. Allowing pass-through.");
+                }
+            }
+        }
+        this._waypointRetryCount = 0; // Reset for next successful generation
+        // --- END OF NEW LOGIC ---
+
         const targetLookAt = new THREE.Vector3(0,0,0);
         const tempMatrix = new THREE.Matrix4().lookAt(ap.endPos, targetLookAt, this.gltfModel.up);
         const randomRoll = (Math.random() - 0.5) * 0.8;
@@ -107,7 +125,6 @@ export const ModelManager = {
             this.gltfModel.position.lerpVectors(ap.startPos, ap.endPos, ease);
             this.gltfModel.quaternion.slerpQuaternions(ap.startQuat, ap.endQuat, ease);
         } else {
-            // If we've reached the destination and are not in a "returning home" state
             if (ap.preset !== null) {
                 this.generateNewRandomWaypoint();
             }
@@ -188,7 +205,6 @@ export const ModelManager = {
         if (this.autopilot.active) {
             this.updateAutopilot(delta);
         } else if (S.enableModelSpin) {
-            // Only apply manual spin if autopilot is off
             this.gltfModel.rotation.y += S.modelSpinSpeed * delta;
         }
     },
