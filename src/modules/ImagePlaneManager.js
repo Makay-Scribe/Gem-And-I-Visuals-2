@@ -2,6 +2,13 @@ import * as THREE from 'three';
 import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
 
+const PRESET_BASE_SPEEDS = {
+    autopilotPreset1: 5.0,
+    autopilotPreset2: 0.5,
+    autopilotPreset3: 0.75,
+    autopilotPreset4: 0.40
+};
+
 export const ImagePlaneManager = {
     app: null,
     landscape: null,
@@ -23,7 +30,6 @@ export const ImagePlaneManager = {
         waypointTransitionDuration: 15.0,
         holdTimer: 0,
         randomBounds: null,
-        // For storing start/end states for interpolation
         startPos: new THREE.Vector3(),
         endPos: new THREE.Vector3(),
         startQuat: new THREE.Quaternion(),
@@ -37,12 +43,14 @@ export const ImagePlaneManager = {
 
     startAutopilot(presetId) {
         if (!this.landscape) return;
-        this.autopilot.active = true;
-        this.autopilot.preset = presetId;
-        this.autopilot.waypoints = [];
-        this.autopilot.currentWaypointIndex = 0;
-        this.autopilot.waypointProgress = 0;
-        this.autopilot.holdTimer = 0;
+        const ap = this.autopilot;
+
+        ap.active = true;
+        ap.preset = presetId;
+        ap.waypoints = [];
+        ap.currentWaypointIndex = 0;
+        ap.waypointProgress = 1.0;
+        ap.holdTimer = 0;
 
         const home = { pos: this.app.vizSettings.homePositionLandscape.clone(), rot: new THREE.Quaternion() };
 
@@ -53,14 +61,26 @@ export const ImagePlaneManager = {
                 { pos: new THREE.Vector3(0, 3, 5), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, 0, 0)) },
                 { pos: new THREE.Vector3(3, -3, -5), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.1, 0.1, 0.05)) },
             ];
-            destinations.forEach(dest => { this.autopilot.waypoints.push(dest); this.autopilot.waypoints.push(home); });
+            // NEW: Use the expanded bounds for Preset 2 as requested.
+            ap.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(25, 20, 5)), home.pos.clone().add(new THREE.Vector3(25, 20, 40)));
+            ap.waypoints = destinations.map(dest => ({
+                pos: new THREE.Vector3(
+                    THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
+                    THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
+                    THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
+                ),
+                rot: dest.rot // Keep original rotations for now
+            }));
+            ap.waypoints.forEach(dest => ap.waypoints.push(home)); // Add return trips
         
         } else if (presetId === 'autopilotPreset3') {
-            this.autopilot.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(8, 5, 5)), home.pos.clone().add(new THREE.Vector3(8, 5, 10)));
+            // Further back, but not as wide as Preset 4
+            ap.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(20, 15, 5)), home.pos.clone().add(new THREE.Vector3(20, 15, 60)));
             this.generateNewRandomWaypoint();
 
         } else if (presetId === 'autopilotPreset4') {
-             this.autopilot.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(15, 10, 10)), home.pos.clone().add(new THREE.Vector3(15, 10, 15)));
+             // Widest and furthest back range
+             ap.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(30, 25, 10)), home.pos.clone().add(new THREE.Vector3(30, 25, 80)));
              this.generateNewRandomWaypoint();
         }
 
@@ -75,24 +95,30 @@ export const ImagePlaneManager = {
     
     generateNewRandomWaypoint() {
         const ap = this.autopilot;
+        const S = this.app.vizSettings;
+        
         ap.startPos.copy(this.app.interactionState.targetPosition);
         ap.startQuat.setFromEuler(this.app.interactionState.targetRotation);
 
         ap.endPos.set(
             THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
             THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
-            THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
+            // Ensure the Z position is always moving away or staying far away
+            -Math.abs(THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)) 
         );
 
         const randomRot = new THREE.Euler(
-            (Math.random() - 0.5) * 0.4,
-            (Math.random() - 0.5) * 0.4,
-            (Math.random() - 0.5) * 0.2
+            (Math.random() - 0.5) * 0.6,
+            (Math.random() - 0.5) * 0.6,
+            (Math.random() - 0.5) * 0.3
         );
         ap.endQuat.setFromEuler(randomRot);
         
         const distance = ap.startPos.distanceTo(ap.endPos);
-        ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance, 10, 15);
+        const baseSpeed = PRESET_BASE_SPEEDS[ap.preset] || 1.0;
+        const finalSpeed = baseSpeed * S.landscapeAutopilotSpeed;
+
+        ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance / finalSpeed, 10, 15);
         ap.holdTimer = Math.random() * 2.0;
         ap.waypointProgress = 0;
     },
@@ -102,11 +128,11 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const IS = this.app.interactionState;
 
-        if (ap.waypoints.length === 0) { // Random Waypoint Logic
+        if (ap.waypoints.length === 0) {
             if (ap.holdTimer > 0) { 
                 ap.holdTimer -= delta; 
             } else if (ap.waypointProgress < 1.0) {
-                ap.waypointProgress = Math.min(1.0, ap.waypointProgress + (S.landscapeAutopilotSpeed * delta) / ap.waypointTransitionDuration);
+                ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
                 const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
                 
                 IS.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
@@ -115,18 +141,20 @@ export const ImagePlaneManager = {
             } else { 
                 this.generateNewRandomWaypoint(); 
             }
-        } else { // Fixed Waypoint Logic
+        } else {
              const currentIndex = ap.currentWaypointIndex;
             const nextIndex = (currentIndex + 1) % ap.waypoints.length;
-            const startPoint = ap.waypoints[currentIndex];
+            const startPoint = ap.currentWaypointIndex === 0 ? {pos: IS.targetPosition.clone(), rot: new THREE.Quaternion().setFromEuler(IS.targetRotation)} : ap.waypoints[currentIndex];
             const endPoint = ap.waypoints[nextIndex];
             
-            if(ap.waypointProgress === 0) { // First frame of a new transition
+            if(ap.waypointProgress === 0) {
                  const distance = startPoint.pos.distanceTo(endPoint.pos);
-                 ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance, 10, 15);
+                 const baseSpeed = PRESET_BASE_SPEEDS[ap.preset] || 1.0;
+                 const finalSpeed = baseSpeed * S.landscapeAutopilotSpeed;
+                 ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance / finalSpeed, 10, 15);
             }
 
-            ap.waypointProgress = Math.min(1.0, ap.waypointProgress + (S.landscapeAutopilotSpeed * delta) / ap.waypointTransitionDuration);
+            ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             
             IS.targetPosition.lerpVectors(startPoint.pos, endPoint.pos, ease);
@@ -143,13 +171,17 @@ export const ImagePlaneManager = {
     updateAutopilot(delta) {
         const preset = this.autopilot.preset;
 
-        if (preset === 'autopilotPreset1') { // Handicam
+        if (preset === 'autopilotPreset1') {
             const S = this.app.vizSettings;
             const IS = this.app.interactionState;
             const time = this.app.currentTime;
-            const speed = S.landscapeAutopilotSpeed * 0.1;
-            const posSpeed = speed * 0.2;
-            const rotSpeed = speed * 0.15;
+            
+            const baseSpeed = PRESET_BASE_SPEEDS[preset] || 1.0;
+            const finalSpeed = baseSpeed * S.landscapeAutopilotSpeed;
+
+            const posSpeed = finalSpeed * 0.2;
+            const rotSpeed = finalSpeed * 0.15;
+
             const xPos = Math.sin(time * posSpeed) * 1.5;
             const yPos = Math.cos(time * posSpeed * 1.2) * 1.0;
             const zPos = Math.sin(time * posSpeed * 0.8) * 2.0;
