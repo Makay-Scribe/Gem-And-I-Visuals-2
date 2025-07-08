@@ -94,18 +94,12 @@
                     <span class="toggle-label">Auto</span>
                 </div>
                 
-                <!-- ** THE FIX IS HERE ** -->
-                <!-- Autopilot presets are now outside the container that gets hidden -->
                 <p class="sub-group-title">AUTOPILOT PRESETS</p>
                 <div class="model-preset-buttons" id="autopilotPresetContainer">
                     <button id="autopilotPreset1">1</button>
                     <button id="autopilotPreset2">2</button>
                     <button id="autopilotPreset3">3</button>
                     <button id="autopilotPreset4">4</button>
-                </div>
-
-                <!-- This container will now only hold future "auto-only" controls -->
-                <div id="autopilotControlsContainer" style="display: none;">
                 </div>
 
                 <div id="masterActorControls">
@@ -316,6 +310,11 @@
                     <input type="number" id="modelSpinSpeed" min="-1.0" max="1.0" step="0.01" value="0.0">
                 </div>
                 
+                <div class="checkbox-label-container">
+                    <label for="enableCollisionAvoidance">Avoid Landscape</label>
+                    <input type="checkbox" id="enableCollisionAvoidance" checked>
+                </div>
+
                 <p class="sub-group-title">ASSETS</p>
                 <div class="file-input-row">
                     <button class="browse-btn" data-target="gltfModelInput">Load Model...</button>
@@ -518,7 +517,6 @@
                     <label for="enableGPGPUDebugger">Enable Debug Plane</label>
                     <input type="checkbox" id="enableGPGPUDebugger" checked>
                 </div>
-                 <!-- ** THE FIX IS HERE ** - Add the toggle for the new on-screen display -->
                 <div class="checkbox-label-container">
                     <label for="enableOnScreenDebugger">Enable On-Screen Text</label>
                     <input type="checkbox" id="enableOnScreenDebugger" checked>
@@ -531,7 +529,6 @@
     <video id="videoSourceElement" loop muted playsinline style="display:none;"></video>
     <audio id="audioSourceElement" loop style="display:none;"></audio>
 
-    <!-- ** THE FIX IS HERE ** - Add the new debugger element -->
     <div id="onScreenDebugPanel" style="display: none;"></div>
     
     <script type="module" src="/src/main.js"></script>

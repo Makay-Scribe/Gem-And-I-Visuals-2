@@ -53,8 +53,6 @@ export const UIManager = {
         });
     },
 
-    // RENAMED & REFACTORED: This function now reads directly from the world pivot's
-    // target position, making it the single source of truth for the UI.
     syncManualSlidersFromPivot() {
         const targetPosition = this.app.interactionState.targetPosition;
         const UIElements = this.controlDOMElements;
@@ -89,19 +87,47 @@ export const UIManager = {
             button.addEventListener('click', (e) => this.app.switchActiveControl(e.target.dataset.actor));
         });
 
-        // Temporarily disable the autopilot toggle
-        UIElements.manualAutoToggle.disabled = true;
-        UIElements.manualAutoToggle.parentElement.style.opacity = '0.4';
-        UIElements.manualAutoToggle.parentElement.title = 'Autopilot is temporarily disabled during rework.';
+        // Event listener for the main autopilot toggle switch
+        UIElements.manualAutoToggle.addEventListener('change', (e) => {
+            const isAuto = e.target.checked;
+            const activeControl = this.app.vizSettings.activeControl;
+            
+            if (activeControl === 'landscape') {
+                this.app.vizSettings.landscapeAutopilotOn = isAuto;
+                if (isAuto && this.app.vizSettings.activeLandscapePreset) {
+                    this.app.ImagePlaneManager.startAutopilot(this.app.vizSettings.activeLandscapePreset);
+                } else if (!isAuto) {
+                    this.app.ImagePlaneManager.stopAutopilot();
+                }
+            } else if (activeControl === 'model') {
+                this.app.vizSettings.modelAutopilotOn = isAuto;
+                if (isAuto && this.app.vizSettings.activeModelPreset) {
+                    this.app.ModelManager.startAutopilot(this.app.vizSettings.activeModelPreset);
+                } else if (!isAuto) {
+                    this.app.ModelManager.stopAutopilot();
+                }
+            }
+            this.updateMasterControls();
+        });
 
+        // Event listeners for the autopilot preset buttons
         for (let i = 1; i <= 4; i++) {
             const buttonId = `autopilotPreset${i}`;
             const button = document.getElementById(buttonId);
             if(button) {
-                // Disable the autopilot preset buttons but leave them as placeholders
-                button.disabled = true;
-                button.style.opacity = '0.4';
-                button.title = 'Autopilot is temporarily disabled during rework.';
+                button.addEventListener('click', () => {
+                    const activeControl = this.app.vizSettings.activeControl;
+                    if (activeControl === 'landscape') {
+                        this.app.vizSettings.landscapeAutopilotOn = true;
+                        this.app.vizSettings.activeLandscapePreset = buttonId;
+                        this.app.ImagePlaneManager.startAutopilot(buttonId);
+                    } else {
+                        this.app.vizSettings.modelAutopilotOn = true;
+                        this.app.vizSettings.activeModelPreset = buttonId;
+                        this.app.ModelManager.startAutopilot(buttonId);
+                    }
+                    this.updateMasterControls();
+                });
             }
         }
         
@@ -127,7 +153,6 @@ export const UIManager = {
         this.updateRangeDisplay(slider.id, value);
     },
 
-    // REFACTORED: This function now directly controls the one-and-only world pivot target.
     handleActorSliderInput(slider) {
         const targetPosition = this.app.interactionState.targetPosition;
         const value = parseFloat(slider.value);
@@ -160,7 +185,6 @@ export const UIManager = {
             speedProp = 'modelAutopilotSpeed';
         }
         
-        // This logic is kept for when we re-enable autopilot
         UIElements.manualAutoToggle.checked = isAutopilotOn;
         UIElements.manualContainer.style.display = isAutopilotOn ? 'none' : 'block';
         UIElements.masterSpeedContainer.style.display = isAutopilotOn ? 'block' : 'none';
@@ -174,9 +198,7 @@ export const UIManager = {
             this.updateRangeDisplay('masterSpeed', S[speedProp]);
         }
         
-        // Use the new sync function to ensure sliders reflect the pivot's state.
         this.syncManualSlidersFromPivot();
-
         this.updatePresetGlow();
         this.refreshAccordion(UIElements.masterControlContainer);
     },
@@ -237,7 +259,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness'].includes(id)) {
                 precision = 2;

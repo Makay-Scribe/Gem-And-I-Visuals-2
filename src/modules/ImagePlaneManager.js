@@ -11,51 +11,156 @@ export const ImagePlaneManager = {
     planeResolution: new THREE.Vector2(128, 128),
     homeQuaternion: new THREE.Quaternion(),
     
-    // REMOVED: Position anchor is no longer needed. The worldPivot is the new anchor.
-    // positionAnchor: null, 
-
-    rotation: new THREE.Euler(0, 0, 0), // This will be used for manual spin, not position.
+    rotation: new THREE.Euler(0, 0, 0),
     currentTexture: null, 
 
-    // REMOVED: All transition logic is now handled globally in main.js
-    // rotationTransition: { ... },
-    // positionTransition: { ... },
-    // state: { ... },
-    // autopilot: { ... },
+    autopilot: {
+        active: false,
+        preset: null,
+        waypoints: [],
+        currentWaypointIndex: 0,
+        waypointProgress: 0,
+        waypointTransitionDuration: 15.0,
+        holdTimer: 0,
+        randomBounds: null,
+        // For storing start/end states for interpolation
+        startPos: new THREE.Vector3(),
+        endPos: new THREE.Vector3(),
+        startQuat: new THREE.Quaternion(),
+        endQuat: new THREE.Quaternion(),
+    },
 
     init(appInstance) {
         this.app = appInstance;
-        
-        // REMOVED: The position anchor is no longer part of this manager.
-        // this.positionAnchor = new THREE.Object3D();
-        // this.app.scene.add(this.positionAnchor);
-
         this.createDefaultLandscape();
     },
 
-    stopAllTransitions() {
-        // This manager no longer handles its own transitions.
-    },
-
-    returnRotationToHome() {
-        // This will be handled globally.
-    },
-
-    returnToHome() {
-        // This will be handled globally.
-    },
-
     startAutopilot(presetId) {
-        // Autopilot is being disabled for now.
-        console.warn("Autopilot functionality is temporarily disabled.");
+        if (!this.landscape) return;
+        this.autopilot.active = true;
+        this.autopilot.preset = presetId;
+        this.autopilot.waypoints = [];
+        this.autopilot.currentWaypointIndex = 0;
+        this.autopilot.waypointProgress = 0;
+        this.autopilot.holdTimer = 0;
+
+        const home = { pos: this.app.vizSettings.homePositionLandscape.clone(), rot: new THREE.Quaternion() };
+
+        if (presetId === 'autopilotPreset2') {
+            const destinations = [
+                { pos: new THREE.Vector3(-5, 2, -3), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.1, -0.1, 0)) },
+                { pos: new THREE.Vector3(5, -2, 3), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.1, 0.1, 0)) },
+                { pos: new THREE.Vector3(0, 3, 5), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, 0, 0)) },
+                { pos: new THREE.Vector3(3, -3, -5), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.1, 0.1, 0.05)) },
+            ];
+            destinations.forEach(dest => { this.autopilot.waypoints.push(dest); this.autopilot.waypoints.push(home); });
+        
+        } else if (presetId === 'autopilotPreset3') {
+            this.autopilot.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(8, 5, 5)), home.pos.clone().add(new THREE.Vector3(8, 5, 10)));
+            this.generateNewRandomWaypoint();
+
+        } else if (presetId === 'autopilotPreset4') {
+             this.autopilot.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(15, 10, 10)), home.pos.clone().add(new THREE.Vector3(15, 10, 15)));
+             this.generateNewRandomWaypoint();
+        }
+
+        console.log(`ImagePlane Autopilot STARTED with preset: ${presetId}`);
     },
 
     stopAutopilot() {
-        // Autopilot is being disabled for now.
+        this.autopilot.active = false;
+        this.autopilot.preset = null;
+        console.log("ImagePlane Autopilot STOPPED.");
+    },
+    
+    generateNewRandomWaypoint() {
+        const ap = this.autopilot;
+        ap.startPos.copy(this.app.interactionState.targetPosition);
+        ap.startQuat.setFromEuler(this.app.interactionState.targetRotation);
+
+        ap.endPos.set(
+            THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
+            THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
+            THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
+        );
+
+        const randomRot = new THREE.Euler(
+            (Math.random() - 0.5) * 0.4,
+            (Math.random() - 0.5) * 0.4,
+            (Math.random() - 0.5) * 0.2
+        );
+        ap.endQuat.setFromEuler(randomRot);
+        
+        const distance = ap.startPos.distanceTo(ap.endPos);
+        ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance, 10, 15);
+        ap.holdTimer = Math.random() * 2.0;
+        ap.waypointProgress = 0;
+    },
+    
+    runWaypointLogic(delta) {
+        const ap = this.autopilot;
+        const S = this.app.vizSettings;
+        const IS = this.app.interactionState;
+
+        if (ap.waypoints.length === 0) { // Random Waypoint Logic
+            if (ap.holdTimer > 0) { 
+                ap.holdTimer -= delta; 
+            } else if (ap.waypointProgress < 1.0) {
+                ap.waypointProgress = Math.min(1.0, ap.waypointProgress + (S.landscapeAutopilotSpeed * delta) / ap.waypointTransitionDuration);
+                const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
+                
+                IS.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
+                const tempQuat = new THREE.Quaternion().copy(ap.startQuat).slerp(ap.endQuat, ease);
+                IS.targetRotation.setFromQuaternion(tempQuat, 'XYZ');
+            } else { 
+                this.generateNewRandomWaypoint(); 
+            }
+        } else { // Fixed Waypoint Logic
+             const currentIndex = ap.currentWaypointIndex;
+            const nextIndex = (currentIndex + 1) % ap.waypoints.length;
+            const startPoint = ap.waypoints[currentIndex];
+            const endPoint = ap.waypoints[nextIndex];
+            
+            if(ap.waypointProgress === 0) { // First frame of a new transition
+                 const distance = startPoint.pos.distanceTo(endPoint.pos);
+                 ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance, 10, 15);
+            }
+
+            ap.waypointProgress = Math.min(1.0, ap.waypointProgress + (S.landscapeAutopilotSpeed * delta) / ap.waypointTransitionDuration);
+            const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
+            
+            IS.targetPosition.lerpVectors(startPoint.pos, endPoint.pos, ease);
+            const tempQuat = new THREE.Quaternion().copy(startPoint.rot).slerp(endPoint.rot, ease);
+            IS.targetRotation.setFromQuaternion(tempQuat, 'XYZ');
+
+            if (ap.waypointProgress >= 1.0) {
+                ap.currentWaypointIndex = nextIndex;
+                ap.waypointProgress = 0;
+            }
+        }
     },
 
-    transitionToState(newState) {
-        // State transitions are now handled globally.
+    updateAutopilot(delta) {
+        const preset = this.autopilot.preset;
+
+        if (preset === 'autopilotPreset1') { // Handicam
+            const S = this.app.vizSettings;
+            const IS = this.app.interactionState;
+            const time = this.app.currentTime;
+            const speed = S.landscapeAutopilotSpeed * 0.1;
+            const posSpeed = speed * 0.2;
+            const rotSpeed = speed * 0.15;
+            const xPos = Math.sin(time * posSpeed) * 1.5;
+            const yPos = Math.cos(time * posSpeed * 1.2) * 1.0;
+            const zPos = Math.sin(time * posSpeed * 0.8) * 2.0;
+            IS.targetPosition.set(xPos, yPos, zPos);
+            const xRot = Math.sin(time * rotSpeed * 1.1) * 0.05;
+            const yRot = Math.cos(time * rotSpeed * 0.9) * 0.1;
+            const zRot = Math.sin(time * rotSpeed) * 0.03;
+            IS.targetRotation.set(xRot, yRot, zRot);
+        } else if (preset === 'autopilotPreset2' || preset === 'autopilotPreset3' || preset === 'autopilotPreset4') {
+            this.runWaypointLogic(delta);
+        }
     },
 
     update(cappedDelta) {
@@ -68,15 +173,14 @@ export const ImagePlaneManager = {
         }
         this.landscape.visible = true;
 
-        // The landscape's position is now static relative to its parent (the worldPivot).
-        // The worldPivot itself will be moved by the main app loop.
-        // The only transformation this manager still handles is the optional spin.
-
-        if (S.enableLandscapeSpin) {
-            this.landscape.rotation.z += S.landscapeSpinSpeed * cappedDelta;
+        if (this.autopilot.active) {
+            this.updateAutopilot(cappedDelta);
         } else {
-            // Ensure it rests at its home orientation if not spinning.
-            this.landscape.quaternion.copy(this.homeQuaternion);
+            if (S.enableLandscapeSpin) {
+                this.landscape.rotation.z += S.landscapeSpinSpeed * cappedDelta;
+            } else {
+                this.landscape.quaternion.copy(this.homeQuaternion);
+            }
         }
 
         this.landscape.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
@@ -88,7 +192,7 @@ export const ImagePlaneManager = {
     createDefaultLandscape() {
         this.updatePlaneDimensions();
         if (this.landscape) {
-            this.landscape.removeFromParent(); // Use removeFromParent for clean disposal
+            this.landscape.removeFromParent();
             if (this.landscape.geometry) this.landscape.geometry.dispose();
             if (this.landscapeMaterial) this.landscapeMaterial.dispose();
         }
@@ -113,12 +217,10 @@ export const ImagePlaneManager = {
 
         this.landscape.frustumCulled = false;
 
-        // NEW: Add the landscape to the worldPivot instead of the scene.
         this.app.worldPivot.add(this.landscape);
 
         this.applyAndStoreHomeOrientation();
         
-        // The landscape's position is now (0,0,0) relative to its parent, the worldPivot.
         this.landscape.position.set(0, 0, 0); 
         this.landscape.quaternion.copy(this.homeQuaternion);
         this.landscape.scale.set(this.app.defaultVisualizerSettings.landscapeScale, this.app.defaultVisualizerSettings.landscapeScale, this.app.defaultVisualizerSettings.landscapeScale);

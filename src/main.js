@@ -37,9 +37,8 @@ const App = {
         rotationVelocity: new THREE.Vector2(),
         positionVelocity: new THREE.Vector3(),
         
-        // --- TUNED VALUES ---
-        damping: 0.95,      // Increased damping for a longer "coast"
-        returnSpring: 0.02, // Reduced spring force for a slower, gentler return
+        damping: 0.95,
+        returnSpring: 0.02,
         rotationSpeed: 0.005,
         panSpeed: 0.05,
         zoomSpeed: 0.5,
@@ -105,8 +104,7 @@ const App = {
         enableModel: true,
         enableModelSpin: false,
         modelSpinSpeed: 0.0,
-        enableModelDistancePlus: false,
-        enableModelDistanceMinus: false,
+        enableCollisionAvoidance: true, // NEW setting for the toggle
 
         // Landscape-Specific
         enableLandscape: true,
