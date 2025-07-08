@@ -41,8 +41,6 @@ export const UIManager = {
         
         this.updateMasterControls();
         this.openDebugAccordions(); 
-        
-        // ** THE FIX IS HERE ** - The unreliable timeout has been removed.
     },
     
     openDebugAccordions() {
@@ -55,20 +53,13 @@ export const UIManager = {
         });
     },
 
-    syncManualSliders() {
-        const S = this.app.vizSettings;
+    // RENAMED & REFACTORED: This function now reads directly from the world pivot's
+    // target position, making it the single source of truth for the UI.
+    syncManualSlidersFromPivot() {
+        const targetPosition = this.app.interactionState.targetPosition;
         const UIElements = this.controlDOMElements;
-        let targetPosition;
 
-        if (S.activeControl === 'landscape') {
-            targetPosition = S.manualLandscapePosition;
-        } else if (S.activeControl === 'model') {
-            targetPosition = S.manualModelPosition;
-        } else {
-            return; 
-        }
-
-        if (targetPosition) {
+        if (targetPosition && UIElements.sliderX) {
             UIElements.sliderX.value = targetPosition.x;
             UIElements.sliderY.value = targetPosition.y;
             UIElements.sliderZ.value = targetPosition.z;
@@ -98,53 +89,19 @@ export const UIManager = {
             button.addEventListener('click', (e) => this.app.switchActiveControl(e.target.dataset.actor));
         });
 
-        UIElements.manualAutoToggle.addEventListener('change', (e) => {
-            const isAuto = e.target.checked;
-            const activeControl = this.app.vizSettings.activeControl;
-            
-            if (activeControl === 'landscape') {
-                this.app.vizSettings.landscapeAutopilotOn = isAuto;
-                if (isAuto) {
-                    if (this.app.vizSettings.activeLandscapePreset) {
-                        this.app.ImagePlaneManager.startAutopilot(this.app.vizSettings.activeLandscapePreset);
-                    } else {
-                        document.getElementById('autopilotPreset1').click();
-                    }
-                } else {
-                    this.app.ImagePlaneManager.stopAutopilot();
-                }
-            } else if (activeControl === 'model') {
-                this.app.vizSettings.modelAutopilotOn = isAuto;
-                if (isAuto) {
-                     if (this.app.vizSettings.activeModelPreset) {
-                        this.app.ModelManager.startAutopilot(this.app.vizSettings.activeModelPreset);
-                    } else {
-                        document.getElementById('autopilotPreset1').click();
-                    }
-                } else {
-                    this.app.ModelManager.stopAutopilot();
-                }
-            }
-            this.updateMasterControls();
-        });
+        // Temporarily disable the autopilot toggle
+        UIElements.manualAutoToggle.disabled = true;
+        UIElements.manualAutoToggle.parentElement.style.opacity = '0.4';
+        UIElements.manualAutoToggle.parentElement.title = 'Autopilot is temporarily disabled during rework.';
 
         for (let i = 1; i <= 4; i++) {
             const buttonId = `autopilotPreset${i}`;
             const button = document.getElementById(buttonId);
             if(button) {
-                button.addEventListener('click', () => {
-                    const activeControl = this.app.vizSettings.activeControl;
-                    if (activeControl === 'landscape') {
-                        this.app.vizSettings.landscapeAutopilotOn = true;
-                        this.app.vizSettings.activeLandscapePreset = buttonId;
-                        this.app.ImagePlaneManager.startAutopilot(buttonId);
-                    } else {
-                        this.app.vizSettings.modelAutopilotOn = true;
-                        this.app.vizSettings.activeModelPreset = buttonId;
-                        this.app.ModelManager.startAutopilot(buttonId);
-                    }
-                    this.updateMasterControls();
-                });
+                // Disable the autopilot preset buttons but leave them as placeholders
+                button.disabled = true;
+                button.style.opacity = '0.4';
+                button.title = 'Autopilot is temporarily disabled during rework.';
             }
         }
         
@@ -170,17 +127,11 @@ export const UIManager = {
         this.updateRangeDisplay(slider.id, value);
     },
 
+    // REFACTORED: This function now directly controls the one-and-only world pivot target.
     handleActorSliderInput(slider) {
-        const S = this.app.vizSettings;
-        const activeControl = S.activeControl;
+        const targetPosition = this.app.interactionState.targetPosition;
         const value = parseFloat(slider.value);
-        let targetPosition;
-        if (activeControl === 'landscape') {
-            targetPosition = S.manualLandscapePosition;
-        } else if (activeControl === 'model') {
-            targetPosition = S.manualModelPosition;
-        }
-        if (!targetPosition) return;
+        
         switch (slider.id) {
             case 'actorX': targetPosition.x = value; break;
             case 'actorY': targetPosition.y = value; break;
@@ -209,6 +160,7 @@ export const UIManager = {
             speedProp = 'modelAutopilotSpeed';
         }
         
+        // This logic is kept for when we re-enable autopilot
         UIElements.manualAutoToggle.checked = isAutopilotOn;
         UIElements.manualContainer.style.display = isAutopilotOn ? 'none' : 'block';
         UIElements.masterSpeedContainer.style.display = isAutopilotOn ? 'block' : 'none';
@@ -222,7 +174,8 @@ export const UIManager = {
             this.updateRangeDisplay('masterSpeed', S[speedProp]);
         }
         
-        this.syncManualSliders();
+        // Use the new sync function to ensure sliders reflect the pivot's state.
+        this.syncManualSlidersFromPivot();
 
         this.updatePresetGlow();
         this.refreshAccordion(UIElements.masterControlContainer);
@@ -543,7 +496,7 @@ export const UIManager = {
                 break;
             case 'gltfModelInput':
                 this.updateFileNameDisplay('gltf', file.name);
-                this.app.ModelManager.loadGLTFModel(file);
+                this.app.ModelManager.loadGLTFModel(file.path); // Should be file, not file.path
                 break;
         }
     },

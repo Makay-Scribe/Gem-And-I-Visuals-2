@@ -23,57 +23,53 @@ export const Debugger = {
     },
 
     update() {
-        if (!this.enabled || !this.panelElement) return;
+        if (!this.enabled || !this.panelElement || !this.app.worldPivot) return;
 
         const S = this.app.vizSettings;
-        const ipm = this.app.ImagePlaneManager;
-        const landscape = ipm.landscape;
-        const mm = this.app.ModelManager;
-        const model = mm.gltfModel;
+        const landscape = this.app.ImagePlaneManager.landscape;
+        const model = this.app.ModelManager.gltfModel;
+        const pivot = this.app.worldPivot;
+        const interaction = this.app.interactionState;
 
         const formatV3 = (v) => v ? `${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)}` : 'null';
-        const formatQ = (q) => q ? `${q._x.toFixed(2)}, ${q._y.toFixed(2)}, ${q._z.toFixed(2)}, ${q._w.toFixed(2)}` : 'null';
+        const formatE = (e) => e ? `${(e.x * 180/Math.PI).toFixed(1)}°, ${(e.y * 180/Math.PI).toFixed(1)}°, ${(e.z * 180/Math.PI).toFixed(1)}°` : 'null';
 
-        let landscapeOutput = "--- LANDSCAPE NOT LOADED ---";
+        let pivotOutput = `
+--- WORLD PIVOT ---
+Position:   [${formatV3(pivot.position)}]
+Target Pos: [${formatV3(interaction.targetPosition)}]
+Rotation:   [${formatE(pivot.rotation)}]
+Target Rot: [${formatE(interaction.targetRotation)}]
+        `.trim();
+
+        let landscapeOutput = "\n\n--- LANDSCAPE NOT LOADED ---";
         if (landscape) {
+            const worldPos = new this.app.THREE.Vector3();
+            landscape.getWorldPosition(worldPos);
             landscapeOutput = `
---- LANDSCAPE STATE ---
-Visible:         ${landscape.visible}
-State Mode:      ${ipm.state.mode}
-Rot Anim Active: ${ipm.rotationTransition.active}
-
---- Live Object3D Data ---
-Position:    [${formatV3(landscape.position)}]
-Quaternion:  [${formatQ(landscape.quaternion)}]
-Scale:       [${formatV3(landscape.scale)}]
-
---- Manager Internal Data ---
-Manual Euler: [${formatV3(ipm.rotation)}]
-Home Quat:    [${formatQ(ipm.homeQuaternion)}]
-Home Manual:  [${formatV3(S.manualLandscapePosition)}]
+--- LANDSCAPE ---
+Parent:      ${landscape.parent === pivot ? 'worldPivot' : 'scene'}
+Autopilot:   ${S.landscapeAutopilotOn}
+World Pos:   [${formatV3(worldPos)}]
+Local Pos:   [${formatV3(landscape.position)}]
             `.trim();
         }
 
         let modelOutput = "\n\n--- 3D MODEL NOT LOADED ---";
         if (model) {
+            const worldPos = new this.app.THREE.Vector3();
+            model.getWorldPosition(worldPos);
             modelOutput = `
-            
---- 3D MODEL STATE ---
-Visible:         ${model.visible}
-Autopilot:       ${S.modelAutopilotOn ? (mm.autopilot.mode || 'active') : 'off'}
-
---- Live Object3D Data ---
-Position:    [${formatV3(model.position)}]
-Quaternion:  [${formatQ(model.quaternion)}]
-Final Scale: [${formatV3(model.scale)}]
-
---- Manager Internal Data ---
-Home Manual:  [${formatV3(S.manualModelPosition)}]
+--- 3D MODEL ---
+Parent:      ${model.parent === pivot ? 'worldPivot' : 'scene'}
+Autopilot:   ${S.modelAutopilotOn}
+World Pos:   [${formatV3(worldPos)}]
+Local Pos:   [${formatV3(model.position)}]
             `.trim();
         }
 
 
-        this.panelElement.textContent = landscapeOutput + "\n" + modelOutput;
+        this.panelElement.textContent = pivotOutput + "\n" + landscapeOutput + "\n" + modelOutput;
     },
 
     /**

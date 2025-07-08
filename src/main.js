@@ -19,16 +19,32 @@ const App = {
     renderer: null, camera: null, scene: null, 
     gltfModel: null, animationMixer: null,
     raycaster: new THREE.Raycaster(),
-    dragState: {
-        mode: 'none', 
-        targetObject: null,
-        plane: new THREE.Plane(),
-        offset: new THREE.Vector3(),
-        intersection: new THREE.Vector3(),
+
+    worldPivot: null,
+
+    interactionState: {
+        isDragging: false,
+        isRotating: false,
+        
         startMouse: new THREE.Vector2(),
-        startRotation: new THREE.Euler(), 
+        
+        targetRotation: new THREE.Euler(),
+        currentRotation: new THREE.Euler(),
+    
+        targetPosition: new THREE.Vector3(),
+        currentPosition: new THREE.Vector3(),
+    
+        rotationVelocity: new THREE.Vector2(),
+        positionVelocity: new THREE.Vector3(),
+        
+        // --- TUNED VALUES ---
+        damping: 0.95,      // Increased damping for a longer "coast"
+        returnSpring: 0.02, // Reduced spring force for a slower, gentler return
+        rotationSpeed: 0.005,
+        panSpeed: 0.05,
+        zoomSpeed: 0.5,
     },
-    stableLookAtPoint: new THREE.Vector3(0, 0, 0),
+
     modelPresets: {
         'modelPreset1': { name: 'Dancing Planet', path: '/3dmodel/converted/Dancing planet.glb' },
         'modelPreset2': { name: 'Swimming Shark', path: '/3dmodel/converted/Swimming shark.glb' },
@@ -76,10 +92,10 @@ const App = {
         modelAutopilotOn: false,
         activeLandscapePreset: null,
         activeModelPreset: null,
-        
-        manualLandscapePosition: new THREE.Vector3(0, 0, -5),
-        manualModelPosition: new THREE.Vector3(0, -13, 22),
 
+        homePositionLandscape: new THREE.Vector3(0, 0, 0),
+        homePositionModel: new THREE.Vector3(0, -15, 20),
+        
         landscapeScale: 1.3,
         modelScale: 3.0,
         
@@ -206,8 +222,8 @@ const App = {
 
     init() {
         this.vizSettings = JSON.parse(JSON.stringify(this.defaultVisualizerSettings));
-        this.vizSettings.manualLandscapePosition = new THREE.Vector3().copy(this.defaultVisualizerSettings.manualLandscapePosition);
-        this.vizSettings.manualModelPosition = new THREE.Vector3().copy(this.defaultVisualizerSettings.manualModelPosition);
+        this.vizSettings.homePositionLandscape = new THREE.Vector3().copy(this.defaultVisualizerSettings.homePositionLandscape);
+        this.vizSettings.homePositionModel = new THREE.Vector3().copy(this.defaultVisualizerSettings.homePositionModel);
         
         window.onerror = (message, source, lineno, colno, error) => {
             console.error("Uncaught Error (Global Handler):", message, source, lineno, colno, error);
@@ -231,6 +247,10 @@ const App = {
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
 
         this.SceneManager.init(this);
+
+        this.worldPivot = new THREE.Group();
+        this.scene.add(this.worldPivot);
+
         this.CameraManager.init(this);
         this.AudioProcessor.init(this);
         this.ImagePlaneManager.init(this);
@@ -243,7 +263,9 @@ const App = {
         this.Debugger.init(this);
         
         setTimeout(() => {
-            this.preloadDevAssets();
+            this.preloadDevAssets().then(() => {
+                this.switchActiveControl(this.vizSettings.activeControl);
+            });
             
             const defaultShaderCode = this.shaderPresets['presetBg1'];
             if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
@@ -298,109 +320,88 @@ const App = {
     
     onMouseWheel(event) {
         event.preventDefault();
-
-        const S = this.vizSettings;
-        const UIM = this.UIManager;
-
-        const scaleProp = S.activeControl === 'landscape' ? 'landscapeScale' : 'modelScale';
-        const slider = UIM.controlDOMElements.masterScaleSlider;
+        const IS = this.interactionState;
         
-        if (!slider) return;
-
-        let delta = event.deltaY > 0 ? -0.05 : 0.05;
-        let currentValue = parseFloat(S[scaleProp]);
-        let newValue = currentValue + delta;
-
-        newValue = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), newValue));
-        
-        S[scaleProp] = newValue;
-        slider.value = newValue;
-        UIM.updateRangeDisplay('masterScale', newValue);
+        const delta = -Math.sign(event.deltaY);
+        IS.targetPosition.z += delta * IS.zoomSpeed;
     },
 
     onPointerDown(event) {
-        if (this.dragState.mode !== 'none' || event.target !== this.renderer.domElement) return;
-
-        const S = this.vizSettings;
-        if ((S.activeControl === 'landscape' && S.landscapeAutopilotOn) || (S.activeControl === 'model' && S.modelAutopilotOn)) return;
-        
-        const DS = this.dragState;
-
-        this.ImagePlaneManager.stopAllTransitions();
-        this.ModelManager.stopAllTransitions();
-        
-        if (event.button === 0 && S.activeControl === 'landscape') {
-            DS.mode = 'rotating';
-            DS.targetObject = this.ImagePlaneManager.landscape;
-            DS.startMouse.set(event.clientX, event.clientY);
-            DS.startRotation.copy(this.ImagePlaneManager.rotation);
-        
+        const IS = this.interactionState;
+        if (event.button === 0) {
+            IS.isRotating = true;
+            IS.startMouse.set(event.clientX, event.clientY);
         } else if (event.button === 2) {
             event.preventDefault();
-            const target = (S.activeControl === 'landscape') ? this.ImagePlaneManager.landscape : this.ModelManager.gltfModel;
-            if (!target) return;
-
-            const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
-            this.raycaster.setFromCamera(mouse, this.camera);
-            
-            DS.plane.setFromNormalAndCoplanarPoint(
-                this.camera.getWorldDirection(DS.plane.normal),
-                target.position
-            );
-
-            if (this.raycaster.ray.intersectPlane(DS.plane, DS.intersection)) {
-                DS.mode = 'dragging';
-                DS.targetObject = target;
-                DS.offset.copy(DS.intersection).sub(target.position);
-            }
+            IS.isDragging = true;
+            IS.startMouse.set(event.clientX, event.clientY);
         }
     },
     
     onPointerMove(event) {
-        if (this.dragState.mode === 'none') return;
+        const IS = this.interactionState;
+        if (IS.isDragging) {
+            const deltaX = event.clientX - IS.startMouse.x;
+            const deltaY = event.clientY - IS.startMouse.y;
+            
+            const distanceFactor = Math.abs(IS.targetPosition.z / 100) + 0.1;
 
-        const DS = this.dragState;
+            IS.targetPosition.x += deltaX * IS.panSpeed * distanceFactor;
+            IS.targetPosition.y -= deltaY * IS.panSpeed * distanceFactor;
 
-        if (DS.mode === 'rotating') {
-            const deltaX = event.clientX - DS.startMouse.x;
-            const deltaY = event.clientY - DS.startMouse.y;
-            const rotSpeed = 0.005;
-            this.ImagePlaneManager.rotation.y = DS.startRotation.y + deltaX * rotSpeed;
-            this.ImagePlaneManager.rotation.x = DS.startRotation.x + deltaY * rotSpeed;
+            IS.startMouse.set(event.clientX, event.clientY);
+        } else if (IS.isRotating) {
+            const deltaX = event.clientX - IS.startMouse.x;
+            const deltaY = event.clientY - IS.startMouse.y;
 
-        } else if (DS.mode === 'dragging') {
-            const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
-            this.raycaster.setFromCamera(mouse, this.camera);
+            IS.targetRotation.y += deltaX * IS.rotationSpeed;
+            IS.targetRotation.x += deltaY * IS.rotationSpeed;
+            IS.targetRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, IS.targetRotation.x));
 
-            if (this.raycaster.ray.intersectPlane(DS.plane, DS.intersection)) {
-                const newPos = DS.intersection.sub(DS.offset);
-                DS.targetObject.position.copy(newPos);
-            }
+            IS.startMouse.set(event.clientX, event.clientY);
         }
     },
 
     onPointerUp(event) {
-        if (this.dragState.mode === 'none') return;
-        
-        // ** THE FIX IS HERE ** - On mouse up, trigger the appropriate "return to home" animation.
-        if (this.dragState.mode === 'rotating') {
-            this.ImagePlaneManager.returnRotationToHome();
-        } else if (this.dragState.mode === 'dragging') {
-            if (this.dragState.targetObject === this.ImagePlaneManager.landscape) {
-                this.ImagePlaneManager.returnToHome(); 
-            } else if (this.dragState.targetObject === this.ModelManager.gltfModel) {
-                this.ModelManager.returnToHome();
-            }
+        const IS = this.interactionState;
+        if (event.button === 0) {
+            IS.isRotating = false;
+        } else if (event.button === 2) {
+            IS.isDragging = false;
         }
-        
-        this.dragState.mode = 'none';
-        this.dragState.targetObject = null;
     },
 
     switchActiveControl(newControlTarget) {
-        if (this.vizSettings.activeControl === newControlTarget) return;
+        if (this.vizSettings.activeControl === newControlTarget && newControlTarget !== null) return;
+
+        const landscape = this.ImagePlaneManager.landscape;
+        const model = this.ModelManager.gltfModel;
+        const IS = this.interactionState;
+
+        if (!landscape || !model) {
+            console.warn("Cannot switch active control: one or more actors not loaded.");
+            return;
+        }
+
+        const activeObject = (newControlTarget === 'landscape') ? landscape : model;
+        const inactiveObject = (newControlTarget === 'landscape') ? model : landscape;
+        
+        const newPivotWorldPosition = new THREE.Vector3();
+        activeObject.getWorldPosition(newPivotWorldPosition);
+
+        this.worldPivot.attach(activeObject);
+        this.scene.attach(inactiveObject);
+
+        this.worldPivot.position.copy(newPivotWorldPosition);
+        activeObject.position.set(0, 0, 0);
+
+        IS.targetPosition.copy(this.worldPivot.position);
+        this.UIManager.syncManualSlidersFromPivot();
+        
+        IS.targetRotation.set(0, 0, 0);
+
         this.vizSettings.activeControl = newControlTarget;
-        this.UIManager.updateMasterControls();
+        if(this.UIManager) this.UIManager.updateMasterControls();
     },
 
     onWindowResize() {
@@ -411,6 +412,30 @@ const App = {
         this.BackgroundManager.onWindowResize(); 
         if (this.GPGPUDebugger && this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
         if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
+    },
+
+    updateWorldPivot(delta) {
+        const IS = this.interactionState;
+        const S = this.vizSettings;
+
+        if (!IS.isDragging && !IS.isRotating) {
+            const homePosition = (S.activeControl === 'landscape') ? S.homePositionLandscape : S.homePositionModel;
+            IS.targetPosition.lerp(homePosition, IS.returnSpring);
+            
+            const homeRotation = new THREE.Euler(0,0,0);
+            IS.targetRotation.x = THREE.MathUtils.lerp(IS.targetRotation.x, homeRotation.x, IS.returnSpring);
+            IS.targetRotation.y = THREE.MathUtils.lerp(IS.targetRotation.y, homeRotation.y, IS.returnSpring);
+            IS.targetRotation.z = THREE.MathUtils.lerp(IS.targetRotation.z, homeRotation.z, IS.returnSpring);
+        }
+
+        const lerpAlpha = 1.0 - IS.damping;
+
+        this.worldPivot.position.lerp(IS.targetPosition, lerpAlpha);
+        
+        const targetQuaternion = new THREE.Quaternion().setFromEuler(IS.targetRotation);
+        this.worldPivot.quaternion.slerp(targetQuaternion, lerpAlpha);
+        
+        this.UIManager.syncManualSlidersFromPivot();
     },
 
     animate() {
@@ -425,10 +450,11 @@ const App = {
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
+        this.updateWorldPivot(cappedDelta);
+        
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
         
-        this.CameraManager._controls.target.lerp(this.stableLookAtPoint, 0.05);
         this.CameraManager.update(cappedDelta); 
         
         this.SceneManager.update(cappedDelta);
