@@ -416,7 +416,12 @@ const App = {
         const IS = this.interactionState;
         const S = this.vizSettings;
 
-        if (!IS.isDragging && !IS.isRotating) {
+        // ** THE FIX IS HERE **: Determine if an autopilot is currently active for the selected control.
+        const isAutopilotEngaged = (S.activeControl === 'landscape' && S.landscapeAutopilotOn) ||
+                                 (S.activeControl === 'model' && S.modelAutopilotOn);
+
+        // The return-to-home spring should ONLY engage if we are in manual mode and not using the mouse.
+        if (!IS.isDragging && !IS.isRotating && !isAutopilotEngaged) {
             const homePosition = (S.activeControl === 'landscape') ? S.homePositionLandscape : S.homePositionModel;
             IS.targetPosition.lerp(homePosition, IS.returnSpring);
             

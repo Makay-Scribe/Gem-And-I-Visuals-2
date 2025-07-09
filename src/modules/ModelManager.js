@@ -78,27 +78,24 @@ export const ModelManager = {
             THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
         );
         
-        // --- NEW COLLISION AVOIDANCE LOGIC ---
         if (this.app.vizSettings.enableCollisionAvoidance && this.app.ImagePlaneManager.landscape) {
             const landscapeSphere = new THREE.Sphere();
             this.app.ImagePlaneManager.boundingBox.getBoundingSphere(landscapeSphere);
             
-            // Inflate the sphere slightly to give a buffer zone
             landscapeSphere.radius *= 1.1;
 
             if (landscapeSphere.containsPoint(ap.endPos)) {
                 if (this._waypointRetryCount < 1) {
                     console.log("Model waypoint collision detected. Retrying once...");
                     this._waypointRetryCount++;
-                    this.generateNewRandomWaypoint(); // Try again
-                    return; // Exit this attempt
+                    this.generateNewRandomWaypoint(); 
+                    return; 
                 } else {
                     console.warn("Model waypoint collision retry failed. Allowing pass-through.");
                 }
             }
         }
-        this._waypointRetryCount = 0; // Reset for next successful generation
-        // --- END OF NEW LOGIC ---
+        this._waypointRetryCount = 0; 
 
         const targetLookAt = new THREE.Vector3(0,0,0);
         const tempMatrix = new THREE.Matrix4().lookAt(ap.endPos, targetLookAt, this.gltfModel.up);
@@ -177,8 +174,10 @@ export const ModelManager = {
                 this.gltfModel.scale.multiplyScalar(this.app.defaultVisualizerSettings.modelScale);
                 this.gltfModel.position.set(0, 0, 0); 
                 
-                this.app.switchActiveControl(null);
-                this.app.switchActiveControl('model');
+                // ** THE FIX IS HERE **: Removed the lines that forcibly switched control.
+                // The app will now respect the default control set in main.js at startup.
+                // this.app.switchActiveControl(null);
+                // this.app.switchActiveControl('model');
 
             },
             undefined, 

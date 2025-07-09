@@ -3,10 +3,10 @@ import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
 
 const PRESET_BASE_SPEEDS = {
-    autopilotPreset1: 5.0,
-    autopilotPreset2: 0.5,
-    autopilotPreset3: 0.75,
-    autopilotPreset4: 0.40
+    autopilotPreset1: 3.75, 
+    autopilotPreset2: 1.8,
+    autopilotPreset3: 1.5,
+    autopilotPreset4: 1.2
 };
 
 export const ImagePlaneManager = {
@@ -24,10 +24,10 @@ export const ImagePlaneManager = {
     autopilot: {
         active: false,
         preset: null,
-        waypoints: [],
-        currentWaypointIndex: 0,
-        waypointProgress: 0,
-        waypointTransitionDuration: 15.0,
+        isTransitioningToHome: false, 
+        nextPresetId: null, 
+        waypointProgress: 1.0, 
+        waypointTransitionDuration: 10.0,
         holdTimer: 0,
         randomBounds: null,
         startPos: new THREE.Vector3(),
@@ -44,53 +44,62 @@ export const ImagePlaneManager = {
     startAutopilot(presetId) {
         if (!this.landscape) return;
         const ap = this.autopilot;
+        const S = this.app.vizSettings;
+
+        const isAtHome = this.app.interactionState.targetPosition.distanceTo(S.homePositionLandscape) < 0.1;
+
+        // ** THE FIX IS HERE (Part 1) **: Universal Transition Logic
+        // If we are not already at the home position, we MUST transition home first.
+        if (!isAtHome && !ap.isTransitioningToHome) {
+            console.log(`Not at home. Transitioning before starting preset: ${presetId}`);
+            this.initiateReturnToHome(presetId); // Pass the next preset to start after.
+            return;
+        }
 
         ap.active = true;
         ap.preset = presetId;
-        ap.waypoints = [];
-        ap.currentWaypointIndex = 0;
-        ap.waypointProgress = 1.0;
+        ap.isTransitioningToHome = false;
+        ap.waypointProgress = 1.0; 
         ap.holdTimer = 0;
 
-        const home = { pos: this.app.vizSettings.homePositionLandscape.clone(), rot: new THREE.Quaternion() };
-
         if (presetId === 'autopilotPreset2') {
-            const destinations = [
-                { pos: new THREE.Vector3(-5, 2, -3), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.1, -0.1, 0)) },
-                { pos: new THREE.Vector3(5, -2, 3), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.1, 0.1, 0)) },
-                { pos: new THREE.Vector3(0, 3, 5), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, 0, 0)) },
-                { pos: new THREE.Vector3(3, -3, -5), rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.1, 0.1, 0.05)) },
-            ];
-            // NEW: Use the expanded bounds for Preset 2 as requested.
-            ap.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(25, 20, 5)), home.pos.clone().add(new THREE.Vector3(25, 20, 40)));
-            ap.waypoints = destinations.map(dest => ({
-                pos: new THREE.Vector3(
-                    THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
-                    THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
-                    THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
-                ),
-                rot: dest.rot // Keep original rotations for now
-            }));
-            ap.waypoints.forEach(dest => ap.waypoints.push(home)); // Add return trips
-        
+            ap.randomBounds = new THREE.Box3(new THREE.Vector3(-35, -25, -50), new THREE.Vector3(35, 25, 10));
         } else if (presetId === 'autopilotPreset3') {
-            // Further back, but not as wide as Preset 4
-            ap.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(20, 15, 5)), home.pos.clone().add(new THREE.Vector3(20, 15, 60)));
-            this.generateNewRandomWaypoint();
-
+            ap.randomBounds = new THREE.Box3(new THREE.Vector3(-45, -30, -70), new THREE.Vector3(45, 30, 5));
         } else if (presetId === 'autopilotPreset4') {
-             // Widest and furthest back range
-             ap.randomBounds = new THREE.Box3(home.pos.clone().sub(new THREE.Vector3(30, 25, 10)), home.pos.clone().add(new THREE.Vector3(30, 25, 80)));
-             this.generateNewRandomWaypoint();
+             ap.randomBounds = new THREE.Box3(new THREE.Vector3(-60, -35, -90), new THREE.Vector3(60, 35, 0));
         }
 
         console.log(`ImagePlane Autopilot STARTED with preset: ${presetId}`);
     },
 
+    // ** THE FIX IS HERE (Part 2) **: New function for graceful shutdown and transitions.
+    initiateReturnToHome(nextPreset = null) {
+        const ap = this.autopilot;
+        const S = this.app.vizSettings;
+        
+        ap.isTransitioningToHome = true;
+        ap.nextPresetId = nextPreset; // Will be null if we are just turning autopilot off.
+        ap.active = true; // Keep the autopilot system running to handle the transition.
+        ap.preset = null; // We are in a special "transition" state, not a numbered preset.
+
+        ap.startPos.copy(this.app.interactionState.targetPosition);
+        ap.endPos.copy(S.homePositionLandscape);
+        ap.startQuat.setFromEuler(this.app.interactionState.targetRotation);
+        ap.endQuat.identity(); 
+        ap.waypointProgress = 0;
+        ap.waypointTransitionDuration = 10.0;
+        
+        console.log(`Initiating 10-second return to home. Next preset: ${nextPreset}`);
+    },
+
     stopAutopilot() {
-        this.autopilot.active = false;
-        this.autopilot.preset = null;
-        console.log("ImagePlane Autopilot STOPPED.");
+        const ap = this.autopilot;
+        ap.active = false;
+        ap.preset = null;
+        ap.isTransitioningToHome = false;
+        ap.nextPresetId = null;
+        console.log("ImagePlane Autopilot System STOPPED.");
     },
     
     generateNewRandomWaypoint() {
@@ -103,85 +112,63 @@ export const ImagePlaneManager = {
         ap.endPos.set(
             THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
             THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
-            // Ensure the Z position is always moving away or staying far away
-            -Math.abs(THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)) 
+            THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z) 
         );
 
-        const randomRot = new THREE.Euler(
-            (Math.random() - 0.5) * 0.6,
-            (Math.random() - 0.5) * 0.6,
-            (Math.random() - 0.5) * 0.3
-        );
+        const randomRot = new THREE.Euler((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.2);
         ap.endQuat.setFromEuler(randomRot);
         
         const distance = ap.startPos.distanceTo(ap.endPos);
-        const baseSpeed = PRESET_BASE_SPEEDS[ap.preset] || 1.0;
-        const finalSpeed = baseSpeed * S.landscapeAutopilotSpeed;
+        const speedFactor = (PRESET_BASE_SPEEDS[ap.preset] || 1.0) * S.landscapeAutopilotSpeed;
+        ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance / speedFactor, 12, 35);
 
-        ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance / finalSpeed, 10, 15);
-        ap.holdTimer = Math.random() * 2.0;
         ap.waypointProgress = 0;
     },
     
-    runWaypointLogic(delta) {
+    runMovementLogic(delta) {
         const ap = this.autopilot;
-        const S = this.app.vizSettings;
         const IS = this.app.interactionState;
 
-        if (ap.waypoints.length === 0) {
-            if (ap.holdTimer > 0) { 
-                ap.holdTimer -= delta; 
-            } else if (ap.waypointProgress < 1.0) {
-                ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
-                const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
-                
-                IS.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
-                const tempQuat = new THREE.Quaternion().copy(ap.startQuat).slerp(ap.endQuat, ease);
-                IS.targetRotation.setFromQuaternion(tempQuat, 'XYZ');
-            } else { 
-                this.generateNewRandomWaypoint(); 
-            }
-        } else {
-             const currentIndex = ap.currentWaypointIndex;
-            const nextIndex = (currentIndex + 1) % ap.waypoints.length;
-            const startPoint = ap.currentWaypointIndex === 0 ? {pos: IS.targetPosition.clone(), rot: new THREE.Quaternion().setFromEuler(IS.targetRotation)} : ap.waypoints[currentIndex];
-            const endPoint = ap.waypoints[nextIndex];
-            
-            if(ap.waypointProgress === 0) {
-                 const distance = startPoint.pos.distanceTo(endPoint.pos);
-                 const baseSpeed = PRESET_BASE_SPEEDS[ap.preset] || 1.0;
-                 const finalSpeed = baseSpeed * S.landscapeAutopilotSpeed;
-                 ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance / finalSpeed, 10, 15);
-            }
+        ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
+        const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
+        
+        IS.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
+        const tempQuat = new THREE.Quaternion().copy(ap.startQuat).slerp(ap.endQuat, ease);
+        IS.targetRotation.setFromQuaternion(tempQuat, 'XYZ');
 
-            ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
-            const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
-            
-            IS.targetPosition.lerpVectors(startPoint.pos, endPoint.pos, ease);
-            const tempQuat = new THREE.Quaternion().copy(startPoint.rot).slerp(endPoint.rot, ease);
-            IS.targetRotation.setFromQuaternion(tempQuat, 'XYZ');
-
-            if (ap.waypointProgress >= 1.0) {
-                ap.currentWaypointIndex = nextIndex;
-                ap.waypointProgress = 0;
+        if (ap.waypointProgress >= 1.0) {
+            // ** THE FIX IS HERE (Part 3) **: Smarter completion logic.
+            if (ap.isTransitioningToHome) {
+                ap.isTransitioningToHome = false;
+                if (ap.nextPresetId) {
+                    // If we have a preset queued up, start it.
+                    this.startAutopilot(ap.nextPresetId);
+                } else {
+                    // If not, we were just turning off, so stop everything.
+                    this.stopAutopilot();
+                }
+            } else {
+                ap.holdTimer = Math.random() * 1.5 + 0.5;
             }
         }
     },
 
     updateAutopilot(delta) {
-        const preset = this.autopilot.preset;
+        const ap = this.autopilot;
+        
+        if (ap.isTransitioningToHome) {
+            this.runMovementLogic(delta);
+            return;
+        }
 
-        if (preset === 'autopilotPreset1') {
+        if (ap.preset === 'autopilotPreset1') {
             const S = this.app.vizSettings;
             const IS = this.app.interactionState;
             const time = this.app.currentTime;
-            
-            const baseSpeed = PRESET_BASE_SPEEDS[preset] || 1.0;
+            const baseSpeed = PRESET_BASE_SPEEDS[ap.preset] || 1.0;
             const finalSpeed = baseSpeed * S.landscapeAutopilotSpeed;
-
             const posSpeed = finalSpeed * 0.2;
             const rotSpeed = finalSpeed * 0.15;
-
             const xPos = Math.sin(time * posSpeed) * 1.5;
             const yPos = Math.cos(time * posSpeed * 1.2) * 1.0;
             const zPos = Math.sin(time * posSpeed * 0.8) * 2.0;
@@ -190,8 +177,17 @@ export const ImagePlaneManager = {
             const yRot = Math.cos(time * rotSpeed * 0.9) * 0.1;
             const zRot = Math.sin(time * rotSpeed) * 0.03;
             IS.targetRotation.set(xRot, yRot, zRot);
-        } else if (preset === 'autopilotPreset2' || preset === 'autopilotPreset3' || preset === 'autopilotPreset4') {
-            this.runWaypointLogic(delta);
+
+        } else if (ap.preset) { // Check if a preset is active
+            if (ap.waypointProgress >= 1.0 && ap.holdTimer > 0) {
+                ap.holdTimer -= delta;
+            } else if (ap.waypointProgress >= 1.0 && ap.holdTimer <= 0) {
+                this.generateNewRandomWaypoint();
+            }
+            // This ensures movement continues after a new waypoint is generated
+            if(ap.waypointProgress < 1.0) {
+                 this.runMovementLogic(delta);
+            }
         }
     },
 
@@ -209,9 +205,7 @@ export const ImagePlaneManager = {
             this.updateAutopilot(cappedDelta);
         } else {
             if (S.enableLandscapeSpin) {
-                this.landscape.rotation.z += S.landscapeSpinSpeed * cappedDelta;
-            } else {
-                this.landscape.quaternion.copy(this.homeQuaternion);
+                 this.landscape.rotation.z += S.landscapeSpinSpeed * cappedDelta;
             }
         }
 

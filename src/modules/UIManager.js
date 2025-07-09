@@ -87,7 +87,6 @@ export const UIManager = {
             button.addEventListener('click', (e) => this.app.switchActiveControl(e.target.dataset.actor));
         });
 
-        // Event listener for the main autopilot toggle switch
         UIElements.manualAutoToggle.addEventListener('change', (e) => {
             const isAuto = e.target.checked;
             const activeControl = this.app.vizSettings.activeControl;
@@ -97,20 +96,20 @@ export const UIManager = {
                 if (isAuto && this.app.vizSettings.activeLandscapePreset) {
                     this.app.ImagePlaneManager.startAutopilot(this.app.vizSettings.activeLandscapePreset);
                 } else if (!isAuto) {
-                    this.app.ImagePlaneManager.stopAutopilot();
+                    // ** THE FIX IS HERE **: Call the new graceful shutdown function.
+                    this.app.ImagePlaneManager.initiateReturnToHome();
                 }
             } else if (activeControl === 'model') {
                 this.app.vizSettings.modelAutopilotOn = isAuto;
                 if (isAuto && this.app.vizSettings.activeModelPreset) {
                     this.app.ModelManager.startAutopilot(this.app.vizSettings.activeModelPreset);
                 } else if (!isAuto) {
-                    this.app.ModelManager.stopAutopilot();
+                    this.app.ModelManager.stopAutopilot(); // Placeholder for now
                 }
             }
             this.updateMasterControls();
         });
 
-        // Event listeners for the autopilot preset buttons
         for (let i = 1; i <= 4; i++) {
             const buttonId = `autopilotPreset${i}`;
             const button = document.getElementById(buttonId);
@@ -518,7 +517,7 @@ export const UIManager = {
                 break;
             case 'gltfModelInput':
                 this.updateFileNameDisplay('gltf', file.name);
-                this.app.ModelManager.loadGLTFModel(file.path); // Should be file, not file.path
+                this.app.ModelManager.loadGLTFModel(URL.createObjectURL(file)); 
                 break;
         }
     },
