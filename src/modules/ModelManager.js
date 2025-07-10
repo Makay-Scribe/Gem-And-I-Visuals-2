@@ -129,11 +129,10 @@ export const ModelManager = {
 
             if (landscapeSphere.containsPoint(ap.endPos)) {
                 if (this._waypointRetryCount < 1) {
-                    console.log("Model waypoint collision detected. Retrying once...");
                     this._waypointRetryCount++;
                     this.generateNewRandomWaypoint(); 
                     return; 
-                } else { console.warn("Model waypoint collision retry failed. Allowing pass-through."); }
+                } else { console.warn("Model waypoint collision retry failed."); }
             }
         }
         this._waypointRetryCount = 0; 

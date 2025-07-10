@@ -377,9 +377,7 @@ const App = {
         const IS = this.interactionState;
         const S = this.vizSettings;
 
-        if (!landscape || !model) {
-            return;
-        }
+        if (!landscape || !model) { return; }
         
         const oldActiveControl = S.activeControl;
         S.activeControl = newControlTarget;
@@ -387,31 +385,32 @@ const App = {
         const activeObject = (newControlTarget === 'landscape') ? landscape : model;
         const inactiveObject = (newControlTarget === 'landscape') ? model : landscape;
 
-        // ** THE FIX IS HERE **: A complete architectural rewrite of the switch logic.
+        // ** THE FIX IS HERE **: This is the new, robust "Polite Switch" logic.
         
-        // 1. Detach both objects, get their current world positions.
-        const activeObjWorldPos = new THREE.Vector3();
-        const inactiveObjWorldPos = new THREE.Vector3();
-        activeObject.getWorldPosition(activeObjWorldPos);
-        inactiveObject.getWorldPosition(inactiveObjWorldPos);
-        
+        // 1. Get the current world position and rotation of the object that is becoming active.
+        const newPivotWorldPosition = new THREE.Vector3();
+        activeObject.getWorldPosition(newPivotWorldPosition);
+        const newPivotWorldQuaternion = new THREE.Quaternion();
+        activeObject.getWorldQuaternion(newPivotWorldQuaternion);
+
+        // 2. Detach both objects. They are now floating in the scene at their last known positions.
         this.scene.attach(activeObject);
         this.scene.attach(inactiveObject);
+        
+        // 3. Move the pivot to where the new active object was.
+        this.worldPivot.position.copy(newPivotWorldPosition);
+        this.worldPivot.quaternion.copy(newPivotWorldQuaternion);
 
-        // 2. The active object is now attached to the pivot.
+        // 4. Attach the new active object to the pivot.
         this.worldPivot.attach(activeObject);
-        
-        // 3. Move the pivot to the active object's former world position.
-        this.worldPivot.position.copy(activeObjWorldPos);
-        this.worldPivot.quaternion.copy(activeObject.quaternion);
-        
-        // 4. Reset the active object's local position so it sits at the center of the pivot.
+
+        // 5. Reset the active object's local position/rotation. It now sits perfectly on the pivot.
         activeObject.position.set(0, 0, 0);
         activeObject.quaternion.set(0, 0, 0, 1);
-        
-        // 5. Sync the interaction state to match the pivot's new state.
+
+        // 6. Sync the interaction state to match the pivot's new state.
         IS.targetPosition.copy(this.worldPivot.position);
-        IS.targetRotation.copy(this.worldPivot.rotation);
+        IS.targetRotation.setFromQuaternion(this.worldPivot.quaternion, 'XYZ');
 
         if(this.UIManager) this.UIManager.updateMasterControls();
     },
@@ -430,8 +429,8 @@ const App = {
         const IS = this.interactionState;
         const S = this.vizSettings;
 
-        const isLandscapeAutopilotEngaged = S.activeControl === 'landscape' && this.ImagePlaneManager.autopilot.active;
-        const isModelAutopilotEngaged = S.activeControl === 'model' && this.ModelManager.autopilot.active;
+        const isLandscapeAutopilotEngaged = this.ImagePlaneManager.autopilot.active;
+        const isModelAutopilotEngaged = this.ModelManager.autopilot.active;
         
         const isAutopilotEngaged = isLandscapeAutopilotEngaged || isModelAutopilotEngaged;
 
