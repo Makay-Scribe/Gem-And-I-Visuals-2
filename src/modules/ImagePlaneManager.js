@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
 
-const PRESET_BASE_SPEEDS = {
-    autopilotPreset1: 3.75, 
-    autopilotPreset2: 1.8,
-    autopilotPreset3: 1.5,
-    autopilotPreset4: 1.2
+const PRESET_DEFAULT_SPEEDS = {
+    autopilotPreset1: 1.0, 
+    autopilotPreset2: 1.0,
+    autopilotPreset3: 1.0,
+    autopilotPreset4: 1.0
 };
 
 export const ImagePlaneManager = {
@@ -48,40 +48,47 @@ export const ImagePlaneManager = {
 
         const isAtHome = this.app.interactionState.targetPosition.distanceTo(S.homePositionLandscape) < 0.1;
 
-        // ** THE FIX IS HERE (Part 1) **: Universal Transition Logic
-        // If we are not already at the home position, we MUST transition home first.
         if (!isAtHome && !ap.isTransitioningToHome) {
-            console.log(`Not at home. Transitioning before starting preset: ${presetId}`);
-            this.initiateReturnToHome(presetId); // Pass the next preset to start after.
+            this.initiateReturnToHome(presetId);
             return;
         }
 
         ap.active = true;
         ap.preset = presetId;
         ap.isTransitioningToHome = false;
+
+        S.landscapeAutopilotSpeed = PRESET_DEFAULT_SPEEDS[presetId] || 1.0;
+        
+        if (this.app.UIManager) {
+            this.app.UIManager.updateMasterControls();
+        }
+
         ap.waypointProgress = 1.0; 
         ap.holdTimer = 0;
-
-        if (presetId === 'autopilotPreset2') {
+        
+        // ** THE FIX IS HERE (Part 1) **: All presets now just define their boundaries.
+        // Preset 1 now uses the waypoint system with a tiny box for the "handicam" effect.
+        if (presetId === 'autopilotPreset1') {
+            ap.randomBounds = new THREE.Box3(new THREE.Vector3(-2, -1.5, -5), new THREE.Vector3(2, 1.5, 0));
+        } else if (presetId === 'autopilotPreset2') {
             ap.randomBounds = new THREE.Box3(new THREE.Vector3(-35, -25, -50), new THREE.Vector3(35, 25, 10));
         } else if (presetId === 'autopilotPreset3') {
             ap.randomBounds = new THREE.Box3(new THREE.Vector3(-45, -30, -70), new THREE.Vector3(45, 30, 5));
         } else if (presetId === 'autopilotPreset4') {
              ap.randomBounds = new THREE.Box3(new THREE.Vector3(-60, -35, -90), new THREE.Vector3(60, 35, 0));
         }
-
-        console.log(`ImagePlane Autopilot STARTED with preset: ${presetId}`);
+        
+        console.log(`ImagePlane Autopilot STARTED with preset: ${presetId} at speed ${S.landscapeAutopilotSpeed}`);
     },
 
-    // ** THE FIX IS HERE (Part 2) **: New function for graceful shutdown and transitions.
     initiateReturnToHome(nextPreset = null) {
         const ap = this.autopilot;
         const S = this.app.vizSettings;
         
         ap.isTransitioningToHome = true;
-        ap.nextPresetId = nextPreset; // Will be null if we are just turning autopilot off.
-        ap.active = true; // Keep the autopilot system running to handle the transition.
-        ap.preset = null; // We are in a special "transition" state, not a numbered preset.
+        ap.nextPresetId = nextPreset;
+        ap.active = true; 
+        ap.preset = null; 
 
         ap.startPos.copy(this.app.interactionState.targetPosition);
         ap.endPos.copy(S.homePositionLandscape);
@@ -94,12 +101,7 @@ export const ImagePlaneManager = {
     },
 
     stopAutopilot() {
-        const ap = this.autopilot;
-        ap.active = false;
-        ap.preset = null;
-        ap.isTransitioningToHome = false;
-        ap.nextPresetId = null;
-        console.log("ImagePlane Autopilot System STOPPED.");
+        this.initiateReturnToHome(null);
     },
     
     generateNewRandomWaypoint() {
@@ -115,11 +117,22 @@ export const ImagePlaneManager = {
             THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z) 
         );
 
-        const randomRot = new THREE.Euler((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.2);
+        let randomRot;
+        if (ap.preset === 'autopilotPreset1') {
+            // ** THE FIX IS HERE (Part 2) **: Tiny rotation for the "handicam" feel.
+            randomRot = new THREE.Euler(
+                (Math.random() - 0.5) * 0.05, // Very slight tilt
+                (Math.random() - 0.5) * 0.05, // Very slight pan
+                (Math.random() - 0.5) * 0.02  // Almost no roll
+            );
+        } else {
+            // Larger rotation for the other presets.
+            randomRot = new THREE.Euler((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.2);
+        }
         ap.endQuat.setFromEuler(randomRot);
         
         const distance = ap.startPos.distanceTo(ap.endPos);
-        const speedFactor = (PRESET_BASE_SPEEDS[ap.preset] || 1.0) * S.landscapeAutopilotSpeed;
+        const speedFactor = S.landscapeAutopilotSpeed;
         ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance / speedFactor, 12, 35);
 
         ap.waypointProgress = 0;
@@ -137,17 +150,15 @@ export const ImagePlaneManager = {
         IS.targetRotation.setFromQuaternion(tempQuat, 'XYZ');
 
         if (ap.waypointProgress >= 1.0) {
-            // ** THE FIX IS HERE (Part 3) **: Smarter completion logic.
             if (ap.isTransitioningToHome) {
                 ap.isTransitioningToHome = false;
                 if (ap.nextPresetId) {
-                    // If we have a preset queued up, start it.
                     this.startAutopilot(ap.nextPresetId);
                 } else {
-                    // If not, we were just turning off, so stop everything.
-                    this.stopAutopilot();
+                    ap.active = false;
+                    ap.preset = null;
                 }
-            } else {
+            } else { // No special case needed for preset 1 anymore
                 ap.holdTimer = Math.random() * 1.5 + 0.5;
             }
         }
@@ -158,34 +169,19 @@ export const ImagePlaneManager = {
         
         if (ap.isTransitioningToHome) {
             this.runMovementLogic(delta);
-            return;
+            return; 
         }
 
-        if (ap.preset === 'autopilotPreset1') {
-            const S = this.app.vizSettings;
-            const IS = this.app.interactionState;
-            const time = this.app.currentTime;
-            const baseSpeed = PRESET_BASE_SPEEDS[ap.preset] || 1.0;
-            const finalSpeed = baseSpeed * S.landscapeAutopilotSpeed;
-            const posSpeed = finalSpeed * 0.2;
-            const rotSpeed = finalSpeed * 0.15;
-            const xPos = Math.sin(time * posSpeed) * 1.5;
-            const yPos = Math.cos(time * posSpeed * 1.2) * 1.0;
-            const zPos = Math.sin(time * posSpeed * 0.8) * 2.0;
-            IS.targetPosition.set(xPos, yPos, zPos);
-            const xRot = Math.sin(time * rotSpeed * 1.1) * 0.05;
-            const yRot = Math.cos(time * rotSpeed * 0.9) * 0.1;
-            const zRot = Math.sin(time * rotSpeed) * 0.03;
-            IS.targetRotation.set(xRot, yRot, zRot);
-
-        } else if (ap.preset) { // Check if a preset is active
+        // ** THE FIX IS HERE (Part 3) **: All presets are now handled by this single, simple logic block.
+        // The complex `if (ap.preset === 'autopilotPreset1')` block is GONE.
+        if (ap.preset) {
             if (ap.waypointProgress >= 1.0 && ap.holdTimer > 0) {
                 ap.holdTimer -= delta;
             } else if (ap.waypointProgress >= 1.0 && ap.holdTimer <= 0) {
                 this.generateNewRandomWaypoint();
             }
-            // This ensures movement continues after a new waypoint is generated
-            if(ap.waypointProgress < 1.0) {
+            
+            if (ap.waypointProgress < 1.0) {
                  this.runMovementLogic(delta);
             }
         }

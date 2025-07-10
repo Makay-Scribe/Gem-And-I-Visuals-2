@@ -93,10 +93,10 @@ const App = {
         activeModelPreset: null,
 
         homePositionLandscape: new THREE.Vector3(0, 0, 0),
-        homePositionModel: new THREE.Vector3(0, -15, 20),
+        homePositionModel: new THREE.Vector3(0, -5, 30),
         
-        landscapeScale: 1.3,
-        modelScale: 3.0,
+        landscapeScale: 1.0,
+        modelScale: 1.0,
         
         landscapeAutopilotSpeed: 1.0,
         modelAutopilotSpeed: 1.0,
@@ -104,7 +104,7 @@ const App = {
         enableModel: true,
         enableModelSpin: false,
         modelSpinSpeed: 0.0,
-        enableCollisionAvoidance: false, // Defaulting to OFF as requested
+        enableCollisionAvoidance: false, 
 
         // Landscape-Specific
         enableLandscape: true,
@@ -262,7 +262,7 @@ const App = {
         
         setTimeout(() => {
             this.preloadDevAssets().then(() => {
-                this.switchActiveControl(this.vizSettings.activeControl);
+                // The switch to the default control is now handled inside the ModelManager loader
             });
             
             const defaultShaderCode = this.shaderPresets['presetBg1'];
@@ -368,37 +368,51 @@ const App = {
             IS.isDragging = false;
         }
     },
-
+    
     switchActiveControl(newControlTarget) {
         if (this.vizSettings.activeControl === newControlTarget && newControlTarget !== null) return;
 
         const landscape = this.ImagePlaneManager.landscape;
         const model = this.ModelManager.gltfModel;
         const IS = this.interactionState;
+        const S = this.vizSettings;
 
         if (!landscape || !model) {
-            console.warn("Cannot switch active control: one or more actors not loaded.");
             return;
         }
+        
+        const oldActiveControl = S.activeControl;
+        S.activeControl = newControlTarget;
 
         const activeObject = (newControlTarget === 'landscape') ? landscape : model;
         const inactiveObject = (newControlTarget === 'landscape') ? model : landscape;
-        
-        const newPivotWorldPosition = new THREE.Vector3();
-        activeObject.getWorldPosition(newPivotWorldPosition);
 
-        this.worldPivot.attach(activeObject);
+        // ** THE FIX IS HERE **: A complete architectural rewrite of the switch logic.
+        
+        // 1. Detach both objects, get their current world positions.
+        const activeObjWorldPos = new THREE.Vector3();
+        const inactiveObjWorldPos = new THREE.Vector3();
+        activeObject.getWorldPosition(activeObjWorldPos);
+        inactiveObject.getWorldPosition(inactiveObjWorldPos);
+        
+        this.scene.attach(activeObject);
         this.scene.attach(inactiveObject);
 
-        this.worldPivot.position.copy(newPivotWorldPosition);
-        activeObject.position.set(0, 0, 0);
-
-        IS.targetPosition.copy(this.worldPivot.position);
-        this.UIManager.syncManualSlidersFromPivot();
+        // 2. The active object is now attached to the pivot.
+        this.worldPivot.attach(activeObject);
         
-        IS.targetRotation.set(0, 0, 0);
+        // 3. Move the pivot to the active object's former world position.
+        this.worldPivot.position.copy(activeObjWorldPos);
+        this.worldPivot.quaternion.copy(activeObject.quaternion);
+        
+        // 4. Reset the active object's local position so it sits at the center of the pivot.
+        activeObject.position.set(0, 0, 0);
+        activeObject.quaternion.set(0, 0, 0, 1);
+        
+        // 5. Sync the interaction state to match the pivot's new state.
+        IS.targetPosition.copy(this.worldPivot.position);
+        IS.targetRotation.copy(this.worldPivot.rotation);
 
-        this.vizSettings.activeControl = newControlTarget;
         if(this.UIManager) this.UIManager.updateMasterControls();
     },
 
@@ -416,11 +430,11 @@ const App = {
         const IS = this.interactionState;
         const S = this.vizSettings;
 
-        // ** THE FIX IS HERE **: Determine if an autopilot is currently active for the selected control.
-        const isAutopilotEngaged = (S.activeControl === 'landscape' && S.landscapeAutopilotOn) ||
-                                 (S.activeControl === 'model' && S.modelAutopilotOn);
+        const isLandscapeAutopilotEngaged = S.activeControl === 'landscape' && this.ImagePlaneManager.autopilot.active;
+        const isModelAutopilotEngaged = S.activeControl === 'model' && this.ModelManager.autopilot.active;
+        
+        const isAutopilotEngaged = isLandscapeAutopilotEngaged || isModelAutopilotEngaged;
 
-        // The return-to-home spring should ONLY engage if we are in manual mode and not using the mouse.
         if (!IS.isDragging && !IS.isRotating && !isAutopilotEngaged) {
             const homePosition = (S.activeControl === 'landscape') ? S.homePositionLandscape : S.homePositionModel;
             IS.targetPosition.lerp(homePosition, IS.returnSpring);
@@ -453,10 +467,10 @@ const App = {
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
-        this.updateWorldPivot(cappedDelta);
-        
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
+
+        this.updateWorldPivot(cappedDelta);
         
         this.CameraManager.update(cappedDelta); 
         
