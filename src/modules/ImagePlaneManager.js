@@ -18,7 +18,6 @@ export const ImagePlaneManager = {
     planeResolution: new THREE.Vector2(128, 128),
     currentTexture: null, 
 
-    // The new "brain" for the landscape.
     state: {
         isUnderManualControl: false,
         targetPosition: new THREE.Vector3(),
@@ -44,7 +43,6 @@ export const ImagePlaneManager = {
 
     init(appInstance) {
         this.app = appInstance;
-        // Initialize home state from default settings
         this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionLandscape);
         this.state.targetPosition.copy(this.state.homePosition);
         this.createDefaultLandscape();
@@ -96,16 +94,18 @@ export const ImagePlaneManager = {
         ap.startQuat.copy(this.state.targetQuaternion);
         ap.endQuat.copy(this.state.homeQuaternion); 
         ap.waypointProgress = 0;
-        ap.waypointTransitionDuration = 3.0; // Faster return to home
+        
+        ap.waypointTransitionDuration = 6.0;
         
         console.log(`Landscape: Initiating return to home. Next preset: ${nextPreset}`);
     },
 
     stopAutopilot() {
-        this.autopilot.active = false;
-        this.autopilot.preset = null;
-        this.state.isUnderManualControl = false; // Ensure manual control is also off
-        console.log("ImagePlane Autopilot STOPPED. Returning to home.");
+        // ** THE FIX IS HERE **
+        // Instead of just setting flags, this now triggers the timed return-to-home sequence.
+        // It passes `null` to ensure no new preset starts afterward.
+        this.initiateReturnToHome(null);
+        console.log("ImagePlane Autopilot STOP triggered. Starting transition to home.");
     },
     
     generateNewRandomWaypoint() {
@@ -146,7 +146,6 @@ export const ImagePlaneManager = {
         ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
         const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
         
-        // Autopilot now controls its OWN target state, not the global one.
         this.state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
         this.state.targetQuaternion.copy(ap.startQuat).slerp(ap.endQuat, ease);
 
@@ -196,19 +195,15 @@ export const ImagePlaneManager = {
         }
         this.landscape.visible = true;
 
-        // --- Core State Logic ---
         if (this.autopilot.active) {
             this.updateAutopilot(cappedDelta);
         } else if (this.state.isUnderManualControl) {
             // Do nothing. The mouse/sliders are controlling the target state directly.
         } else {
-            // IDLE: Not on autopilot and not being manually controlled. Return to home.
             this.state.targetPosition.lerp(this.state.homePosition, 0.02);
             this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
         }
 
-        // --- Apply Final Movement ---
-        // The landscape always smoothly moves towards its target state.
         this.landscape.position.lerp(this.state.targetPosition, 0.05);
         this.landscape.quaternion.slerp(this.state.targetQuaternion, 0.05);
         
@@ -245,12 +240,10 @@ export const ImagePlaneManager = {
         this.landscape = new THREE.Mesh(landGeom, this.landscapeMaterial);
         this.landscape.frustumCulled = false;
 
-        // The landscape is now added directly to the scene.
         this.app.scene.add(this.landscape);
 
         this.applyAndStoreHomeOrientation();
         
-        // Set initial position and state from home values
         this.landscape.position.copy(this.state.homePosition);
         this.landscape.quaternion.copy(this.state.homeQuaternion);
         this.state.targetPosition.copy(this.state.homePosition);
@@ -268,7 +261,7 @@ export const ImagePlaneManager = {
     applyAndStoreHomeOrientation() {
         if (!this.landscape) return;
         const S = this.app.vizSettings;
-        const tempLandscape = new THREE.Object3D(); // Use a temporary object to calculate home quaternion
+        const tempLandscape = new THREE.Object3D(); 
         if (S.planeOrientation === 'xz') { tempLandscape.rotateX(-Math.PI / 2); } 
         else if (S.planeOrientation === 'yz') { tempLandscape.rotateY(Math.PI / 2); }
         

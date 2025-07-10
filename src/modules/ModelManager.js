@@ -66,29 +66,26 @@ export const ModelManager = {
         
         const home = this.state.homePosition;
 
-        // ** THE FIX IS HERE **
-        // We now define the bounding boxes with explicit min/max vectors
-        // to enforce the Z-depth constraint of -100 (min) to +32 (max).
         switch(presetId) {
-            case 'autopilotPreset1': // Close & Tight
+            case 'autopilotPreset1': 
                 ap.randomBounds = new THREE.Box3(
-                    new THREE.Vector3(home.x - 20, home.y - 15, -20), // Min corner
-                    new THREE.Vector3(home.x + 20, home.y + 15, 32)   // Max corner
+                    new THREE.Vector3(home.x - 20, home.y - 15, -20), 
+                    new THREE.Vector3(home.x + 20, home.y + 15, 32)   
                 );
                 break;
-            case 'autopilotPreset2': // Medium area, higher up
+            case 'autopilotPreset2': 
                 ap.randomBounds = new THREE.Box3(
                     new THREE.Vector3(home.x - 40, home.y, -50),
                     new THREE.Vector3(home.x + 40, home.y + 30, 32)
                 );
                 break;
-            case 'autopilotPreset3': // Wide and flat
+            case 'autopilotPreset3': 
                 ap.randomBounds = new THREE.Box3(
                     new THREE.Vector3(home.x - 60, home.y - 10, -70),
                     new THREE.Vector3(home.x + 60, home.y + 10, 32)
                 );
                 break;
-            case 'autopilotPreset4': // Huge volume, full range
+            case 'autopilotPreset4': 
                 ap.randomBounds = new THREE.Box3(
                     new THREE.Vector3(home.x - 80, home.y - 40, -100),
                     new THREE.Vector3(home.x + 80, home.y + 40, 32)
@@ -115,16 +112,17 @@ export const ModelManager = {
         ap.endPos.copy(this.state.homePosition);
         ap.endQuat.copy(this.state.homeQuaternion); 
         ap.waypointProgress = 0;
-        ap.waypointTransitionDuration = 3.0;
+
+        ap.waypointTransitionDuration = 6.0;
         
         console.log(`Model: Initiating return to home. Next preset: ${nextPreset}`);
     },
 
     stopAutopilot() {
-        this.autopilot.active = false;
-        this.autopilot.preset = null;
-        this.state.isUnderManualControl = false;
-        console.log("Model Autopilot STOPPED. Returning to home.");
+        // ** THE FIX IS HERE **
+        // This now correctly calls the timed return-to-home sequence.
+        this.initiateReturnToHome(null);
+        console.log("Model Autopilot STOP triggered. Starting transition to home.");
     },
 
     generateNewRandomWaypoint() {
@@ -141,26 +139,33 @@ export const ModelManager = {
         );
         
         if (this.app.vizSettings.enableCollisionAvoidance && this.app.ImagePlaneManager.landscape) {
-            const landscapeSphere = new THREE.Sphere();
-            this.app.ImagePlaneManager.boundingBox.getBoundingSphere(landscapeSphere);
-            landscapeSphere.radius *= 1.1;
+            const direction = new THREE.Vector3().subVectors(ap.endPos, ap.startPos);
+            const distance = direction.length();
+            direction.normalize();
 
-            if (landscapeSphere.containsPoint(ap.endPos)) {
-                if (this._waypointRetryCount < 1) {
+            this.app.raycaster.set(ap.startPos, direction);
+            const intersects = this.app.raycaster.intersectObject(this.app.ImagePlaneManager.landscape, false);
+
+            if (intersects.length > 0 && intersects[0].distance < distance) {
+                console.log(`Path collision detected by Raycaster. Retrying waypoint.`);
+                if (this._waypointRetryCount < 5) { 
                     this._waypointRetryCount++;
                     this.generateNewRandomWaypoint(); 
                     return; 
-                } else { console.warn("Model waypoint collision retry failed."); }
+                } else { 
+                    console.warn("Model path collision retry failed after 5 attempts. Allowing path.");
+                }
             }
         }
+
         this._waypointRetryCount = 0; 
 
         const randomRot = new THREE.Euler( (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * Math.PI, (Math.random() - 0.5) * 0.4 );
         ap.endQuat.setFromEuler(randomRot);
         
-        const distance = ap.startPos.distanceTo(ap.endPos);
+        const totalDistance = ap.startPos.distanceTo(ap.endPos);
         const speed = this.app.vizSettings.modelAutopilotSpeed;
-        ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance / (speed * 4), 8, 20);
+        ap.waypointTransitionDuration = THREE.MathUtils.clamp(totalDistance / (speed * 4), 8, 20);
         ap.holdTimer = Math.random() * 5.0 + 2.0;
         ap.waypointProgress = 0;
     },

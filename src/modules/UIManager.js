@@ -39,7 +39,6 @@ export const UIManager = {
         this.updateBackgroundControlsVisibility(true);
         this.updateWarpControlsVisibility(true);
         
-        // Initial sync of the master controls UI
         this.updateMasterControls();
         this.openDebugAccordions(); 
     },
@@ -59,7 +58,8 @@ export const UIManager = {
         const UIElements = this.controlDOMElements;
         
         const activeManager = (S.activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
-        if (!activeManager || !activeManager.state || activeManager.state.isUnderManualControl) return; // Don't fight user input
+        
+        if (!activeManager || !activeManager.state) return;
         
         const targetPosition = activeManager.state.targetPosition;
 
@@ -99,17 +99,23 @@ export const UIManager = {
         UIElements.manualAutoToggle.addEventListener('change', (e) => {
             const isAuto = e.target.checked;
             const activeControl = this.app.vizSettings.activeControl;
+            const S = this.app.vizSettings;
             
             const activeManager = (activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
-            const activePreset = (activeControl === 'landscape') ? this.app.vizSettings.activeLandscapePreset : this.app.vizSettings.activeModelPreset;
+            const activePreset = (activeControl === 'landscape') ? S.activeLandscapePreset : S.activeModelPreset;
+
+            // ** THE FIX IS HERE (Part 1) **
+            // Update the user's intent in vizSettings *before* calling the manager.
+            if (activeControl === 'landscape') S.landscapeAutopilotOn = isAuto;
+            else S.modelAutopilotOn = isAuto;
 
             if (isAuto) {
                 if (activePreset) {
                     activeManager.startAutopilot(activePreset);
                 } else {
                     const defaultPresetId = 'autopilotPreset1';
-                    if (activeControl === 'landscape') this.app.vizSettings.activeLandscapePreset = defaultPresetId;
-                    else this.app.vizSettings.activeModelPreset = defaultPresetId;
+                    if (activeControl === 'landscape') S.activeLandscapePreset = defaultPresetId;
+                    else S.activeModelPreset = defaultPresetId;
                     activeManager.startAutopilot(defaultPresetId);
                 }
             } else {
@@ -124,12 +130,15 @@ export const UIManager = {
             if(button) {
                 button.addEventListener('click', () => {
                     const activeControl = this.app.vizSettings.activeControl;
+                    const S = this.app.vizSettings;
                     const activeManager = (activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
                     
                     if (activeControl === 'landscape') {
-                        this.app.vizSettings.activeLandscapePreset = buttonId;
+                        S.landscapeAutopilotOn = true;
+                        S.activeLandscapePreset = buttonId;
                     } else {
-                        this.app.vizSettings.activeModelPreset = buttonId;
+                        S.modelAutopilotOn = true;
+                        S.activeModelPreset = buttonId;
                     }
                     activeManager.startAutopilot(buttonId);
                     this.updateMasterControls();
@@ -165,8 +174,6 @@ export const UIManager = {
         const activeManager = (S.activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
         if (!activeManager || !activeManager.state) return;
         
-        // ** THE FIX IS HERE **
-        // Using the slider constitutes manual control. Set the flag.
         activeManager.state.isUnderManualControl = true;
         
         const targetPosition = activeManager.state.targetPosition;
@@ -185,18 +192,16 @@ export const UIManager = {
         const activeControl = S.activeControl;
         const UIElements = this.controlDOMElements;
         
-        let activeManager, isAutopilotOn, scaleProp, speedProp;
+        let isAutopilotOn, scaleProp, speedProp;
         
+        // ** THE FIX IS HERE (Part 2) **
+        // The UI now reads the user's intent from vizSettings, not the manager's internal state.
         if (activeControl === 'landscape') {
-            activeManager = this.app.ImagePlaneManager;
-            isAutopilotOn = activeManager.autopilot.active;
-            S.landscapeAutopilotOn = isAutopilotOn; 
+            isAutopilotOn = S.landscapeAutopilotOn;
             scaleProp = 'landscapeScale';
             speedProp = 'landscapeAutopilotSpeed';
         } else {
-            activeManager = this.app.ModelManager;
-            isAutopilotOn = activeManager.autopilot.active;
-            S.modelAutopilotOn = isAutopilotOn; 
+            isAutopilotOn = S.modelAutopilotOn;
             scaleProp = 'modelScale';
             speedProp = 'modelAutopilotSpeed';
         }
@@ -226,6 +231,7 @@ export const UIManager = {
     updatePresetGlow() {
         const S = this.app.vizSettings;
         let activePreset;
+        // Read the manager's actual active preset to determine glow
         if (S.activeControl === 'landscape') { 
             activePreset = this.app.ImagePlaneManager.autopilot.preset;
         } else { 
