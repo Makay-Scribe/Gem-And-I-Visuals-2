@@ -16,10 +16,16 @@ export const ImagePlaneManager = {
     boundingBox: new THREE.Box3(),
     planeDimensions: new THREE.Vector2(40, 40),
     planeResolution: new THREE.Vector2(128, 128),
-    homeQuaternion: new THREE.Quaternion(),
-    
-    rotation: new THREE.Euler(0, 0, 0),
     currentTexture: null, 
+
+    // The new "brain" for the landscape.
+    state: {
+        isUnderManualControl: false,
+        targetPosition: new THREE.Vector3(),
+        targetQuaternion: new THREE.Quaternion(),
+        homePosition: new THREE.Vector3(),
+        homeQuaternion: new THREE.Quaternion()
+    },
 
     autopilot: {
         active: false,
@@ -38,6 +44,9 @@ export const ImagePlaneManager = {
 
     init(appInstance) {
         this.app = appInstance;
+        // Initialize home state from default settings
+        this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionLandscape);
+        this.state.targetPosition.copy(this.state.homePosition);
         this.createDefaultLandscape();
     },
 
@@ -45,13 +54,6 @@ export const ImagePlaneManager = {
         if (!this.landscape) return;
         const ap = this.autopilot;
         const S = this.app.vizSettings;
-
-        const isAtHome = this.app.interactionState.targetPosition.distanceTo(S.homePositionLandscape) < 0.1;
-
-        if (!isAtHome && !ap.isTransitioningToHome) {
-            this.initiateReturnToHome(presetId);
-            return;
-        }
 
         ap.active = true;
         ap.preset = presetId;
@@ -66,8 +68,7 @@ export const ImagePlaneManager = {
         ap.waypointProgress = 1.0; 
         ap.holdTimer = 0;
         
-        // ** THE FIX IS HERE (Part 1) **: All presets now just define their boundaries.
-        // Preset 1 now uses the waypoint system with a tiny box for the "handicam" effect.
+        const home = this.state.homePosition;
         if (presetId === 'autopilotPreset1') {
             ap.randomBounds = new THREE.Box3(new THREE.Vector3(-2, -1.5, -5), new THREE.Vector3(2, 1.5, 0));
         } else if (presetId === 'autopilotPreset2') {
@@ -79,37 +80,40 @@ export const ImagePlaneManager = {
         }
         
         console.log(`ImagePlane Autopilot STARTED with preset: ${presetId} at speed ${S.landscapeAutopilotSpeed}`);
+        this.generateNewRandomWaypoint();
     },
 
     initiateReturnToHome(nextPreset = null) {
         const ap = this.autopilot;
-        const S = this.app.vizSettings;
         
         ap.isTransitioningToHome = true;
         ap.nextPresetId = nextPreset;
         ap.active = true; 
         ap.preset = null; 
 
-        ap.startPos.copy(this.app.interactionState.targetPosition);
-        ap.endPos.copy(S.homePositionLandscape);
-        ap.startQuat.setFromEuler(this.app.interactionState.targetRotation);
-        ap.endQuat.identity(); 
+        ap.startPos.copy(this.state.targetPosition);
+        ap.endPos.copy(this.state.homePosition);
+        ap.startQuat.copy(this.state.targetQuaternion);
+        ap.endQuat.copy(this.state.homeQuaternion); 
         ap.waypointProgress = 0;
-        ap.waypointTransitionDuration = 10.0;
+        ap.waypointTransitionDuration = 3.0; // Faster return to home
         
-        console.log(`Initiating 10-second return to home. Next preset: ${nextPreset}`);
+        console.log(`Landscape: Initiating return to home. Next preset: ${nextPreset}`);
     },
 
     stopAutopilot() {
-        this.initiateReturnToHome(null);
+        this.autopilot.active = false;
+        this.autopilot.preset = null;
+        this.state.isUnderManualControl = false; // Ensure manual control is also off
+        console.log("ImagePlane Autopilot STOPPED. Returning to home.");
     },
     
     generateNewRandomWaypoint() {
         const ap = this.autopilot;
         const S = this.app.vizSettings;
         
-        ap.startPos.copy(this.app.interactionState.targetPosition);
-        ap.startQuat.setFromEuler(this.app.interactionState.targetRotation);
+        ap.startPos.copy(this.state.targetPosition);
+        ap.startQuat.copy(this.state.targetQuaternion);
 
         ap.endPos.set(
             THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
@@ -119,14 +123,12 @@ export const ImagePlaneManager = {
 
         let randomRot;
         if (ap.preset === 'autopilotPreset1') {
-            // ** THE FIX IS HERE (Part 2) **: Tiny rotation for the "handicam" feel.
             randomRot = new THREE.Euler(
-                (Math.random() - 0.5) * 0.05, // Very slight tilt
-                (Math.random() - 0.5) * 0.05, // Very slight pan
-                (Math.random() - 0.5) * 0.02  // Almost no roll
+                (Math.random() - 0.5) * 0.05,
+                (Math.random() - 0.5) * 0.05,
+                (Math.random() - 0.5) * 0.02
             );
         } else {
-            // Larger rotation for the other presets.
             randomRot = new THREE.Euler((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.2);
         }
         ap.endQuat.setFromEuler(randomRot);
@@ -140,14 +142,13 @@ export const ImagePlaneManager = {
     
     runMovementLogic(delta) {
         const ap = this.autopilot;
-        const IS = this.app.interactionState;
 
         ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
         const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
         
-        IS.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
-        const tempQuat = new THREE.Quaternion().copy(ap.startQuat).slerp(ap.endQuat, ease);
-        IS.targetRotation.setFromQuaternion(tempQuat, 'XYZ');
+        // Autopilot now controls its OWN target state, not the global one.
+        this.state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
+        this.state.targetQuaternion.copy(ap.startQuat).slerp(ap.endQuat, ease);
 
         if (ap.waypointProgress >= 1.0) {
             if (ap.isTransitioningToHome) {
@@ -158,7 +159,7 @@ export const ImagePlaneManager = {
                     ap.active = false;
                     ap.preset = null;
                 }
-            } else { // No special case needed for preset 1 anymore
+            } else {
                 ap.holdTimer = Math.random() * 1.5 + 0.5;
             }
         }
@@ -172,8 +173,6 @@ export const ImagePlaneManager = {
             return; 
         }
 
-        // ** THE FIX IS HERE (Part 3) **: All presets are now handled by this single, simple logic block.
-        // The complex `if (ap.preset === 'autopilotPreset1')` block is GONE.
         if (ap.preset) {
             if (ap.waypointProgress >= 1.0 && ap.holdTimer > 0) {
                 ap.holdTimer -= delta;
@@ -197,14 +196,22 @@ export const ImagePlaneManager = {
         }
         this.landscape.visible = true;
 
+        // --- Core State Logic ---
         if (this.autopilot.active) {
             this.updateAutopilot(cappedDelta);
+        } else if (this.state.isUnderManualControl) {
+            // Do nothing. The mouse/sliders are controlling the target state directly.
         } else {
-            if (S.enableLandscapeSpin) {
-                 this.landscape.rotation.z += S.landscapeSpinSpeed * cappedDelta;
-            }
+            // IDLE: Not on autopilot and not being manually controlled. Return to home.
+            this.state.targetPosition.lerp(this.state.homePosition, 0.02);
+            this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
         }
 
+        // --- Apply Final Movement ---
+        // The landscape always smoothly moves towards its target state.
+        this.landscape.position.lerp(this.state.targetPosition, 0.05);
+        this.landscape.quaternion.slerp(this.state.targetQuaternion, 0.05);
+        
         this.landscape.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
         this.updateDeformationUniforms();
@@ -236,15 +243,19 @@ export const ImagePlaneManager = {
         }
         landGeom.setAttribute('uv_gpgpu', new THREE.BufferAttribute(uv_gpgpu, 2));
         this.landscape = new THREE.Mesh(landGeom, this.landscapeMaterial);
-
         this.landscape.frustumCulled = false;
 
-        this.app.worldPivot.add(this.landscape);
+        // The landscape is now added directly to the scene.
+        this.app.scene.add(this.landscape);
 
         this.applyAndStoreHomeOrientation();
         
-        this.landscape.position.set(0, 0, 0); 
-        this.landscape.quaternion.copy(this.homeQuaternion);
+        // Set initial position and state from home values
+        this.landscape.position.copy(this.state.homePosition);
+        this.landscape.quaternion.copy(this.state.homeQuaternion);
+        this.state.targetPosition.copy(this.state.homePosition);
+        this.state.targetQuaternion.copy(this.state.homeQuaternion);
+
         this.landscape.scale.set(this.app.defaultVisualizerSettings.landscapeScale, this.app.defaultVisualizerSettings.landscapeScale, this.app.defaultVisualizerSettings.landscapeScale);
     },
 
@@ -257,10 +268,11 @@ export const ImagePlaneManager = {
     applyAndStoreHomeOrientation() {
         if (!this.landscape) return;
         const S = this.app.vizSettings;
-        this.landscape.rotation.set(0, 0, 0);
-        if (S.planeOrientation === 'xz') { this.landscape.rotateX(-Math.PI / 2); } 
-        else if (S.planeOrientation === 'yz') { this.landscape.rotateY(Math.PI / 2); }
-        this.homeQuaternion.copy(this.landscape.quaternion);
+        const tempLandscape = new THREE.Object3D(); // Use a temporary object to calculate home quaternion
+        if (S.planeOrientation === 'xz') { tempLandscape.rotateX(-Math.PI / 2); } 
+        else if (S.planeOrientation === 'yz') { tempLandscape.rotateY(Math.PI / 2); }
+        
+        this.state.homeQuaternion.copy(tempLandscape.quaternion);
     },
     
     createMaterials() {

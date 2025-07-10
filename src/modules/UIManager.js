@@ -39,6 +39,7 @@ export const UIManager = {
         this.updateBackgroundControlsVisibility(true);
         this.updateWarpControlsVisibility(true);
         
+        // Initial sync of the master controls UI
         this.updateMasterControls();
         this.openDebugAccordions(); 
     },
@@ -53,9 +54,14 @@ export const UIManager = {
         });
     },
 
-    syncManualSlidersFromPivot() {
-        const targetPosition = this.app.interactionState.targetPosition;
+    syncManualSlidersFromState() {
+        const S = this.app.vizSettings;
         const UIElements = this.controlDOMElements;
+        
+        const activeManager = (S.activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
+        if (!activeManager || !activeManager.state || activeManager.state.isUnderManualControl) return; // Don't fight user input
+        
+        const targetPosition = activeManager.state.targetPosition;
 
         if (targetPosition && UIElements.sliderX) {
             UIElements.sliderX.value = targetPosition.x;
@@ -71,7 +77,7 @@ export const UIManager = {
         const UIElements = {
             actorToggleContainer: document.getElementById('actorControlToggle'),
             manualAutoToggle: document.getElementById('manualAutoToggle'),
-            autopilotContainer: document.getElementById('autopilotControlsContainer'),
+            autopilotPresetContainer: document.getElementById('autopilotPresetContainer'),
             manualContainer: document.getElementById('manualPositionControls'),
             masterControlContainer: document.getElementById('masterActorControls'),
             masterScaleSlider: document.getElementById('masterScale'),
@@ -84,28 +90,30 @@ export const UIManager = {
         this.controlDOMElements = UIElements;
 
         UIElements.actorToggleContainer.querySelectorAll('button').forEach(button => {
-            button.addEventListener('click', (e) => this.app.switchActiveControl(e.target.dataset.actor));
+            button.addEventListener('click', (e) => {
+                this.app.vizSettings.activeControl = e.target.dataset.actor;
+                this.updateMasterControls();
+            });
         });
 
         UIElements.manualAutoToggle.addEventListener('change', (e) => {
             const isAuto = e.target.checked;
             const activeControl = this.app.vizSettings.activeControl;
             
-            if (activeControl === 'landscape') {
-                this.app.vizSettings.landscapeAutopilotOn = isAuto;
-                if (isAuto && this.app.vizSettings.activeLandscapePreset) {
-                    this.app.ImagePlaneManager.startAutopilot(this.app.vizSettings.activeLandscapePreset);
-                } else if (!isAuto) {
-                    // ** THE FIX IS HERE **: Call the new graceful shutdown function.
-                    this.app.ImagePlaneManager.initiateReturnToHome();
+            const activeManager = (activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
+            const activePreset = (activeControl === 'landscape') ? this.app.vizSettings.activeLandscapePreset : this.app.vizSettings.activeModelPreset;
+
+            if (isAuto) {
+                if (activePreset) {
+                    activeManager.startAutopilot(activePreset);
+                } else {
+                    const defaultPresetId = 'autopilotPreset1';
+                    if (activeControl === 'landscape') this.app.vizSettings.activeLandscapePreset = defaultPresetId;
+                    else this.app.vizSettings.activeModelPreset = defaultPresetId;
+                    activeManager.startAutopilot(defaultPresetId);
                 }
-            } else if (activeControl === 'model') {
-                this.app.vizSettings.modelAutopilotOn = isAuto;
-                if (isAuto && this.app.vizSettings.activeModelPreset) {
-                    this.app.ModelManager.startAutopilot(this.app.vizSettings.activeModelPreset);
-                } else if (!isAuto) {
-                    this.app.ModelManager.stopAutopilot(); // Placeholder for now
-                }
+            } else {
+                activeManager.stopAutopilot();
             }
             this.updateMasterControls();
         });
@@ -116,15 +124,14 @@ export const UIManager = {
             if(button) {
                 button.addEventListener('click', () => {
                     const activeControl = this.app.vizSettings.activeControl;
+                    const activeManager = (activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
+                    
                     if (activeControl === 'landscape') {
-                        this.app.vizSettings.landscapeAutopilotOn = true;
                         this.app.vizSettings.activeLandscapePreset = buttonId;
-                        this.app.ImagePlaneManager.startAutopilot(buttonId);
                     } else {
-                        this.app.vizSettings.modelAutopilotOn = true;
                         this.app.vizSettings.activeModelPreset = buttonId;
-                        this.app.ModelManager.startAutopilot(buttonId);
                     }
+                    activeManager.startAutopilot(buttonId);
                     this.updateMasterControls();
                 });
             }
@@ -142,6 +149,7 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const activeControl = S.activeControl;
         const value = parseFloat(slider.value);
+        
         let targetProp;
         if (slider.id === 'masterScale') {
             targetProp = (activeControl === 'landscape') ? 'landscapeScale' : 'modelScale';
@@ -153,7 +161,15 @@ export const UIManager = {
     },
 
     handleActorSliderInput(slider) {
-        const targetPosition = this.app.interactionState.targetPosition;
+        const S = this.app.vizSettings;
+        const activeManager = (S.activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
+        if (!activeManager || !activeManager.state) return;
+        
+        // ** THE FIX IS HERE **
+        // Using the slider constitutes manual control. Set the flag.
+        activeManager.state.isUnderManualControl = true;
+        
+        const targetPosition = activeManager.state.targetPosition;
         const value = parseFloat(slider.value);
         
         switch (slider.id) {
@@ -168,21 +184,26 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const activeControl = S.activeControl;
         const UIElements = this.controlDOMElements;
-        let isAutopilotOn, scaleProp, speedProp;
         
-        UIElements.actorToggleContainer.querySelectorAll('button').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.actor === activeControl);
-        });
-
+        let activeManager, isAutopilotOn, scaleProp, speedProp;
+        
         if (activeControl === 'landscape') {
-            isAutopilotOn = S.landscapeAutopilotOn;
+            activeManager = this.app.ImagePlaneManager;
+            isAutopilotOn = activeManager.autopilot.active;
+            S.landscapeAutopilotOn = isAutopilotOn; 
             scaleProp = 'landscapeScale';
             speedProp = 'landscapeAutopilotSpeed';
         } else {
-            isAutopilotOn = S.modelAutopilotOn;
+            activeManager = this.app.ModelManager;
+            isAutopilotOn = activeManager.autopilot.active;
+            S.modelAutopilotOn = isAutopilotOn; 
             scaleProp = 'modelScale';
             speedProp = 'modelAutopilotSpeed';
         }
+
+        UIElements.actorToggleContainer.querySelectorAll('button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.actor === activeControl);
+        });
         
         UIElements.manualAutoToggle.checked = isAutopilotOn;
         UIElements.manualContainer.style.display = isAutopilotOn ? 'none' : 'block';
@@ -197,7 +218,7 @@ export const UIManager = {
             this.updateRangeDisplay('masterSpeed', S[speedProp]);
         }
         
-        this.syncManualSlidersFromPivot();
+        this.syncManualSlidersFromState();
         this.updatePresetGlow();
         this.refreshAccordion(UIElements.masterControlContainer);
     },
@@ -205,8 +226,12 @@ export const UIManager = {
     updatePresetGlow() {
         const S = this.app.vizSettings;
         let activePreset;
-        if (S.activeControl === 'landscape') { activePreset = S.activeLandscapePreset; } 
-        else { activePreset = S.activeModelPreset; }
+        if (S.activeControl === 'landscape') { 
+            activePreset = this.app.ImagePlaneManager.autopilot.preset;
+        } else { 
+            activePreset = this.app.ModelManager.autopilot.preset;
+        }
+        
         for (let i = 1; i <= 4; i++) {
             const button = document.getElementById(`autopilotPreset${i}`);
             if(button) button.classList.remove('button-glow-effect');

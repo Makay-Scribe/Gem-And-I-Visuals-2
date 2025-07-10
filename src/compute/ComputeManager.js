@@ -13,8 +13,6 @@ export const ComputeManager = {
     HEIGHT: 0,
     AREA: 0,
 
-    _rotationMatrix: new THREE.Matrix4(),
-
     init(appInstance, planeWidth, planeHeight, planeResX, planeResY) {
         this.app = appInstance;
         const renderer = this.app.renderer;
@@ -134,11 +132,10 @@ export const ComputeManager = {
 
         const S = this.app.vizSettings;
         const A = this.app.AudioProcessor;
-        const IM = this.app.ImagePlaneManager;
         const uniforms = this.positionVariable.material.uniforms;
 
-        // ** THE FIX IS HERE ** - u_rotationMatrix and u_planeOrientation are no longer used by GPGPU.
-        // The rotation is handled entirely by the ImagePlaneManager's object matrix during rendering.
+        // u_rotationMatrix and u_planeOrientation are no longer needed.
+        // The rotation is handled by the ImagePlaneManager's object matrix.
 
         const warpModeMap = { 'none': 0, 'sag': 2, 'droop': 5, 'cylinder': 4, 'bend': 3, 'fold': 1 };
         uniforms.u_warpMode.value = warpModeMap[S.warpMode] || 0;
@@ -230,8 +227,7 @@ export const ComputeManager = {
         vec2 safeNormalize(vec2 v) { float l = length(v); return (l > EPSILON_SHADER) ? v / l : vec2(0.0); }
         mat3 rotationMatrix3(vec3 axis, float angle){axis=normalize(axis);float s=sin(angle);float c=cos(angle);float oc=1.0-c;return mat3(oc*axis.x*axis.x+c,oc*axis.x*axis.y-axis.z*s,oc*axis.z*axis.x+axis.y*s,oc*axis.x*axis.y+axis.z*s,oc*axis.y*axis.y+c,oc*axis.y*axis.z-axis.x*s,oc*axis.z*axis.x-axis.y*s,oc*axis.y*axis.z+axis.x*s,oc*axis.z*axis.z+c);}
 
-        // ** THE FIX IS HERE ** - This function is now simplified. 
-        // It always returns the normal for a flat XY plane.
+        // This function is now simplified. It always returns the normal for a flat XY plane.
         vec3 getDisplacementNormal() {
             return vec3(0.0, 0.0, 1.0);
         }
@@ -248,7 +244,7 @@ export const ComputeManager = {
             float final_curl = peelCurl + drift_animation;
             vec2 offset_2d = safeNormalize(centeredUv) * -1.0 * displacement * final_curl;
             
-            // ** THE FIX IS HERE ** - Displacement is now always in Z, with XY offset.
+            // Displacement is now always in Z, with an XY offset for the curl.
             vec3 displacement_vec = getDisplacementNormal() * displacement;
             displacement_vec.xy += offset_2d;
             return displacement_vec;
@@ -261,7 +257,7 @@ export const ComputeManager = {
             float sag_mask = 1.0 - pow(dist_from_center, sagFalloffSharpness);
             float total_sag_amount = sagAmount * (1.0 + audio * sagAudioMod);
             float sag_displacement = total_sag_amount * sag_mask;
-            // ** THE FIX IS HERE ** - Sag is always in the negative Z direction.
+            // Sag is always in the negative Z direction.
             return getDisplacementNormal() * -sag_displacement;
         }
 
@@ -281,7 +277,7 @@ export const ComputeManager = {
             float final_droop_mask = pow(combined_droop_factor, droopFalloffSharpness);
             float total_droop_amount = droopAmount * (1.0 + audio * droopAudioMod);
             float droop_displacement = total_droop_amount * final_droop_mask;
-            // ** THE FIX IS HERE ** - Droop is always in the negative Z direction.
+            // Droop is always in the negative Z direction.
             return getDisplacementNormal() * -droop_displacement;
         }
 
@@ -292,7 +288,7 @@ export const ComputeManager = {
             vec3 p;
             vec3 normal_dir;
 
-            // This effect is fundamentally axis-dependent, so it retains its logic, but it's now warping a base XY plane.
+            // This effect is fundamentally axis-dependent, but it now warps a base XY plane.
             if (cylinderAxisAlignment == 1) { p = vec3(length_coord, cos(angle) * cylinderRadius, sin(angle) * cylinderRadius); normal_dir = normalize(vec3(0.0, p.y, p.z)); } 
             else if (cylinderAxisAlignment == 2) { p = vec3(cos(angle) * cylinderRadius, sin(angle) * cylinderRadius, length_coord); normal_dir = normalize(vec3(p.x, p.y, 0.0)); } 
             else { p = vec3(cos(angle) * cylinderRadius, length_coord, sin(angle) * cylinderRadius); normal_dir = normalize(vec3(p.x, 0.0, p.z)); }
@@ -308,7 +304,7 @@ export const ComputeManager = {
 
             if (abs(total_bend_angle) < EPSILON_SHADER) { return p; }
             
-            // ** THE FIX IS HERE ** - Simplified axis logic, always assumes base XY plane.
+            // Simplified axis logic, always assumes base XY plane.
             vec3 segment_axis = (bendAxis == 0) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
             float segment_extent = (bendAxis == 0) ? planeSize.y : planeSize.x;
             vec3 bend_axis_dir = normalize(cross(getDisplacementNormal(), segment_axis));
@@ -329,7 +325,7 @@ export const ComputeManager = {
             vec2 local_uv; int corner_index; 
             if(uv_param.x<0.5&&uv_param.y<0.5){local_uv=uv_param;corner_index=0;}else if(uv_param.x>0.5&&uv_param.y<0.5){local_uv=vec2(1.0-uv_param.x,uv_param.y);corner_index=1;}else if(uv_param.x<0.5&&uv_param.y>0.5){local_uv=vec2(uv_param.x,1.0-uv_param.y);corner_index=2;}else{local_uv=vec2(1.0-uv_param.x,1.0-uv_param.y);corner_index=3;}
             
-            // ** THE FIX IS HERE ** - Simplified axis logic, always assumes base XY plane.
+            // Simplified axis logic, always assumes base XY plane.
             vec3 axis_U = vec3(1.0, 0.0, 0.0);
             vec3 axis_V = vec3(0.0, 1.0, 0.0);
             vec3 axis_W = getDisplacementNormal();
@@ -416,7 +412,7 @@ export const ComputeManager = {
             if (u_warpMode == 4) { // Cylinder
                 pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
             } else {
-                // ** THE FIX IS HERE ** - The base position is ALWAYS a flat XY plane. No more orientation logic.
+                // The base position is ALWAYS a flat XY plane. No more orientation logic.
                 pos = vec3((uv.x - 0.5) * u_planeDimensions.x, (uv.y - 0.5) * u_planeDimensions.y, 0.0);
 
                 if (u_warpMode == 1) { // Fold
@@ -494,12 +490,12 @@ export const ComputeManager = {
         uniform float u_foldTuckReach;
         
         vec3 getDeformedPosition(vec2 uv) {
-             vec3 pos;
+            vec3 pos;
 
             if (u_warpMode == 4) { // Cylinder
                 pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
             } else {
-                // ** THE FIX IS HERE ** - The base position is ALWAYS a flat XY plane. No more orientation logic.
+                // The base position is ALWAYS a flat XY plane.
                 pos = vec3((uv.x - 0.5) * u_planeDimensions.x, (uv.y - 0.5) * u_planeDimensions.y, 0.0);
 
                 if (u_warpMode == 1) { // Fold

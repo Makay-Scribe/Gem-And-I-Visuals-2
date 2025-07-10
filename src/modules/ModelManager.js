@@ -16,6 +16,14 @@ export const ModelManager = {
     boundingSphere: new THREE.Sphere(),
     _waypointRetryCount: 0, 
     
+    state: {
+        isUnderManualControl: false,
+        targetPosition: new THREE.Vector3(),
+        targetQuaternion: new THREE.Quaternion(),
+        homePosition: new THREE.Vector3(),
+        homeQuaternion: new THREE.Quaternion()
+    },
+    
     autopilot: {
         active: false,
         preset: null,
@@ -33,6 +41,8 @@ export const ModelManager = {
 
     init(appInstance) {
         this.app = appInstance;
+        this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionModel);
+        this.state.targetPosition.copy(this.state.homePosition);
         console.log("ModelManager initialized.");
     },
 
@@ -40,14 +50,6 @@ export const ModelManager = {
         if (!this.gltfModel) return;
         const ap = this.autopilot;
         const S = this.app.vizSettings;
-        const IS = this.app.interactionState;
-
-        const isAtHome = IS.targetPosition.distanceTo(S.homePositionModel) < 0.1;
-
-        if (!isAtHome && !ap.isTransitioningToHome) {
-            this.initiateReturnToHome(presetId);
-            return;
-        }
 
         ap.active = true;
         ap.preset = presetId;
@@ -62,19 +64,35 @@ export const ModelManager = {
         ap.waypointProgress = 1.0; 
         ap.holdTimer = 0;
         
-        const home = S.homePositionModel;
+        const home = this.state.homePosition;
+
+        // ** THE FIX IS HERE **
+        // We now define the bounding boxes with explicit min/max vectors
+        // to enforce the Z-depth constraint of -100 (min) to +32 (max).
         switch(presetId) {
-            case 'autopilotPreset1': 
-                ap.randomBounds = new THREE.Box3().setFromCenterAndSize(home, new THREE.Vector3(30, 20, 20));
+            case 'autopilotPreset1': // Close & Tight
+                ap.randomBounds = new THREE.Box3(
+                    new THREE.Vector3(home.x - 20, home.y - 15, -20), // Min corner
+                    new THREE.Vector3(home.x + 20, home.y + 15, 32)   // Max corner
+                );
                 break;
-            case 'autopilotPreset2':
-                ap.randomBounds = new THREE.Box3().setFromCenterAndSize(home.clone().add(new THREE.Vector3(0, 15, -10)), new THREE.Vector3(60, 30, 30));
+            case 'autopilotPreset2': // Medium area, higher up
+                ap.randomBounds = new THREE.Box3(
+                    new THREE.Vector3(home.x - 40, home.y, -50),
+                    new THREE.Vector3(home.x + 40, home.y + 30, 32)
+                );
                 break;
-            case 'autopilotPreset3':
-                ap.randomBounds = new THREE.Box3().setFromCenterAndSize(home, new THREE.Vector3(100, 10, 15));
+            case 'autopilotPreset3': // Wide and flat
+                ap.randomBounds = new THREE.Box3(
+                    new THREE.Vector3(home.x - 60, home.y - 10, -70),
+                    new THREE.Vector3(home.x + 60, home.y + 10, 32)
+                );
                 break;
-            case 'autopilotPreset4':
-                ap.randomBounds = new THREE.Box3().setFromCenterAndSize(home.clone().add(new THREE.Vector3(0, 0, -20)), new THREE.Vector3(120, 50, 40));
+            case 'autopilotPreset4': // Huge volume, full range
+                ap.randomBounds = new THREE.Box3(
+                    new THREE.Vector3(home.x - 80, home.y - 40, -100),
+                    new THREE.Vector3(home.x + 80, home.y + 40, 32)
+                );
                 break;
         }
 
@@ -85,36 +103,36 @@ export const ModelManager = {
     initiateReturnToHome(nextPreset = null) {
         if (!this.gltfModel) return;
         const ap = this.autopilot;
-        const S = this.app.vizSettings;
-        const IS = this.app.interactionState;
         
         ap.isTransitioningToHome = true;
         ap.nextPresetId = nextPreset;
         ap.active = true; 
         ap.preset = null; 
 
-        ap.startPos.copy(IS.targetPosition);
-        ap.startQuat.setFromEuler(IS.targetRotation);
+        ap.startPos.copy(this.state.targetPosition);
+        ap.startQuat.copy(this.state.targetQuaternion);
 
-        ap.endPos.copy(S.homePositionModel);
-        ap.endQuat.identity(); 
+        ap.endPos.copy(this.state.homePosition);
+        ap.endQuat.copy(this.state.homeQuaternion); 
         ap.waypointProgress = 0;
-        ap.waypointTransitionDuration = 10.0;
+        ap.waypointTransitionDuration = 3.0;
         
-        console.log(`Initiating 10-second return to home for model. Next preset: ${nextPreset}`);
+        console.log(`Model: Initiating return to home. Next preset: ${nextPreset}`);
     },
 
     stopAutopilot() {
-        this.initiateReturnToHome(null);
+        this.autopilot.active = false;
+        this.autopilot.preset = null;
+        this.state.isUnderManualControl = false;
+        console.log("Model Autopilot STOPPED. Returning to home.");
     },
 
     generateNewRandomWaypoint() {
         const ap = this.autopilot;
         if (!this.gltfModel || !ap.randomBounds) return;
-        const IS = this.app.interactionState;
 
-        ap.startPos.copy(IS.targetPosition);
-        ap.startQuat.setFromEuler(IS.targetRotation);
+        ap.startPos.copy(this.state.targetPosition);
+        ap.startQuat.copy(this.state.targetQuaternion);
         
         ap.endPos.set(
             THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
@@ -149,14 +167,12 @@ export const ModelManager = {
     
     runMovementLogic(delta) {
         const ap = this.autopilot;
-        const IS = this.app.interactionState;
         
         ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
         const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
         
-        IS.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
-        const tempQuat = new THREE.Quaternion().copy(ap.startQuat).slerp(ap.endQuat, ease);
-        IS.targetRotation.setFromQuaternion(tempQuat, 'XYZ');
+        this.state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
+        this.state.targetQuaternion.copy(ap.startQuat).slerp(ap.endQuat, ease);
 
         if (ap.waypointProgress >= 1.0) {
             if (ap.isTransitioningToHome) {
@@ -217,8 +233,10 @@ export const ModelManager = {
                 this.app.gltfModel = gltf.scene;
                 
                 this.app.scene.add(this.gltfModel);
-                this.gltfModel.position.copy(this.app.vizSettings.homePositionModel);
 
+                this.gltfModel.position.copy(this.state.homePosition);
+                this.state.targetPosition.copy(this.state.homePosition);
+                
                 const box = new THREE.Box3().setFromObject(this.gltfModel);
                 box.getBoundingSphere(this.boundingSphere);
                 
@@ -240,8 +258,6 @@ export const ModelManager = {
                 
                 this.gltfModel.scale.multiplyScalar(this.app.defaultVisualizerSettings.modelScale);
                 
-                this.app.switchActiveControl(this.app.vizSettings.activeControl);
-
             },
             undefined, 
             (error) => {
@@ -261,16 +277,20 @@ export const ModelManager = {
         }
         this.gltfModel.visible = true;
         
-        // Only run the autopilot if the model is the active control.
-        if (S.activeControl === 'model') {
-            if(this.autopilot.active) {
-                this.updateAutopilot(delta);
-            }
+        if (this.autopilot.active) {
+            this.updateAutopilot(delta);
+        } else if (this.state.isUnderManualControl) {
+            // Do nothing. The mouse/sliders are controlling the target state directly.
         } else {
-             // Only apply inactive spin when not the active control.
-             if (S.enableModelSpin) {
-                this.gltfModel.rotation.y += S.modelSpinSpeed * delta;
-             }
+            this.state.targetPosition.lerp(this.state.homePosition, 0.02);
+            this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
+        }
+        
+        this.gltfModel.position.lerp(this.state.targetPosition, 0.05);
+        this.gltfModel.quaternion.slerp(this.state.targetQuaternion, 0.05);
+        
+        if (!this.autopilot.active && !this.state.isUnderManualControl && S.enableModelSpin) {
+            this.gltfModel.rotation.y += S.modelSpinSpeed * delta;
         }
     },
 };

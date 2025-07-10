@@ -20,25 +20,10 @@ const App = {
     gltfModel: null, animationMixer: null,
     raycaster: new THREE.Raycaster(),
 
-    worldPivot: null,
-
-    interactionState: {
+    mouseInteraction: {
         isDragging: false,
         isRotating: false,
-        
         startMouse: new THREE.Vector2(),
-        
-        targetRotation: new THREE.Euler(),
-        currentRotation: new THREE.Euler(),
-    
-        targetPosition: new THREE.Vector3(),
-        currentPosition: new THREE.Vector3(),
-    
-        rotationVelocity: new THREE.Vector2(),
-        positionVelocity: new THREE.Vector3(),
-        
-        damping: 0.95,
-        returnSpring: 0.02,
         rotationSpeed: 0.005,
         panSpeed: 0.05,
         zoomSpeed: 0.5,
@@ -85,35 +70,28 @@ const App = {
     Debugger: Debugger,
 
     defaultVisualizerSettings: {
-        // Master Controls
         activeControl: 'landscape',
         landscapeAutopilotOn: false,
         modelAutopilotOn: false,
         activeLandscapePreset: null,
         activeModelPreset: null,
-
         homePositionLandscape: new THREE.Vector3(0, 0, 0),
+        // ** THE FIX IS HERE ** - Changed Z from 15 to 30
         homePositionModel: new THREE.Vector3(0, -5, 30),
-        
         landscapeScale: 1.0,
         modelScale: 1.0,
-        
         landscapeAutopilotSpeed: 1.0,
         modelAutopilotSpeed: 1.0,
-        
         enableModel: true,
         enableModelSpin: false,
         modelSpinSpeed: 0.0,
         enableCollisionAvoidance: false, 
-
-        // Landscape-Specific
         enableLandscape: true,
         enableLandscapeSpin: false,
         landscapeSpinSpeed: 0.0,
         planeAspectRatio: '1.0',
         planeOrientation: 'xy',
         deformationStrength: 1.5,
-        
         enablePeel: false,
         peelAmount: 0.2,
         peelCurl: 0.4,
@@ -121,29 +99,24 @@ const App = {
         peelDrift: 0.05,
         peelTextureAmount: 0.0,
         peelAudioSource: 'onBeat',
-        
         warpMode: 'none',
         sagAmount: 2.0,
         sagFalloffSharpness: 1.5,
         sagAudioMod: 0.2,
-
         droopAmount: 0.3,
         droopAudioMod: 1.0,
         droopFalloffSharpness: 2.5,
         droopSupportedWidthFactor: 0.6,
         droopSupportedDepthFactor: 0.5,
-
         cylinderRadius: 5.0,
         cylinderHeightScale: 1.0,
         cylinderAxisAlignment: "y",
         cylinderArcAngle: 360,
         cylinderArcOffset: 0,
-
         bendAngle: 0.0,
         bendAudioMod: 0.0,
         bendFalloffSharpness: 1.0,
         bendAxis: 'primary',
-        
         foldAngle: 0.0,
         foldDepth: 0.2,
         foldRoundness: 0.0,
@@ -155,8 +128,6 @@ const App = {
         enableFoldTuck: false,
         foldTuckAmount: 0.0,
         foldTuckReach: 0.15,
-
-        // Background
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
         enableShaderMouse: false,
@@ -167,12 +138,8 @@ const App = {
         butterchurnSpeed: 1, butterchurnAudioInfluence: 1.0, butterchurnBlendTime: 5.0,
         butterchurnTintColor: '#ffffff', butterchurnOpacity: 1.0,
         butterchurnEnableCycle: false, butterchurnCycleTime: 15,
-        
-        // Audio
         audioSmoothing: 0.8,
         testToneMode: 'dynamicPulse',
-
-        // Material & Lighting
         metalness: 1.0,
         roughness: 0.10,
         enablePBRColor: true,
@@ -184,8 +151,6 @@ const App = {
         ambientLightColor: "#ffffff",
         lightDirectionX: 0.5, lightDirectionY: 0.8, lightDirectionZ: 0.5,
         enableLightOrbit: true, lightOrbitSpeed: 0.2, enableGuideLaser: false,
-        
-        // GPGPU Debug
         enableGPGPUDebugger: true, 
     },
 
@@ -220,8 +185,6 @@ const App = {
 
     init() {
         this.vizSettings = JSON.parse(JSON.stringify(this.defaultVisualizerSettings));
-        this.vizSettings.homePositionLandscape = new THREE.Vector3().copy(this.defaultVisualizerSettings.homePositionLandscape);
-        this.vizSettings.homePositionModel = new THREE.Vector3().copy(this.defaultVisualizerSettings.homePositionModel);
         
         window.onerror = (message, source, lineno, colno, error) => {
             console.error("Uncaught Error (Global Handler):", message, source, lineno, colno, error);
@@ -245,10 +208,6 @@ const App = {
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
 
         this.SceneManager.init(this);
-
-        this.worldPivot = new THREE.Group();
-        this.scene.add(this.worldPivot);
-
         this.CameraManager.init(this);
         this.AudioProcessor.init(this);
         this.ImagePlaneManager.init(this);
@@ -261,9 +220,7 @@ const App = {
         this.Debugger.init(this);
         
         setTimeout(() => {
-            this.preloadDevAssets().then(() => {
-                // The switch to the default control is now handled inside the ModelManager loader
-            });
+            this.preloadDevAssets();
             
             const defaultShaderCode = this.shaderPresets['presetBg1'];
             if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
@@ -315,106 +272,81 @@ const App = {
 
         this.animate();
     },
+
+    _getActiveManager() {
+        if (this.vizSettings.activeControl === 'landscape') {
+            return this.ImagePlaneManager;
+        } else if (this.vizSettings.activeControl === 'model') {
+            return this.ModelManager;
+        }
+        return null;
+    },
     
     onMouseWheel(event) {
         event.preventDefault();
-        const IS = this.interactionState;
+        const activeManager = this._getActiveManager();
+        if (!activeManager || !activeManager.state) return;
         
         const delta = -Math.sign(event.deltaY);
-        IS.targetPosition.z += delta * IS.zoomSpeed;
+        activeManager.state.targetPosition.z += delta * this.mouseInteraction.zoomSpeed;
     },
 
     onPointerDown(event) {
-        const IS = this.interactionState;
+        const MI = this.mouseInteraction;
+        const activeManager = this._getActiveManager();
+        if (!activeManager || !activeManager.state) return;
+        
+        activeManager.state.isUnderManualControl = true;
+
         if (event.button === 0) {
-            IS.isRotating = true;
-            IS.startMouse.set(event.clientX, event.clientY);
+            MI.isRotating = true;
         } else if (event.button === 2) {
             event.preventDefault();
-            IS.isDragging = true;
-            IS.startMouse.set(event.clientX, event.clientY);
+            MI.isDragging = true;
         }
+        MI.startMouse.set(event.clientX, event.clientY);
     },
     
     onPointerMove(event) {
-        const IS = this.interactionState;
-        if (IS.isDragging) {
-            const deltaX = event.clientX - IS.startMouse.x;
-            const deltaY = event.clientY - IS.startMouse.y;
+        const MI = this.mouseInteraction;
+        const activeManager = this._getActiveManager();
+        if (!activeManager || !activeManager.state) return;
+        
+        if (!MI.isDragging && !MI.isRotating) return; 
+
+        if (MI.isDragging) {
+            const deltaX = event.clientX - MI.startMouse.x;
+            const deltaY = event.clientY - MI.startMouse.y;
             
-            const distanceFactor = Math.abs(IS.targetPosition.z / 100) + 0.1;
+            const distanceFactor = Math.abs(activeManager.state.targetPosition.z / 100) + 0.1;
 
-            IS.targetPosition.x += deltaX * IS.panSpeed * distanceFactor;
-            IS.targetPosition.y -= deltaY * IS.panSpeed * distanceFactor;
+            activeManager.state.targetPosition.x += deltaX * MI.panSpeed * distanceFactor;
+            activeManager.state.targetPosition.y -= deltaY * MI.panSpeed * distanceFactor;
 
-            IS.startMouse.set(event.clientX, event.clientY);
-        } else if (IS.isRotating) {
-            const deltaX = event.clientX - IS.startMouse.x;
-            const deltaY = event.clientY - IS.startMouse.y;
+            MI.startMouse.set(event.clientX, event.clientY);
+        } else if (MI.isRotating) {
+            const deltaX = event.clientX - MI.startMouse.x;
+            const deltaY = event.clientY - MI.startMouse.y;
 
-            IS.targetRotation.y += deltaX * IS.rotationSpeed;
-            IS.targetRotation.x += deltaY * IS.rotationSpeed;
-            IS.targetRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, IS.targetRotation.x));
+            const targetEuler = new THREE.Euler().setFromQuaternion(activeManager.state.targetQuaternion, 'YXZ');
+            targetEuler.y += deltaX * MI.rotationSpeed;
+            targetEuler.x += deltaY * MI.rotationSpeed;
+            targetEuler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetEuler.x));
+            activeManager.state.targetQuaternion.setFromEuler(targetEuler);
 
-            IS.startMouse.set(event.clientX, event.clientY);
+            MI.startMouse.set(event.clientX, event.clientY);
         }
     },
 
     onPointerUp(event) {
-        const IS = this.interactionState;
-        if (event.button === 0) {
-            IS.isRotating = false;
-        } else if (event.button === 2) {
-            IS.isDragging = false;
-        }
+        const MI = this.mouseInteraction;
+        if (this.ImagePlaneManager.state) this.ImagePlaneManager.state.isUnderManualControl = false;
+        if (this.ModelManager.state) this.ModelManager.state.isUnderManualControl = false;
+
+        MI.isRotating = false;
+        MI.isDragging = false;
     },
     
-    switchActiveControl(newControlTarget) {
-        if (this.vizSettings.activeControl === newControlTarget && newControlTarget !== null) return;
-
-        const landscape = this.ImagePlaneManager.landscape;
-        const model = this.ModelManager.gltfModel;
-        const IS = this.interactionState;
-        const S = this.vizSettings;
-
-        if (!landscape || !model) { return; }
-        
-        const oldActiveControl = S.activeControl;
-        S.activeControl = newControlTarget;
-
-        const activeObject = (newControlTarget === 'landscape') ? landscape : model;
-        const inactiveObject = (newControlTarget === 'landscape') ? model : landscape;
-
-        // ** THE FIX IS HERE **: This is the new, robust "Polite Switch" logic.
-        
-        // 1. Get the current world position and rotation of the object that is becoming active.
-        const newPivotWorldPosition = new THREE.Vector3();
-        activeObject.getWorldPosition(newPivotWorldPosition);
-        const newPivotWorldQuaternion = new THREE.Quaternion();
-        activeObject.getWorldQuaternion(newPivotWorldQuaternion);
-
-        // 2. Detach both objects. They are now floating in the scene at their last known positions.
-        this.scene.attach(activeObject);
-        this.scene.attach(inactiveObject);
-        
-        // 3. Move the pivot to where the new active object was.
-        this.worldPivot.position.copy(newPivotWorldPosition);
-        this.worldPivot.quaternion.copy(newPivotWorldQuaternion);
-
-        // 4. Attach the new active object to the pivot.
-        this.worldPivot.attach(activeObject);
-
-        // 5. Reset the active object's local position/rotation. It now sits perfectly on the pivot.
-        activeObject.position.set(0, 0, 0);
-        activeObject.quaternion.set(0, 0, 0, 1);
-
-        // 6. Sync the interaction state to match the pivot's new state.
-        IS.targetPosition.copy(this.worldPivot.position);
-        IS.targetRotation.setFromQuaternion(this.worldPivot.quaternion, 'XYZ');
-
-        if(this.UIManager) this.UIManager.updateMasterControls();
-    },
-
     onWindowResize() {
         if (!this.camera || !this.renderer) return;
         this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -425,35 +357,6 @@ const App = {
         if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
     },
 
-    updateWorldPivot(delta) {
-        const IS = this.interactionState;
-        const S = this.vizSettings;
-
-        const isLandscapeAutopilotEngaged = this.ImagePlaneManager.autopilot.active;
-        const isModelAutopilotEngaged = this.ModelManager.autopilot.active;
-        
-        const isAutopilotEngaged = isLandscapeAutopilotEngaged || isModelAutopilotEngaged;
-
-        if (!IS.isDragging && !IS.isRotating && !isAutopilotEngaged) {
-            const homePosition = (S.activeControl === 'landscape') ? S.homePositionLandscape : S.homePositionModel;
-            IS.targetPosition.lerp(homePosition, IS.returnSpring);
-            
-            const homeRotation = new THREE.Euler(0,0,0);
-            IS.targetRotation.x = THREE.MathUtils.lerp(IS.targetRotation.x, homeRotation.x, IS.returnSpring);
-            IS.targetRotation.y = THREE.MathUtils.lerp(IS.targetRotation.y, homeRotation.y, IS.returnSpring);
-            IS.targetRotation.z = THREE.MathUtils.lerp(IS.targetRotation.z, homeRotation.z, IS.returnSpring);
-        }
-
-        const lerpAlpha = 1.0 - IS.damping;
-
-        this.worldPivot.position.lerp(IS.targetPosition, lerpAlpha);
-        
-        const targetQuaternion = new THREE.Quaternion().setFromEuler(IS.targetRotation);
-        this.worldPivot.quaternion.slerp(targetQuaternion, lerpAlpha);
-        
-        this.UIManager.syncManualSlidersFromPivot();
-    },
-
     animate() {
         requestAnimationFrame(this.animate.bind(this));
         const delta = this.clock.getDelta();
@@ -461,15 +364,11 @@ const App = {
         this.currentTime = this.clock.getElapsedTime(); 
         this.frame++;
         
-        const S = this.vizSettings;
-        
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
-
-        this.updateWorldPivot(cappedDelta);
         
         this.CameraManager.update(cappedDelta); 
         
@@ -477,6 +376,8 @@ const App = {
         this.BackgroundManager.update();
         this.GPGPUDebugger.update();
         this.Debugger.update();
+
+        this.UIManager.syncManualSlidersFromState();
 
         if (this.vizSettings.backgroundMode === 'greenscreen') {
             this.renderer.setClearColor('#00ff00');

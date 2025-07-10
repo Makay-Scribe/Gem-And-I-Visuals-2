@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-// ** THE FIX IS HERE ** - The standard GLSL for positioning an object in a scene.
+// A simple vertex shader to draw a 2D plane in screen space.
 const gpgpuDebugVertexShader = `
     varying vec2 vUv;
     void main() {
@@ -45,9 +45,8 @@ export const GPGPUDebugger = {
             return;
         }
         
+        // Create a dedicated scene and camera for the 2D overlay.
         this.scene = new THREE.Scene();
-        
-        // ** THE FIX IS HERE ** - Make camera aspect-ratio aware
         const aspect = window.innerWidth / window.innerHeight;
         this.camera = new THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0, 1);
 
@@ -63,7 +62,7 @@ export const GPGPUDebugger = {
         });
 
         this.mesh = new THREE.Mesh(geometry, material);
-        // Position relative to the new aspect-aware coordinates
+        // Position the mesh in the bottom-right corner of the orthographic view.
         this.mesh.position.set(aspect - 0.22, -1.0 + 0.22, 0); 
         this.scene.add(this.mesh);
 
@@ -71,11 +70,12 @@ export const GPGPUDebugger = {
     },
 
     onWindowResize() {
-        if (!this.camera) return;
+        if (!this.camera || !this.mesh) return;
         const aspect = window.innerWidth / window.innerHeight;
         this.camera.left = -aspect;
         this.camera.right = aspect;
         this.camera.updateProjectionMatrix();
+        // Reposition the mesh to keep it in the corner when the aspect ratio changes.
         this.mesh.position.x = aspect - 0.22;
     },
 
@@ -83,12 +83,14 @@ export const GPGPUDebugger = {
         if (!this.mesh || !this.app.vizSettings.enableGPGPUDebugger) return;
 
         if (this.app.ComputeManager.gpuCompute) {
+            // Update the debug texture to the latest GPGPU output.
             this.mesh.material.uniforms.tDebug.value = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable).texture;
             this.mesh.material.uniforms.u_planeDimensions.value = this.app.ImagePlaneManager.planeDimensions;
         }
     },
 
     render() {
+        // Only render if enabled. This is called after the main scene render.
         if (this.scene && this.camera && this.app.vizSettings.enableGPGPUDebugger) {
             this.app.renderer.render(this.scene, this.camera);
         }
