@@ -6,7 +6,8 @@ const PRESET_DEFAULT_SPEEDS = {
     autopilotPreset1: 1.0, 
     autopilotPreset2: 1.0,
     autopilotPreset3: 1.0,
-    autopilotPreset4: 1.0
+    autopilotPreset4: 1.0,
+    autopilotPreset5: 0.7 
 };
 
 export const ImagePlaneManager = {
@@ -67,14 +68,22 @@ export const ImagePlaneManager = {
         ap.holdTimer = 0;
         
         const home = this.state.homePosition;
-        if (presetId === 'autopilotPreset1') {
-            ap.randomBounds = new THREE.Box3(new THREE.Vector3(-2, -1.5, -5), new THREE.Vector3(2, 1.5, 0));
-        } else if (presetId === 'autopilotPreset2') {
-            ap.randomBounds = new THREE.Box3(new THREE.Vector3(-35, -25, -50), new THREE.Vector3(35, 25, 10));
-        } else if (presetId === 'autopilotPreset3') {
-            ap.randomBounds = new THREE.Box3(new THREE.Vector3(-45, -30, -70), new THREE.Vector3(45, 30, 5));
-        } else if (presetId === 'autopilotPreset4') {
-             ap.randomBounds = new THREE.Box3(new THREE.Vector3(-60, -35, -90), new THREE.Vector3(60, 35, 0));
+        switch(presetId) {
+            case 'autopilotPreset1':
+                ap.randomBounds = new THREE.Box3(new THREE.Vector3(-2, -1.5, -5), new THREE.Vector3(2, 1.5, 0));
+                break;
+            case 'autopilotPreset2':
+                ap.randomBounds = new THREE.Box3(new THREE.Vector3(-35, -25, -50), new THREE.Vector3(35, 25, 10));
+                break;
+            case 'autopilotPreset3':
+                ap.randomBounds = new THREE.Box3(new THREE.Vector3(-45, -30, -70), new THREE.Vector3(45, 30, 5));
+                break;
+            case 'autopilotPreset4':
+                 ap.randomBounds = new THREE.Box3(new THREE.Vector3(-60, -35, -90), new THREE.Vector3(60, 35, 0));
+                 break;
+            case 'autopilotPreset5': 
+                 ap.randomBounds = new THREE.Box3(new THREE.Vector3(-50, -5, -40), new THREE.Vector3(50, 5, -10));
+                 break;
         }
         
         console.log(`ImagePlane Autopilot STARTED with preset: ${presetId} at speed ${S.landscapeAutopilotSpeed}`);
@@ -101,9 +110,6 @@ export const ImagePlaneManager = {
     },
 
     stopAutopilot() {
-        // ** THE FIX IS HERE **
-        // Instead of just setting flags, this now triggers the timed return-to-home sequence.
-        // It passes `null` to ensure no new preset starts afterward.
         this.initiateReturnToHome(null);
         console.log("ImagePlane Autopilot STOP triggered. Starting transition to home.");
     },
@@ -122,7 +128,7 @@ export const ImagePlaneManager = {
         );
 
         let randomRot;
-        if (ap.preset === 'autopilotPreset1') {
+        if (ap.preset === 'autopilotPreset1' || ap.preset === 'autopilotPreset5') {
             randomRot = new THREE.Euler(
                 (Math.random() - 0.5) * 0.05,
                 (Math.random() - 0.5) * 0.05,
@@ -195,6 +201,9 @@ export const ImagePlaneManager = {
         }
         this.landscape.visible = true;
 
+        // ** THE FIX IS HERE **
+        // This check now uses the manager's internal `active` flag.
+        // This allows the return-to-home transition (which sets `active` to true) to run.
         if (this.autopilot.active) {
             this.updateAutopilot(cappedDelta);
         } else if (this.state.isUnderManualControl) {

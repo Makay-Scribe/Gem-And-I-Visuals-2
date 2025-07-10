@@ -5,7 +5,8 @@ const PRESET_DEFAULT_SPEEDS = {
     autopilotPreset1: 1.0, 
     autopilotPreset2: 1.0,
     autopilotPreset3: 1.0,
-    autopilotPreset4: 1.0
+    autopilotPreset4: 1.0,
+    autopilotPreset5: 1.2 
 };
 
 export const ModelManager = {
@@ -91,6 +92,12 @@ export const ModelManager = {
                     new THREE.Vector3(home.x + 80, home.y + 40, 32)
                 );
                 break;
+            case 'autopilotPreset5': 
+                ap.randomBounds = new THREE.Box3(
+                    new THREE.Vector3(home.x - 120, home.y - 5, -10),
+                    new THREE.Vector3(home.x + 120, home.y + 5, 25)
+                );
+                break;
         }
 
         console.log(`Model Autopilot STARTED with preset: ${presetId}.`);
@@ -119,8 +126,6 @@ export const ModelManager = {
     },
 
     stopAutopilot() {
-        // ** THE FIX IS HERE **
-        // This now correctly calls the timed return-to-home sequence.
         this.initiateReturnToHome(null);
         console.log("Model Autopilot STOP triggered. Starting transition to home.");
     },
@@ -282,6 +287,8 @@ export const ModelManager = {
         }
         this.gltfModel.visible = true;
         
+        // ** THE FIX IS HERE **
+        // This check now uses the manager's internal `active` flag.
         if (this.autopilot.active) {
             this.updateAutopilot(delta);
         } else if (this.state.isUnderManualControl) {

@@ -85,21 +85,19 @@
                     <button class="segmented-control-button" data-actor="model">3D Model</button>
                 </div>
 
-                <div class="toggle-switch-container">
-                    <span class="toggle-label">Manual</span>
-                    <label class="switch">
-                        <input type="checkbox" id="manualAutoToggle">
-                        <span class="slider round"></span>
-                    </label>
-                    <span class="toggle-label">Auto</span>
-                </div>
-                
-                <p class="sub-group-title">AUTOPILOT PRESETS</p>
-                <div class="model-preset-buttons" id="autopilotPresetContainer">
+                <!-- ** THE FIX IS HERE ** -->
+                <!-- The old toggle switch is gone. -->
+
+                <!-- We add an ID to the header so we can change its text. -->
+                <p class="sub-group-title" id="autopilotHeader">LANDSCAPE AUTOPILOT</p>
+                <!-- We use a new grid class for styling the 6 buttons. -->
+                <div class="autopilot-preset-grid" id="autopilotPresetContainer">
                     <button id="autopilotPreset1">1</button>
                     <button id="autopilotPreset2">2</button>
                     <button id="autopilotPreset3">3</button>
                     <button id="autopilotPreset4">4</button>
+                    <button id="autopilotPreset5">5</button> <!-- New 5th preset button -->
+                    <button id="autopilotOffButton">OFF</button> <!-- New OFF button -->
                 </div>
 
                 <div id="masterActorControls">
