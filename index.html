@@ -85,14 +85,19 @@
                     <button class="segmented-control-button" data-actor="model">3D Model</button>
                 </div>
 
+                <!-- ** THE FIX IS HERE ** -->
+                <!-- The old toggle switch is gone. -->
+
+                <!-- We add an ID to the header so we can change its text. -->
                 <p class="sub-group-title" id="autopilotHeader">LANDSCAPE AUTOPILOT</p>
+                <!-- We use a new grid class for styling the 6 buttons. -->
                 <div class="autopilot-preset-grid" id="autopilotPresetContainer">
                     <button id="autopilotPreset1">1</button>
                     <button id="autopilotPreset2">2</button>
                     <button id="autopilotPreset3">3</button>
                     <button id="autopilotPreset4">4</button>
-                    <button id="autopilotPreset5">5</button>
-                    <button id="autopilotOffButton">OFF</button>
+                    <button id="autopilotPreset5">5</button> <!-- New 5th preset button -->
+                    <button id="autopilotOffButton">OFF</button> <!-- New OFF button -->
                 </div>
 
                 <div id="masterActorControls">
@@ -330,63 +335,6 @@
                     <button id="modelPreset11">11</button>
                     <button id="modelPreset12">12</button>
                 </div>
-            </div>
-        </div>
-
-        <!-- PLANE MORPH SECTION - The New Playground -->
-        <div class="accordion-item">
-            <button class="accordion-header">Plane Morph</button>
-            <div class="accordion-content">
-                <p class="sub-group-title">MORPH CONTROLS</p>
-                <label for="morphTargetSelect">Target Effect</label>
-                <select id="morphTargetSelect">
-                    <option value="flat">Flat</option>
-                    <option value="spectralWave">Spectral Wave</option>
-                    <option value="cloth">Cloth Sim</option>
-                    <option value="paint">Paint Splatter</option>
-                </select>
-                <label for="morphDuration">Duration (s): <span id="morphDurationValue" class="range-value-display">8.00</span></label>
-                <input type="range" id="morphDuration" min="1.0" max="30.0" step="0.5" value="8.0">
-                <button id="triggerMorphButton">Morph</button>
-                
-                <div id="morphEffectControls">
-                    <div id="clothControlsContainer" style="display: none;">
-                        <p class="sub-group-title">CLOTH PHYSICS</p>
-                        <label for="clothStiffness">Stiffness: <span id="clothStiffnessValue" class="range-value-display">0.80</span></label>
-                        <input type="range" id="clothStiffness" min="0.1" max="1.5" step="0.05" value="0.8">
-                        
-                        <label for="clothDamping">Damping: <span id="clothDampingValue" class="range-value-display">0.05</span></label>
-                        <input type="range" id="clothDamping" min="0.0" max="0.1" step="0.001" value="0.05">
-
-                        <label for="clothGravity">Gravity: <span id="clothGravityValue" class="range-value-display">9.8</span></label>
-                        <input type="range" id="clothGravity" min="0.0" max="50.0" step="0.1" value="9.8">
-
-                        <label for="clothAudioWind">Audio Wind: <span id="clothAudioWindValue" class="range-value-display">0</span></label>
-                        <input type="range" id="clothAudioWind" min="0.0" max="100.0" step="1" value="0.0">
-                    </div>
-
-                    <div id="paintControlsContainer" style="display: none;">
-                        <p class="sub-group-title">PAINT SPLATTER</p>
-                        <div class="checkbox-label-container">
-                            <label for="paintEnable">Enable Paint/Drip</label>
-                            <input type="checkbox" id="paintEnable">
-                        </div>
-                        <label for="paintSplatStrength">Splat Strength: <span id="paintSplatStrengthValue" class="range-value-display"></span></label>
-                        <input type="range" id="paintSplatStrength" min="0.1" max="5.0" step="0.1" value="1.0">
-                        <label for="paintFadeSpeed">Fade Speed: <span id="paintFadeSpeedValue" class="range-value-display"></span></label>
-                        <input type="range" id="paintFadeSpeed" min="0.1" max="2.0" step="0.05" value="0.5">
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- FX LAB SECTION -->
-        <div class="accordion-item">
-            <button class="accordion-header">FX Lab</button>
-            <div class="accordion-content">
-                <p class="sub-group-title">LIVE GLSL EDITOR</p>
-                <textarea id="fxLabCodeEditor" placeholder="vec3 userDeformation(vec3 initialPos, vec2 uv, float time, sampler2D audioTexture) { ... }"></textarea>
-                <button id="fxLabApplyButton">Apply Code</button>
             </div>
         </div>
 

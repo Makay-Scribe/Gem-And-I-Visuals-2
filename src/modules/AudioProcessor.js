@@ -1,5 +1,4 @@
 import { Debugger } from './Debugger.js';
-import * as THREE from 'three';
 
 export const AudioProcessor = {
     app: null, // Will be set on init
@@ -19,7 +18,6 @@ export const AudioProcessor = {
 
     // --- Data Outputs ---
     frequencyData: null, // Raw data for textures/EQ visualizer
-    audioDataTexture: null, 
     energy: {
         low: 0.0,
         mid: 0.0,
@@ -35,30 +33,16 @@ export const AudioProcessor = {
     // --- Adaptive Beat Detection Internals ---
     _beatCount: 0,
     _beatTime: 0,
-    _onsetTimeout: 0.15, 
-    _energyHistory: [], 
-    _HISTORY_LENGTH: 60, 
-    _MINIMUM_BEAT_ENERGY: 0.15,
+    _onsetTimeout: 0.15, // Cooldown in seconds to prevent multiple triggers for one beat.
+    _energyHistory: [], // Stores the recent history of mid-range energy
+    _HISTORY_LENGTH: 60, // How many frames of history to keep (approx 1 second at 60fps)
+    _MINIMUM_BEAT_ENERGY: 0.15, // The "Noise Gate": energy must be above this to be considered a beat.
 
     init(appInstance) {
         this.app = appInstance;
+        // Pre-fill the energy history with zeros
         for (let i = 0; i < this._HISTORY_LENGTH; i++) {
             this._energyHistory.push(0);
-        }
-    },
-
-    unlockMedia() {
-        if (!this._ensureAudioContext()) {
-            console.error("Could not unlock media, AudioContext failed to initialize.");
-            return;
-        }
-        
-        const videoEl = document.getElementById('videoSourceElement');
-        if (videoEl && videoEl.src && videoEl.paused) {
-            videoEl.play().catch(e => {
-                // This is expected if there's no user interaction yet, but we try.
-                console.warn("Initial unlock play() for video was prevented. A subsequent user action will be required.");
-            });
         }
     },
 
@@ -80,18 +64,7 @@ export const AudioProcessor = {
             this.muteNode.gain.value = 0;
             this.muteNode.connect(this.audioContext.destination);
             this.butterchurnGainNode.connect(this.muteNode);
-            
             this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
-            
-            this.audioDataTexture = new THREE.DataTexture(
-                this.frequencyData, 
-                this.analyser.frequencyBinCount, 
-                1, 
-                THREE.RedFormat, 
-                THREE.UnsignedByteType
-            );
-            this.audioDataTexture.needsUpdate = true;
-            
             return true;
         } catch (e) {
             console.error("Could not initialize AudioContext.", e);
@@ -155,10 +128,6 @@ export const AudioProcessor = {
             return;
         }
         if (!this._ensureAudioContext()) return;
-
-        // The unlock happens on first click now, this just handles play/pause.
-        const videoElement = document.getElementById('videoSourceElement');
-
         if (this.activeAudioSource === 'file' && !this.fileSourceNode) {
             this.fileSourceNode = this.audioContext.createMediaElementSource(this.audioElement);
             this._connectSourceToNodes(this.fileSourceNode);
@@ -166,17 +135,13 @@ export const AudioProcessor = {
             this.audioElement.onpause = () => this.app.UIManager.updateAudioStatus('file_paused');
             this.connectButterchurn();
         }
-
         if (this.audioElement.paused) {
-            this.audioElement.play().catch(e => console.warn("Audio playback issue:", e.message));
-            if (videoElement && videoElement.src && videoElement.paused) {
-                videoElement.play().catch(e => console.warn("Video playback issue:", e.message));
-            }
+            this.audioElement.play().catch(e => {
+                // This catch block prevents the harmless "not suitable" error from polluting the console.
+                console.warn("Audio playback failed to start automatically. User may need to click again.", e.message);
+            });
         } else {
             this.audioElement.pause();
-            if (videoElement && !videoElement.paused) {
-                videoElement.pause();
-            }
         }
     },
 
@@ -230,15 +195,12 @@ export const AudioProcessor = {
 
         if (!this.analyser || !this.frequencyData || this.activeAudioSource === 'none') {
             if (this.frequencyData) this.frequencyData.fill(0);
-            if (this.audioDataTexture) this.audioDataTexture.needsUpdate = true;
             if (this.app.UIManager && this.app.UIManager.eqCanvas) this.app.UIManager.updateEQ(this.frequencyData);
             this.energy.low = this.energy.mid = this.energy.high = this.energy.overall = 0;
             return;
         }
 
         this.analyser.getByteFrequencyData(this.frequencyData);
-        if (this.audioDataTexture) this.audioDataTexture.needsUpdate = true;
-        
         if (this.app.UIManager && this.app.UIManager.eqCanvas) this.app.UIManager.updateEQ(this.frequencyData);
 
         const n = this.analyser.frequencyBinCount;

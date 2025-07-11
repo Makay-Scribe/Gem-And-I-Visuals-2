@@ -20,9 +20,6 @@ const App = {
     gltfModel: null, animationMixer: null,
     raycaster: new THREE.Raycaster(),
 
-    // NEW: State for unlocking media
-    mediaUnlocked: false,
-
     mouseInteraction: {
         isDragging: false,
         isRotating: false,
@@ -79,6 +76,7 @@ const App = {
         activeLandscapePreset: null,
         activeModelPreset: null,
         homePositionLandscape: new THREE.Vector3(0, 0, 0),
+        // ** THE FIX IS HERE ** - Changed Z from 15 to 30
         homePositionModel: new THREE.Vector3(0, -5, 30),
         landscapeScale: 1.0,
         modelScale: 1.0,
@@ -94,22 +92,42 @@ const App = {
         planeAspectRatio: '1.0',
         planeOrientation: 'xy',
         deformationStrength: 1.5,
-        morphMix: 0.0,
-        morphDuration: 8.0,
-        morphTargetSelect: 'flat',
-        clothStiffness: 0.8,
-        clothDamping: 0.05,
-        clothGravity: 9.8,
-        clothAudioWind: 0.0,
-        paintEnable: false,
-        paintSplatStrength: 1.0,
-        paintFadeSpeed: 0.5,
-        fxLabCodeEditor: `// Example: Sine wave based on Y position and time
-vec3 userDeformation(vec3 initialPos, vec2 uv, float time, sampler2D audioTexture) {
-    vec3 p = initialPos;
-    p.z += sin(p.y * 0.5 + time) * 2.0;
-    return p;
-}`,
+        enablePeel: false,
+        peelAmount: 0.2,
+        peelCurl: 0.4,
+        peelAnimationStyle: 1,
+        peelDrift: 0.05,
+        peelTextureAmount: 0.0,
+        peelAudioSource: 'onBeat',
+        warpMode: 'none',
+        sagAmount: 2.0,
+        sagFalloffSharpness: 1.5,
+        sagAudioMod: 0.2,
+        droopAmount: 0.3,
+        droopAudioMod: 1.0,
+        droopFalloffSharpness: 2.5,
+        droopSupportedWidthFactor: 0.6,
+        droopSupportedDepthFactor: 0.5,
+        cylinderRadius: 5.0,
+        cylinderHeightScale: 1.0,
+        cylinderAxisAlignment: "y",
+        cylinderArcAngle: 360,
+        cylinderArcOffset: 0,
+        bendAngle: 0.0,
+        bendAudioMod: 0.0,
+        bendFalloffSharpness: 1.0,
+        bendAxis: 'primary',
+        foldAngle: 0.0,
+        foldDepth: 0.2,
+        foldRoundness: 0.0,
+        foldAudioMod: 0.0,
+        foldNudge: 0.0,
+        enableFoldCrease: false,
+        foldCreaseDepth: -0.15,
+        foldCreaseSharpness: 3.0,
+        enableFoldTuck: false,
+        foldTuckAmount: 0.0,
+        foldTuckReach: 0.15,
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
         enableShaderMouse: false,
@@ -139,7 +157,7 @@ vec3 userDeformation(vec3 initialPos, vec2 uv, float time, sampler2D audioTextur
     async preloadDevAssets() {
         console.log("Attempting to preload developer assets...");
         try {
-            const audioPath = '/Devmedia/Devaudio.mp3';
+            const audioPath = '/WH21 #9 42825-music.mp3';
             const audioResponse = await fetch(audioPath);
             if (!audioResponse.ok) throw new Error(`HTTP error! Status: ${audioResponse.status}`);
             const audioBlob = await audioResponse.blob();
@@ -152,17 +170,16 @@ vec3 userDeformation(vec3 initialPos, vec2 uv, float time, sampler2D audioTextur
             if (this.UIManager) this.UIManager.logError(`Dev audio preload failed: ${error.message.substring(0, 100)}...`);
         }
         try {
-            const videoPath = '/Devmedia/Devvideo.mp4';
-            const videoResponse = await fetch(videoPath);
-            if (!videoResponse.ok) throw new Error(`HTTP error! Status: ${videoResponse.status}`);
-            const videoBlob = await videoResponse.blob();
-            const videoFile = new File([videoBlob], 'Devvideo.mp4', { type: 'video/mp4' });
-            this.ImagePlaneManager.loadTexture(videoFile);
-            this.UIManager.updateFileNameDisplay('video', 'Devvideo.mp4');
-            console.log("Preloaded Devvideo.mp4 successfully.");
+            const imageResponse = await fetch('/Devmedia/Devimage.jpeg');
+            if (!imageResponse.ok) throw new Error(`HTTP error! Status: ${imageResponse.status}`);
+            const imageBlob = await imageResponse.blob();
+            const imageFile = new File([imageBlob], 'Devimage.jpeg', { type: 'image/jpeg' });
+            this.ImagePlaneManager.loadTexture(imageFile);
+            this.UIManager.updateFileNameDisplay('image', 'Devimage.jpeg');
+            console.log("Preloaded Devimage.jpeg successfully.");
         } catch (error) {
-            console.warn(`Could not preload Devvideo.mp4: ${error.message}. App will start without it.`);
-            if (this.UIManager) this.UIManager.logError(`Devvideo.mp4 preload failed: ${error.message.substring(0, 100)}...`);
+            console.warn(`Could not preload Devimage.jpeg: ${error.message}. App will start without it.`);
+            if (this.UIManager) this.UIManager.logError(`Devimage.jpeg preload failed: ${error.message.substring(0, 100)}...`);
         }
     },
 
@@ -225,19 +242,6 @@ vec3 userDeformation(vec3 initialPos, vec2 uv, float time, sampler2D audioTextur
                 if (this.UIManager) this.UIManager.updateFileNameDisplay('gltf', modelPreset.name);
             }
         }, 100);
-
-        // **THE FIX IS HERE**
-        // Add a one-time event listener to unlock media on the first click.
-        const unlockMedia = () => {
-            if (this.mediaUnlocked) return;
-            console.log("User gesture detected. Unlocking media playback.");
-            this.mediaUnlocked = true;
-            this.AudioProcessor.unlockMedia();
-            document.body.removeEventListener('click', unlockMedia);
-            document.body.removeEventListener('keydown', unlockMedia);
-        };
-        document.body.addEventListener('click', unlockMedia, { once: true });
-        document.body.addEventListener('keydown', unlockMedia, { once: true });
 
         const canvas = document.getElementById('glCanvas');
         window.addEventListener('resize', this.onWindowResize.bind(this));
@@ -361,11 +365,6 @@ vec3 userDeformation(vec3 initialPos, vec2 uv, float time, sampler2D audioTextur
         this.frame++;
         
         this.AudioProcessor.updateAudioData();
-        
-        // ** THE FIX IS HERE **
-        // The GPGPU simulation must be updated every frame to calculate physics and effects.
-        this.ComputeManager.update(cappedDelta);
-        
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
         this.ImagePlaneManager.update(cappedDelta);
