@@ -134,63 +134,67 @@ export const ComputeManager = {
         const A = this.app.AudioProcessor;
         const uniforms = this.positionVariable.material.uniforms;
 
-        // u_rotationMatrix and u_planeOrientation are no longer needed.
-        // The rotation is handled by the ImagePlaneManager's object matrix.
+        const isLegacyMode = S.deformationEngine === 'legacy';
 
         const warpModeMap = { 'none': 0, 'sag': 2, 'droop': 5, 'cylinder': 4, 'bend': 3, 'fold': 1 };
-        uniforms.u_warpMode.value = warpModeMap[S.warpMode] || 0;
+        uniforms.u_warpMode.value = isLegacyMode ? (warpModeMap[S.warpMode] || 0) : 0;
 
         let peelAudioValue = 0.0;
-        if (S.peelAudioSource === 'continuous') { peelAudioValue = A.energy.low; }
-        else if (S.peelAudioSource === 'onBeat' && A.triggers.beat) { peelAudioValue = 1.0; }
-        else if (S.peelAudioSource === 'on2ndBeat' && A.triggers.beat2) { peelAudioValue = 1.0; }
-        else if (S.peelAudioSource === 'on4thBeat' && A.triggers.beat4) { peelAudioValue = 1.0; }
-
+        if (isLegacyMode) {
+            if (S.peelAudioSource === 'continuous') { peelAudioValue = A.energy.low; }
+            else if (S.peelAudioSource === 'onBeat' && A.triggers.beat) { peelAudioValue = 1.0; }
+            else if (S.peelAudioSource === 'on2ndBeat' && A.triggers.beat2) { peelAudioValue = 1.0; }
+            else if (S.peelAudioSource === 'on4thBeat' && A.triggers.beat4) { peelAudioValue = 1.0; }
+        }
+        
         uniforms.u_time.value = this.app.currentTime;
         uniforms.u_audioLow.value = A.energy.low;
-        uniforms.u_deformationStrength.value = S.deformationStrength;
         
-        uniforms.u_enablePeel.value = S.enablePeel ? 1.0 : 0.0;
-        uniforms.u_peelAmount.value = S.peelAmount;
-        uniforms.u_peelCurl.value = S.peelCurl;
+        // ** THE FIX IS HERE **
+        // The base audio deformation is now also part of the legacy system.
+        uniforms.u_deformationStrength.value = isLegacyMode ? S.deformationStrength : 0.0;
+        
+        uniforms.u_enablePeel.value = isLegacyMode && S.enablePeel ? 1.0 : 0.0;
+        uniforms.u_peelAmount.value = isLegacyMode ? S.peelAmount : 0.0;
+        uniforms.u_peelCurl.value = isLegacyMode ? S.peelCurl : 0.0;
         uniforms.u_peelAnimationStyle.value = S.peelAnimationStyle;
-        uniforms.u_peelTextureAmount.value = S.peelTextureAmount;
-        uniforms.u_peelDrift.value = S.peelDrift;
-        uniforms.u_peelAudio.value = peelAudioValue;
+        uniforms.u_peelTextureAmount.value = isLegacyMode ? S.peelTextureAmount : 0.0;
+        uniforms.u_peelDrift.value = isLegacyMode ? S.peelDrift : 0.0;
+        uniforms.u_peelAudio.value = peelAudioValue; 
         
-        uniforms.u_sagAmount.value = S.sagAmount;
-        uniforms.u_sagFalloffSharpness.value = S.sagFalloffSharpness;
-        uniforms.u_sagAudioMod.value = S.sagAudioMod;
+        uniforms.u_sagAmount.value = isLegacyMode ? S.sagAmount : 0.0;
+        uniforms.u_sagFalloffSharpness.value = isLegacyMode ? S.sagFalloffSharpness : 1.0;
+        uniforms.u_sagAudioMod.value = isLegacyMode ? S.sagAudioMod : 0.0;
 
-        uniforms.u_droopAmount.value = S.droopAmount;
-        uniforms.u_droopAudioMod.value = S.droopAudioMod;
-        uniforms.u_droopFalloffSharpness.value = S.droopFalloffSharpness;
-        uniforms.u_droopSupportedWidthFactor.value = S.droopSupportedWidthFactor;
-        uniforms.u_droopSupportedDepthFactor.value = S.droopSupportedDepthFactor;
+        uniforms.u_droopAmount.value = isLegacyMode ? S.droopAmount : 0.0;
+        uniforms.u_droopAudioMod.value = isLegacyMode ? S.droopAudioMod : 0.0;
+        uniforms.u_droopFalloffSharpness.value = isLegacyMode ? S.droopFalloffSharpness : 1.0;
+        uniforms.u_droopSupportedWidthFactor.value = isLegacyMode ? S.droopSupportedWidthFactor : 0.0;
+        uniforms.u_droopSupportedDepthFactor.value = isLegacyMode ? S.droopSupportedDepthFactor : 0.0;
         
-        uniforms.u_cylinderRadius.value = S.cylinderRadius;
-        uniforms.u_cylinderHeightScale.value = S.cylinderHeightScale;
+        uniforms.u_cylinderRadius.value = isLegacyMode ? S.cylinderRadius : 5.0;
+        uniforms.u_cylinderHeightScale.value = isLegacyMode ? S.cylinderHeightScale : 1.0;
         const cylAxisMap = { 'y': 0, 'x': 1, 'z': 2 };
         uniforms.u_cylinderAxisAlignment.value = cylAxisMap[S.cylinderAxisAlignment] || 0;
-        uniforms.u_cylinderArcAngle.value = S.cylinderArcAngle * (Math.PI / 180.0);
-        uniforms.u_cylinderArcOffset.value = S.cylinderArcOffset * (Math.PI / 180.0);
+        uniforms.u_cylinderArcAngle.value = isLegacyMode ? S.cylinderArcAngle * (Math.PI / 180.0) : 0.0;
+        uniforms.u_cylinderArcOffset.value = isLegacyMode ? S.cylinderArcOffset * (Math.PI / 180.0) : 0.0;
         
-        uniforms.u_bendAngle.value = S.bendAngle * (Math.PI / 180.0);
-        uniforms.u_bendAudioMod.value = S.bendAudioMod;
-        uniforms.u_bendFalloffSharpness.value = S.bendFalloffSharpness;
+        uniforms.u_bendAngle.value = isLegacyMode ? S.bendAngle * (Math.PI / 180.0) : 0.0;
+        uniforms.u_bendAudioMod.value = isLegacyMode ? S.bendAudioMod : 0.0;
+        uniforms.u_bendFalloffSharpness.value = isLegacyMode ? S.bendFalloffSharpness : 1.0;
         uniforms.u_bendAxis.value = S.bendAxis === 'primary' ? 0 : 1;
 
-        uniforms.u_foldAngle.value = S.foldAngle * (Math.PI / 180.0);
-        uniforms.u_foldDepth.value = S.foldDepth;
-        uniforms.u_foldRoundness.value = S.foldRoundness;
-        uniforms.u_foldAudioMod.value = S.foldAudioMod * (Math.PI / 180.0);
-        uniforms.u_foldNudge.value = S.foldNudge;
-        uniforms.u_enableFoldCrease.value = S.enableFoldCrease;
-        uniforms.u_foldCreaseDepth.value = S.foldCreaseDepth;
-        uniforms.u_foldCreaseSharpness.value = S.foldCreaseSharpness;
-        uniforms.u_enableFoldTuck.value = S.enableFoldTuck;
-        uniforms.u_foldTuckAmount.value = S.foldTuckAmount;
-        uniforms.u_foldTuckReach.value = S.foldTuckReach;
+        uniforms.u_foldAngle.value = isLegacyMode ? S.foldAngle * (Math.PI / 180.0) : 0.0;
+        uniforms.u_foldDepth.value = isLegacyMode ? S.foldDepth : 0.0;
+        uniforms.u_foldRoundness.value = isLegacyMode ? S.foldRoundness : 0.0;
+        uniforms.u_foldAudioMod.value = isLegacyMode ? S.foldAudioMod * (Math.PI / 180.0) : 0.0;
+        uniforms.u_foldNudge.value = isLegacyMode ? S.foldNudge : 0.0;
+        uniforms.u_enableFoldCrease.value = isLegacyMode && S.enableFoldCrease;
+        uniforms.u_foldCreaseDepth.value = isLegacyMode ? S.foldCreaseDepth : 0.0;
+        uniforms.u_foldCreaseSharpness.value = isLegacyMode ? S.foldCreaseSharpness : 1.0;
+        uniforms.u_enableFoldTuck.value = isLegacyMode && S.enableFoldTuck;
+        uniforms.u_foldTuckAmount.value = isLegacyMode ? S.foldTuckAmount : 0.0;
+        uniforms.u_foldTuckReach.value = isLegacyMode ? S.foldTuckReach : 0.0;
         
         this.gpuCompute.compute();
     },

@@ -39,6 +39,8 @@ export const UIManager = {
         this.updateBackgroundControlsVisibility(true);
         this.updateWarpControlsVisibility(true);
         
+        this.updateDeformationEngineControls(true);
+
         this.updateMasterControls();
         this.openDebugAccordions(); 
     },
@@ -218,9 +220,6 @@ export const UIManager = {
         
         let isAutopilotOn, activePreset;
         
-        // ** THE FIX IS HERE **
-        // Read the user's intent from vizSettings for the glow logic.
-        // Read the actual running preset from the manager.
         if (activeControl === 'landscape') {
             isAutopilotOn = S.landscapeAutopilotOn;
             activePreset = this.app.ImagePlaneManager.autopilot.preset;
@@ -324,6 +323,42 @@ export const UIManager = {
         if (!isInitial) this.refreshAccordion(document.getElementById('warpMode'));
     },
 
+    updateDeformationEngineControls(isInitial = false) {
+        const S = this.app.vizSettings;
+        const engineMode = S.deformationEngine;
+    
+        const legacyContainer = document.getElementById('legacyDeformersContainer');
+        const gpgpuAccordion = document.getElementById('gpgpuEffectsAccordion');
+        const gpgpuStatusLight = document.getElementById('gpgpuStatusLight');
+        const toggleContainer = document.getElementById('deformationEngineToggle');
+    
+        if (!legacyContainer || !gpgpuAccordion || !gpgpuStatusLight || !toggleContainer) return;
+    
+        const isGpuMode = engineMode === 'gpgpu';
+    
+        // Update containers
+        legacyContainer.classList.toggle('container-disabled', isGpuMode);
+        gpgpuAccordion.classList.toggle('container-disabled', !isGpuMode);
+    
+        // Update button active states and their internal lights
+        toggleContainer.querySelectorAll('.segmented-control-button').forEach(btn => {
+            const light = btn.querySelector('.status-light');
+            const isActive = btn.dataset.mode === engineMode;
+            btn.classList.toggle('active', isActive);
+            if (light) {
+                light.classList.toggle('active', isActive);
+            }
+        });
+    
+        // Update the separate GPGPU accordion's header light
+        gpgpuStatusLight.classList.toggle('active', isGpuMode);
+    
+        if (!isInitial) {
+            this.refreshAccordion(legacyContainer);
+            this.refreshAccordion(gpgpuAccordion.querySelector('.accordion-content'));
+        }
+    },
+
     toggleLightSliders() { 
         const disabled = this.app.vizSettings.enableLightOrbit; 
         document.getElementById('lightDirectionX').disabled = disabled;
@@ -365,9 +400,20 @@ export const UIManager = {
                 this.app.vizSettings.enableGPGPUDebugger = e.target.checked;
             });
         }
+        
+        document.querySelectorAll('#deformationEngineToggle button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                // Find the actual button element if a child span was clicked
+                const btn = e.target.closest('.segmented-control-button');
+                if (btn) {
+                    this.app.vizSettings.deformationEngine = btn.dataset.mode;
+                    this.updateDeformationEngineControls();
+                }
+            });
+        });
 
         document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select').forEach(control => {
-            if (control.closest('#cameraOptions')) return;
+            if (control.closest('#cameraOptions') || control.closest('#deformationEngineToggle')) return;
             
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -409,6 +455,9 @@ export const UIManager = {
             header.addEventListener('click', () => {
                 const content = header.nextElementSibling;
                 if (!content || !content.classList.contains('accordion-content')) return;
+                const parentAccordion = header.closest('.accordion-item');
+                if (parentAccordion && parentAccordion.classList.contains('container-disabled')) return;
+                
                 content.classList.toggle('open');
                 if (content.classList.contains('open')) {
                     content.style.maxHeight = content.scrollHeight + 'px';

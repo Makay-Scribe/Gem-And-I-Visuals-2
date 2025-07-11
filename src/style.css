@@ -25,6 +25,9 @@
     --glow-color-yellow: rgba(255, 255, 150, 0.7); /* Color for the new glow effect */
     --debug-header-bg: #6e5300; /* New color for debug panels */
     --debug-header-hover-bg: #8c6a00; /* New hover color for debug */
+    --status-light-off: #444; /* Color for the status light when off */
+    --status-light-on: #34C759; /* Green for status light on */
+    --status-light-on-glow: rgba(52, 199, 89, 0.6);
 }
 
 /* --- GLOW ANIMATION --- */
@@ -149,6 +152,40 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     position: relative; /* Needed for the ::after overlay */
 }
 .accordion-content.open { padding: 4px; }
+
+
+/* --- NEW Styles for Disabled Accordions/Containers --- */
+.container-disabled {
+    pointer-events: none;
+    opacity: 0.4;
+}
+
+/* Specific styling to make it look visually "off" */
+.container-disabled .accordion-header {
+    background-color: #333;
+    color: #888;
+}
+.container-disabled .accordion-item .accordion-header {
+    background-color: #2a2a2a;
+}
+.container-disabled .accordion-content {
+    background-color: #222;
+}
+
+/* --- NEW Status Light Style --- */
+.status-light {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--status-light-off);
+    margin-left: 5px;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    flex-shrink: 0; /* Prevents light from shrinking */
+}
+.status-light.active {
+    background-color: var(--status-light-on);
+    box-shadow: 0 0 5px 1px var(--status-light-on-glow);
+}
 
 /* "Coming Soon" Overlay Style */
 .disabled-feature::after {
@@ -448,7 +485,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--sub-header-hover-bg);
 }
 
-/* ** THE FIX IS HERE (Part 1) ** - Add new grid style for our new autopilot controls */
 .autopilot-preset-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr); /* 3 columns for a 2x3 grid */
@@ -522,10 +558,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     min-height: 12px;
 }
 
-/* ** THE FIX IS HERE (Part 2) ** - The old toggle switch styles are no longer needed. */
-/* --- TOGGLE SWITCH STYLES (REMOVED) --- */
-
-
 /* --- SEGMENTED CONTROL STYLES --- */
 .segmented-control {
     display: flex;
@@ -547,6 +579,11 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     transition: background-color 0.2s;
     font-size: 10px;
     font-weight: 500;
+    
+    /* ** THE FIX IS HERE ** */
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .segmented-control-button:last-child {

@@ -90,6 +90,7 @@ const App = {
         landscapeSpinSpeed: 0.0,
         planeAspectRatio: '1.0',
         planeOrientation: 'xy',
+        deformationEngine: 'legacy', // <-- NEW SETTING
         deformationStrength: 1.5,
         enablePeel: false,
         peelAmount: 0.2,
@@ -156,7 +157,6 @@ const App = {
     async preloadDevAssets() {
         console.log("Attempting to preload developer assets...");
         try {
-            // ** THE FIX IS HERE ** - Path updated to your desired audio file
             const audioPath = '/Devmedia/Devaudio.mp3';
             const audioResponse = await fetch(audioPath);
             if (!audioResponse.ok) throw new Error(`HTTP error! Status: ${audioResponse.status}`);
