@@ -201,18 +201,17 @@ export const ImagePlaneManager = {
         }
         this.landscape.visible = true;
 
-        // ** THE FIX IS HERE **
-        // This check now uses the manager's internal `active` flag.
-        // This allows the return-to-home transition (which sets `active` to true) to run.
         if (this.autopilot.active) {
             this.updateAutopilot(cappedDelta);
         } else if (this.state.isUnderManualControl) {
             // Do nothing. The mouse/sliders are controlling the target state directly.
         } else {
+            // When not under manual or autopilot control, gently return to home.
             this.state.targetPosition.lerp(this.state.homePosition, 0.02);
             this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
         }
 
+        // Apply smoothed movement to the actual landscape object
         this.landscape.position.lerp(this.state.targetPosition, 0.05);
         this.landscape.quaternion.slerp(this.state.targetQuaternion, 0.05);
         
@@ -229,6 +228,7 @@ export const ImagePlaneManager = {
             if (this.landscape.geometry) this.landscape.geometry.dispose();
             if (this.landscapeMaterial) this.landscapeMaterial.dispose();
         }
+        // The orientation logic is removed from the init call to ComputeManager
         if (this.app.ComputeManager) {
             this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
         } else { return; }
@@ -251,8 +251,10 @@ export const ImagePlaneManager = {
 
         this.app.scene.add(this.landscape);
 
+        // New method call to apply the home orientation directly to the mesh
         this.applyAndStoreHomeOrientation();
         
+        // Set the mesh's initial state from the stored home state
         this.landscape.position.copy(this.state.homePosition);
         this.landscape.quaternion.copy(this.state.homeQuaternion);
         this.state.targetPosition.copy(this.state.homePosition);
@@ -267,13 +269,17 @@ export const ImagePlaneManager = {
         this.planeDimensions.set(baseSize * aspectRatio, baseSize);
     },
 
+    // New function to handle orientation
     applyAndStoreHomeOrientation() {
         if (!this.landscape) return;
         const S = this.app.vizSettings;
+        // We use a temporary object to calculate the rotation quaternion
         const tempLandscape = new THREE.Object3D(); 
         if (S.planeOrientation === 'xz') { tempLandscape.rotateX(-Math.PI / 2); } 
         else if (S.planeOrientation === 'yz') { tempLandscape.rotateY(Math.PI / 2); }
+        // For 'xy', no rotation is needed.
         
+        // Store this calculated orientation as our "home" state
         this.state.homeQuaternion.copy(tempLandscape.quaternion);
     },
     

@@ -343,28 +343,11 @@ export const ComputeManager = {
             float blend_factor=1.0-smoothstep(foldDepth-foldRoundness,foldDepth+foldRoundness,uv_sum_diag);
             float actual_rotation_angle=main_fold_angle*blend_factor;
             
-            // --- FIX START: Nudge is now a displacement (arch), not a rotation. ---
-            // 1. Perform ONLY the main fold rotation first.
-            mat3 R_fold = rotationMatrix3(hinge_axis, actual_rotation_angle);
-            vec3 folded_pos = hinge_start + R_fold * (flat_pos - hinge_start);
-            vec3 transformed_normal = R_fold * axis_W; // The normal *after* the fold
-
-            // 2. Calculate and apply the nudge as a displacement along the new normal.
-            if (abs(foldNudge) > 0.001) {
-                // Find how far along the hinge the vertex is (from 0.0 to 1.0)
-                vec3 vec_from_hinge_start = flat_pos - hinge_start;
-                float hinge_segment_length = length(hinge_end - hinge_start);
-                float projection = dot(vec_from_hinge_start, hinge_axis);
-                float progress_along_hinge = clamp(projection / hinge_segment_length, 0.0, 1.0);
-
-                // Create a smooth arch shape using a sine wave
-                float arch_factor = sin(progress_along_hinge * PI);
-
-                // Apply the nudge as a displacement along the new folded normal
-                folded_pos += transformed_normal * foldNudge * arch_factor * blend_factor;
-            }
-            // --- FIX END ---
+            mat3 R = rotationMatrix3(hinge_axis, actual_rotation_angle);
+            vec3 folded_pos = hinge_start + R * (flat_pos - hinge_start);
+            vec3 transformed_normal = R * axis_W;
             
+            if(abs(foldNudge)>0.001){float progress_along_hinge=clamp(dot(flat_pos-hinge_start,hinge_axis)/length(hinge_end-hinge_start),0.0,1.0);float arch_factor=sin(progress_along_hinge*PI);folded_pos+=transformed_normal*foldNudge*arch_factor*blend_factor;}
             if(enableFoldTuck){float tuck_falloff=1.0-smoothstep(0.0,foldTuckReach,length(local_uv));if(tuck_falloff>0.0){vec3 outward_vector=normalize(corner_sign.x*axis_U+corner_sign.y*axis_V);float tuck_strength=foldTuckAmount*-0.5;folded_pos+=outward_vector*tuck_strength*tuck_falloff*blend_factor;}}
             if(enableFoldCrease){float dist_from_diag=abs(local_uv.x-local_uv.y)/1.4142;float crease_mask=1.0-smoothstep(0.0,foldDepth*0.5,dist_from_diag);crease_mask=pow(crease_mask,foldCreaseSharpness*0.5);folded_pos+=transformed_normal*foldCreaseDepth*crease_mask*blend_factor;}
             

@@ -76,7 +76,6 @@ const App = {
         activeLandscapePreset: null,
         activeModelPreset: null,
         homePositionLandscape: new THREE.Vector3(0, 0, 0),
-        // ** THE FIX IS HERE ** - Changed Z from 15 to 30
         homePositionModel: new THREE.Vector3(0, -5, 30),
         landscapeScale: 1.0,
         modelScale: 1.0,
@@ -157,7 +156,8 @@ const App = {
     async preloadDevAssets() {
         console.log("Attempting to preload developer assets...");
         try {
-            const audioPath = '/WH21 #9 42825-music.mp3';
+            // ** THE FIX IS HERE ** - Path updated to your desired audio file
+            const audioPath = '/Devmedia/Devaudio.mp3';
             const audioResponse = await fetch(audioPath);
             if (!audioResponse.ok) throw new Error(`HTTP error! Status: ${audioResponse.status}`);
             const audioBlob = await audioResponse.blob();
@@ -202,7 +202,9 @@ const App = {
 
         this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('glCanvas'), antialias: true, powerPreference: "high-performance" });
         this.renderer.setPixelRatio(window.devicePixelRatio); this.renderer.setSize(window.innerWidth, window.innerHeight);
+        
         this.renderer.autoClear = false;
+
         const toneMappingOptions = { 'ACESFilmic': THREE.ACESFilmicToneMapping, 'Reinhard': THREE.ReinhardToneMapping, 'Linear': THREE.LinearToneMapping };
         this.renderer.toneMapping = toneMappingOptions[this.vizSettings.toneMappingMode] || THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
@@ -379,16 +381,14 @@ const App = {
 
         this.UIManager.syncManualSlidersFromState();
 
-        if (this.vizSettings.backgroundMode === 'greenscreen') {
-            this.renderer.setClearColor('#00ff00');
-        } else {
-            this.renderer.setClearColor('#000000');
-        }
+        this.renderer.clear(true, true, true);
         
-        this.renderer.clear(true, true);
         this.BackgroundManager.render();
+        
         this.renderer.clearDepth();
+
         this.renderer.render(this.scene, this.camera);
+        
         this.GPGPUDebugger.render();
     }
 };

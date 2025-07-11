@@ -14,9 +14,10 @@ uniform vec3 u_cameraPosition;
 // General uniforms
 uniform float u_time;
 
+// Data from vertex shader (now in world space)
 varying vec2 vUv;
-varying vec3 vNormal;
-varying vec3 vViewPosition;
+varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
 
 #define PI 3.14159265359
 
@@ -58,9 +59,9 @@ void main() {
     float metalness = u_metalness;
     float roughness = u_roughness;
 
-    // Vectors
-    vec3 N = normalize(vNormal);
-    vec3 V = normalize(u_cameraPosition - vViewPosition);
+    // Vectors (now calculated correctly in world space)
+    vec3 N = normalize(vWorldNormal);
+    vec3 V = normalize(u_cameraPosition - vWorldPosition); // View direction
     vec3 L = normalize(u_lightDirection);
     vec3 H = normalize(V + L);
 
