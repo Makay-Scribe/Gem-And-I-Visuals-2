@@ -28,6 +28,7 @@ export const Debugger = {
 
         const landscapeManager = this.app.ImagePlaneManager;
         const modelManager = this.app.ModelManager;
+        const computeManager = this.app.ComputeManager;
 
         // Helper function for formatting vectors
         const formatV3 = (v) => v ? `${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}` : 'null';
@@ -62,7 +63,25 @@ Actual Pos:  [${formatV3(worldPos)}]
             `.trim();
         }
 
-        this.panelElement.textContent = landscapeOutput + "\n" + modelOutput;
+        // --- GPGPU COMPUTE DEBUG INFO ---
+        let computeOutput = "\n--- GPGPU NOT READY ---";
+        if (computeManager && computeManager.positionVariable && computeManager.positionVariable.material.uniforms) {
+            const uniforms = computeManager.positionVariable.material.uniforms;
+            computeOutput = `
+--- GPGPU UNIFORMS ---
+Time:        ${uniforms.u_time.value.toFixed(2)}
+Audio Low:   ${uniforms.u_audioLow.value.toFixed(2)}
+Beat:        ${uniforms.u_beat.value.toFixed(2)}
+Warp Mode:   ${uniforms.u_warpMode.value}
+Morph Src:   ${uniforms.u_morphSource.value}
+Morph Dst:   ${uniforms.u_morphTarget.value}
+Morph Mix:   ${uniforms.u_morphMix.value.toFixed(2)}
+Gravity:     ${uniforms.u_gravity.value.toFixed(2)}
+            `.trim();
+        }
+
+
+        this.panelElement.textContent = landscapeOutput + "\n" + modelOutput + "\n" + computeOutput;
     },
 
     /**

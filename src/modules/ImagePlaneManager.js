@@ -19,6 +19,12 @@ export const ImagePlaneManager = {
     planeResolution: new THREE.Vector2(128, 128),
     currentTexture: null, 
 
+    // Morphing State
+    isMorphing: false,
+    morphStartTime: 0,
+    sourceMorphTarget: 0, // 0: Flat
+    targetMorphTarget: 0, // 0: Flat
+
     state: {
         isUnderManualControl: false,
         targetPosition: new THREE.Vector3(),
@@ -48,6 +54,49 @@ export const ImagePlaneManager = {
         this.state.targetPosition.copy(this.state.homePosition);
         this.createDefaultLandscape();
     },
+
+    triggerMorph(targetMorphId) {
+        const targetIdMap = { 'flat': 0, 'spectralWave': 1, 'cloth': 2, 'paint': 4, 'userFx': 3 };
+        const newTarget = targetIdMap[targetMorphId];
+
+        if (newTarget === undefined || newTarget === this.targetMorphTarget) {
+            console.warn(`Morph cancelled: Target ${targetMorphId} is invalid or already active.`);
+            return;
+        }
+
+        if (this.isMorphing) {
+            const currentMix = this.app.vizSettings.morphMix;
+            this.sourceMorphTarget = (currentMix < 0.5) ? this.sourceMorphTarget : this.targetMorphTarget;
+        } else {
+            this.sourceMorphTarget = this.targetMorphTarget;
+        }
+
+        this.targetMorphTarget = newTarget;
+        this.isMorphing = true;
+        this.morphStartTime = this.app.currentTime;
+
+        console.log(`Morph triggered: From ${this.sourceMorphTarget} to ${this.targetMorphTarget}`);
+    },
+
+    updateMorph(delta) {
+        if (!this.isMorphing) return;
+
+        const S = this.app.vizSettings;
+        const elapsedTime = this.app.currentTime - this.morphStartTime;
+        const duration = S.morphDuration;
+
+        let progress = Math.min(elapsedTime / duration, 1.0);
+        
+        S.morphMix = progress;
+
+        if (progress >= 1.0) {
+            this.isMorphing = false;
+            this.sourceMorphTarget = this.targetMorphTarget;
+            S.morphMix = 0.0;
+            console.log("Morph complete. Current state is now:", this.targetMorphTarget);
+        }
+    },
+
 
     startAutopilot(presetId) {
         if (!this.landscape) return;
@@ -201,9 +250,8 @@ export const ImagePlaneManager = {
         }
         this.landscape.visible = true;
 
-        // ** THE FIX IS HERE **
-        // This check now uses the manager's internal `active` flag.
-        // This allows the return-to-home transition (which sets `active` to true) to run.
+        this.updateMorph(cappedDelta);
+        
         if (this.autopilot.active) {
             this.updateAutopilot(cappedDelta);
         } else if (this.state.isUnderManualControl) {
@@ -217,8 +265,9 @@ export const ImagePlaneManager = {
         this.landscape.quaternion.slerp(this.state.targetQuaternion, 0.05);
         
         this.landscape.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
-        if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
+        
         this.updateDeformationUniforms();
+        
         this.updateBoundingBox();
     },
 
@@ -229,9 +278,12 @@ export const ImagePlaneManager = {
             if (this.landscape.geometry) this.landscape.geometry.dispose();
             if (this.landscapeMaterial) this.landscapeMaterial.dispose();
         }
-        if (this.app.ComputeManager) {
-            this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
-        } else { return; }
+        
+        const computeInitialized = this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
+        if (!computeInitialized) {
+            console.error("ImagePlaneManager: Halting landscape creation due to ComputeManager init failure.");
+            return;
+        }
         
         this.createMaterials(); 
         
@@ -282,13 +334,11 @@ export const ImagePlaneManager = {
         const textureToUse = this.currentTexture || new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
 
-        const positionRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
-        const normalRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.normalVariable);
         this.landscapeMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 u_map: { value: textureToUse },
-                u_positionTexture: { value: positionRenderTarget.texture }, 
-                u_normalTexture: { value: normalRenderTarget.texture },   
+                u_positionTexture: { value: null }, 
+                u_normalTexture: { value: null },   
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
@@ -333,7 +383,8 @@ export const ImagePlaneManager = {
                 return;
             }
             videoEl.src = objectURL;
-            videoEl.play();
+            // ** THE FIX IS HERE (Part 2) **
+            // Don't call .play() here. Let the user interaction in AudioProcessor handle it.
             const texture = new THREE.VideoTexture(videoEl);
             applyTextureSettings(texture);
         } else {
@@ -346,25 +397,31 @@ export const ImagePlaneManager = {
 
     updateDeformationUniforms() {
         if (!this.landscapeMaterial || !this.app.ComputeManager || !this.app.ComputeManager.gpuCompute) { return; }
+
         const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
         const normalTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.normalVariable);
         if (!positionTarget || !normalTarget) return; 
+
         const S = this.app.vizSettings;
-        const U = this.landscapeMaterial.uniforms;
-        U.u_time.value = this.app.currentTime;
-        U.u_beat.value = this.app.AudioProcessor.triggers.beat ? 1.0 : 0.0;
-        U.u_audioLow.value = this.app.AudioProcessor.energy.low;
-        U.u_audioMid.value = this.app.AudioProcessor.energy.mid;
-        U.u_positionTexture.value = positionTarget.texture;
-        U.u_normalTexture.value = normalTarget.texture;
-        U.u_metalness.value = S.metalness;
-        U.u_roughness.value = S.roughness;
-        U.u_envMapIntensity.value = S.reflectionStrength;
-        U.t_envMap.value = this.app.hdrTexture; 
-        U.u_cameraPosition.value = this.app.camera.position;
-        U.u_lightColor.value.set(S.lightColor);
-        U.u_ambientLightColor.value.set(S.ambientLightColor);
-        U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+        const A = this.app.AudioProcessor;
+        
+        const renderUniforms = this.landscapeMaterial.uniforms;
+        renderUniforms.u_time.value = this.app.currentTime;
+        renderUniforms.u_beat.value = A.triggers.beat ? 1.0 : 0.0;
+        renderUniforms.u_audioLow.value = A.energy.low;
+        renderUniforms.u_audioMid.value = A.energy.mid;
+        
+        renderUniforms.u_positionTexture.value = positionTarget.texture;
+        renderUniforms.u_normalTexture.value = normalTarget.texture;
+
+        renderUniforms.u_metalness.value = S.metalness;
+        renderUniforms.u_roughness.value = S.roughness;
+        renderUniforms.u_envMapIntensity.value = S.reflectionStrength;
+        renderUniforms.t_envMap.value = this.app.hdrTexture; 
+        renderUniforms.u_cameraPosition.value = this.app.camera.position;
+        renderUniforms.u_lightColor.value.set(S.lightColor);
+        renderUniforms.u_ambientLightColor.value.set(S.ambientLightColor);
+        renderUniforms.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
     },
 
     updateBoundingBox() {

@@ -38,6 +38,7 @@ export const UIManager = {
         this.setupFollowerGlow();
         this.updateBackgroundControlsVisibility(true);
         this.updateWarpControlsVisibility(true);
+        this.updateMorphControlsVisibility(true); 
         
         this.updateMasterControls();
         this.openDebugAccordions(); 
@@ -218,9 +219,6 @@ export const UIManager = {
         
         let isAutopilotOn, activePreset;
         
-        // ** THE FIX IS HERE **
-        // Read the user's intent from vizSettings for the glow logic.
-        // Read the actual running preset from the manager.
         if (activeControl === 'landscape') {
             isAutopilotOn = S.landscapeAutopilotOn;
             activePreset = this.app.ImagePlaneManager.autopilot.preset;
@@ -284,11 +282,11 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'clothStiffness', 'clothDamping', 'paintSplatStrength', 'paintFadeSpeed'].includes(id)) {
                 precision = 2;
-            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness'].includes(id)) {
+            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness', 'morphDuration'].includes(id)) {
                 precision = 2;
-            } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod'].includes(id)) {
+            } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod', 'clothGravity', 'clothAudioWind'].includes(id)) {
                 precision = 0;
             }
             display.textContent = parseFloat(value).toFixed(precision);
@@ -324,6 +322,20 @@ export const UIManager = {
         if (!isInitial) this.refreshAccordion(document.getElementById('warpMode'));
     },
 
+    updateMorphControlsVisibility(isInitial = false) {
+        const target = this.app.vizSettings.morphTargetSelect;
+        const clothControls = document.getElementById('clothControlsContainer');
+        const paintControls = document.getElementById('paintControlsContainer');
+
+        if (clothControls) clothControls.style.display = (target === 'cloth') ? 'block' : 'none';
+        
+        // This was the missing part of the logic from the previous incorrect step.
+        // Now it correctly handles showing/hiding paint controls.
+        if (paintControls) paintControls.style.display = (target === 'paint') ? 'block' : 'none';
+
+        if (!isInitial) this.refreshAccordion(document.getElementById('morphTargetSelect'));
+    },
+
     toggleLightSliders() { 
         const disabled = this.app.vizSettings.enableLightOrbit; 
         document.getElementById('lightDirectionX').disabled = disabled;
@@ -353,6 +365,34 @@ export const UIManager = {
         document.getElementById('pasteShaderCode').addEventListener('click', async () => { try { const text = await navigator.clipboard.readText(); document.getElementById('shaderToyGLSL').value = text; this.app.vizSettings.shaderToyGLSL = text; this.logSuccess('Pasted from clipboard.'); } catch (err) { this.logError('Failed to read from clipboard.'); } });
         document.getElementById('landscapeResetButton').addEventListener('click', () => this.resetLandscapeSettings());
         
+        const triggerMorphButton = document.getElementById('triggerMorphButton');
+        if (triggerMorphButton) {
+            triggerMorphButton.addEventListener('click', () => {
+                const select = document.getElementById('morphTargetSelect');
+                if (select && this.app.ImagePlaneManager) {
+                    this.app.ImagePlaneManager.triggerMorph(select.value);
+                }
+            });
+        }
+        
+        const fxLabApplyButton = document.getElementById('fxLabApplyButton');
+        if (fxLabApplyButton) {
+            fxLabApplyButton.addEventListener('click', () => {
+                const userCode = document.getElementById('fxLabCodeEditor').value;
+                if (this.app.ComputeManager) {
+                    this.app.ComputeManager.recompile(userCode);
+                }
+            });
+        }
+        
+        const morphTargetSelect = document.getElementById('morphTargetSelect');
+        if (morphTargetSelect) {
+            morphTargetSelect.addEventListener('change', () => {
+                this.app.vizSettings.morphTargetSelect = morphTargetSelect.value;
+                this.updateMorphControlsVisibility();
+            });
+        }
+        
         const fileInputIds = ['mainTextureInput', 'videoTextureInput', 'audioFileInput', 'gltfModelInput', 'hdriInput', 'iChannel0Input', 'iChannel1Input', 'iChannel2Input', 'iChannel3Input'];
         fileInputIds.forEach(id => {
             const el = document.getElementById(id);
@@ -377,7 +417,7 @@ export const UIManager = {
 
                 if (e.target.type === 'checkbox') {
                     S[id] = value;
-                } else if (e.target.type === 'range' || e.target.type === 'number' || e.target.id === 'peelAnimationStyle') {
+                } else if (e.target.type === 'range' || e.target.type === 'number' || e.target.id === 'peelAnimationStyle' || id === 'morphDuration') {
                     S[id] = parseFloat(value);
                 } else {
                     S[id] = value;
