@@ -129,19 +129,17 @@ const App = {
         foldTuckAmount: 0.0,
         foldTuckReach: 0.15,
         // --- GPGPU SETTINGS ---
-        gpgpu_enableRipple: true,
+        gpgpu_enableRipple: false,
         gpgpu_rippleSpeed: 0.5,
         gpgpu_rippleStrength: 1.0,
         gpgpu_rippleFrequency: 15.0,
         gpgpu_enableEqRipple: false,
         gpgpu_eqRippleStrength: 2.0,
+        gpgpu_eqRippleSmoothing: 0.5,
         gpgpu_eqRippleBarCount: 64,
         gpgpu_eqRippleBarWidth: 0.8,
-        gpgpu_eqRippleSmoothing: 0.5,
-        // ** THE FIX IS HERE **
         gpgpu_eqRippleRangeStart: 0.0,
         gpgpu_eqRippleRangeEnd: 1.0,
-        // ** END OF FIX **
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",

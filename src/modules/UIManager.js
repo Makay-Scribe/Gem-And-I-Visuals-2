@@ -47,18 +47,18 @@ export const UIManager = {
         this.updateDeformationEngineControls(true);
 
         this.updateMasterControls();
-        this.openDebugAccordions(); 
+        // this.openDebugAccordions(); // This line is now commented out
     },
     
-    openDebugAccordions() {
-        document.querySelectorAll('.accordion-header.debug-header').forEach(header => {
-            const content = header.nextElementSibling;
-            if (content && content.classList.contains('accordion-content')) {
-                content.classList.add('open');
-                content.style.maxHeight = content.scrollHeight + 'px';
-            }
-        });
-    },
+    // openDebugAccordions() {
+    //     document.querySelectorAll('.accordion-header.debug-header').forEach(header => {
+    //         const content = header.nextElementSibling;
+    //         if (content && content.classList.contains('accordion-content')) {
+    //             content.classList.add('open');
+    //             content.style.maxHeight = content.scrollHeight + 'px';
+    //         }
+    //     });
+    // },
 
     syncManualSlidersFromState() {
         const S = this.app.vizSettings;
