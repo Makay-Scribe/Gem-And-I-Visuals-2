@@ -159,23 +159,16 @@
                             <label>Peel Curl: <span id="peelCurlValue" class="range-value-display"></span></label>
                             <input type="range" id="peelCurl" min="0.0" max="1.0" step="0.01" value="0.4">
                             
+                            <!-- ** THE FIX IS HERE ** -->
                             <p class="sub-group-title">ANIMATION & AUDIO</p>
-                            <label for="peelAnimationStyle">Animation Style</label>
-                            <select id="peelAnimationStyle">
-                                <option value="0">Synchronized</option>
-                                <option value="1" selected>Asynchronous (Rolling)</option>
-                            </select>
+                            <div class="checkbox-label-container">
+                                <label for="peelEnableAudio">Enable Audio</label>
+                                <input type="checkbox" id="peelEnableAudio" checked>
+                            </div>
                             <label>Peel Drift: <span id="peelDriftValue" class="range-value-display"></span></label>
                             <input type="range" id="peelDrift" min="0.0" max="0.2" step="0.005" value="0.05">
                             <label>Peel Texture: <span id="peelTextureAmountValue" class="range-value-display"></span></label>
                             <input type="range" id="peelTextureAmount" min="0.0" max="0.2" step="0.005" value="0.0">
-                            <label for="peelAudioSource">Audio Source</label>
-                            <select id="peelAudioSource">
-                                <option value="continuous">Lows (Continuous)</option>
-                                <option value="onBeat" selected>Lows (On Beat)</option>
-                                <option value="on2ndBeat">Lows (On 2nd Beat)</option>
-                                <option value="on4thBeat">Lows (On 4th Beat)</option>
-                            </select>
                         </div>
                     </div>
                     
@@ -270,10 +263,13 @@
                         </div>
                     </div>
 
-                    <!-- ** THE FIX IS HERE: Accordions moved inside the container ** -->
                     <div class="accordion-item">
                         <button class="accordion-header">Audio Deformation</button>
                         <div class="accordion-content">
+                            <div class="checkbox-label-container">
+                                <label for="enableAudioDeform">Enable</label>
+                                <input type="checkbox" id="enableAudioDeform" checked>
+                            </div>
                             <label>Strength: <span id="deformationStrengthValue" class="range-value-display"></span></label>
                             <input type="range" id="deformationStrength" min="0.0" max="10.0" step="0.1" value="1.5">
                             <label>Smoothing: <span id="audioSmoothingValue" class="range-value-display"></span></label>
@@ -538,7 +534,6 @@
                     <input type="checkbox" id="enableGPGPUDebugger" checked>
                 </div>
                 
-                <!-- ** THE FIX IS HERE ** -->
                 <label for="gpgpuDebugViewSelect">Debug View</label>
                 <select id="gpgpuDebugViewSelect">
                     <option value="position" selected>Position Data</option>
@@ -550,7 +545,6 @@
                 <div id="gpgpuDebugPixelValue" style="background-color: #2C2F31; border: 1px solid #333333; border-radius: 3px; padding: 4px; font-family: 'Courier New', Courier, monospace; min-height: 16px; margin-top: 2px;">
                     Hover over debug plane...
                 </div>
-                <!-- ** END OF FIX ** -->
 
                 <div class="checkbox-label-container" style="margin-top: 6px;">
                     <label for="enableOnScreenDebugger">Enable On-Screen Text</label>

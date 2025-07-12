@@ -90,15 +90,15 @@ const App = {
         landscapeSpinSpeed: 0.0,
         planeAspectRatio: '1.0',
         planeOrientation: 'xy',
-        deformationEngine: 'legacy', // <-- NEW SETTING
+        deformationEngine: 'legacy',
+        enableAudioDeform: true,
         deformationStrength: 1.5,
         enablePeel: false,
         peelAmount: 0.2,
         peelCurl: 0.4,
-        peelAnimationStyle: 1,
+        peelEnableAudio: true, // <-- ** THE FIX IS HERE **
         peelDrift: 0.05,
         peelTextureAmount: 0.0,
-        peelAudioSource: 'onBeat',
         warpMode: 'none',
         sagAmount: 2.0,
         sagFalloffSharpness: 1.5,
@@ -248,15 +248,11 @@ const App = {
         const canvas = document.getElementById('glCanvas');
         window.addEventListener('resize', this.onWindowResize.bind(this));
         
-        // --- THE FIX IS HERE ---
-        // Add a single listener to the window.
-        // It will handle both the ShaderToy mouse and the new GPGPU debugger mouse.
         window.addEventListener('mousemove', (event) => {
             if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
                 this.mouseState.x = event.clientX;
                 this.mouseState.y = event.clientY;
             }
-            // Pass the event along to the GPGPU debugger's handler.
             if (this.GPGPUDebugger && this.GPGPUDebugger.handleMouseMove) {
                 this.GPGPUDebugger.handleMouseMove(event);
             }
