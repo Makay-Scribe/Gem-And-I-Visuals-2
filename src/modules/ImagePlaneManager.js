@@ -13,6 +13,7 @@ const PRESET_DEFAULT_SPEEDS = {
 export const ImagePlaneManager = {
     app: null,
     landscape: null,
+    landscapeContainer: null, // ** NEW: The grouping parent
     landscapeMaterial: null,
     boundingBox: new THREE.Box3(),
     planeDimensions: new THREE.Vector2(40, 40),
@@ -46,6 +47,9 @@ export const ImagePlaneManager = {
         this.app = appInstance;
         this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionLandscape);
         this.state.targetPosition.copy(this.state.homePosition);
+        // ** NEW: Initialize the container
+        this.landscapeContainer = new THREE.Group();
+        this.app.scene.add(this.landscapeContainer);
         this.createDefaultLandscape();
     },
 
@@ -192,14 +196,14 @@ export const ImagePlaneManager = {
     },
 
     update(cappedDelta) {
-        if (!this.landscape) return;
+        if (!this.landscapeContainer || !this.landscape) return;
         const S = this.app.vizSettings;
         
         if (!S.enableLandscape) {
-            this.landscape.visible = false;
+            this.landscapeContainer.visible = false;
             return;
         }
-        this.landscape.visible = true;
+        this.landscapeContainer.visible = true;
 
         if (this.autopilot.active) {
             this.updateAutopilot(cappedDelta);
@@ -211,11 +215,17 @@ export const ImagePlaneManager = {
             this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
         }
 
-        // Apply smoothed movement to the actual landscape object
-        this.landscape.position.lerp(this.state.targetPosition, 0.05);
-        this.landscape.quaternion.slerp(this.state.targetQuaternion, 0.05);
+        // Apply position and orientation to the container
+        this.landscapeContainer.position.lerp(this.state.targetPosition, 0.05);
+        this.landscapeContainer.quaternion.slerp(this.state.targetQuaternion, 0.05);
+        this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
-        this.landscape.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
+        // Apply spin directly to the mesh
+        if (S.enableLandscapeSpin && S.landscapeSpinSpeed !== 0) {
+            // ** THE FIX IS HERE **
+            this.landscape.rotateOnAxis(new THREE.Vector3(0, 0, 1), -S.landscapeSpinSpeed * cappedDelta);
+        }
+        
         if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
         this.updateDeformationUniforms();
         this.updateBoundingBox();
@@ -223,12 +233,13 @@ export const ImagePlaneManager = {
 
     createDefaultLandscape() {
         this.updatePlaneDimensions();
+        // Clear any previous landscape from the container
         if (this.landscape) {
-            this.landscape.removeFromParent();
+            this.landscapeContainer.remove(this.landscape);
             if (this.landscape.geometry) this.landscape.geometry.dispose();
             if (this.landscapeMaterial) this.landscapeMaterial.dispose();
         }
-        // The orientation logic is removed from the init call to ComputeManager
+
         if (this.app.ComputeManager) {
             this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
         } else { return; }
@@ -248,19 +259,18 @@ export const ImagePlaneManager = {
         landGeom.setAttribute('uv_gpgpu', new THREE.BufferAttribute(uv_gpgpu, 2));
         this.landscape = new THREE.Mesh(landGeom, this.landscapeMaterial);
         this.landscape.frustumCulled = false;
+        
+        // Add the landscape mesh to the container, NOT the scene
+        this.landscapeContainer.add(this.landscape);
 
-        this.app.scene.add(this.landscape);
-
-        // New method call to apply the home orientation directly to the mesh
         this.applyAndStoreHomeOrientation();
         
-        // Set the mesh's initial state from the stored home state
-        this.landscape.position.copy(this.state.homePosition);
-        this.landscape.quaternion.copy(this.state.homeQuaternion);
+        // Set the container's initial state
+        this.landscapeContainer.position.copy(this.state.homePosition);
+        this.landscapeContainer.quaternion.copy(this.state.homeQuaternion);
         this.state.targetPosition.copy(this.state.homePosition);
         this.state.targetQuaternion.copy(this.state.homeQuaternion);
-
-        this.landscape.scale.set(this.app.defaultVisualizerSettings.landscapeScale, this.app.defaultVisualizerSettings.landscapeScale, this.app.defaultVisualizerSettings.landscapeScale);
+        this.landscapeContainer.scale.set(this.app.defaultVisualizerSettings.landscapeScale, this.app.defaultVisualizerSettings.landscapeScale, this.app.defaultVisualizerSettings.landscapeScale);
     },
 
     updatePlaneDimensions() {
@@ -269,17 +279,14 @@ export const ImagePlaneManager = {
         this.planeDimensions.set(baseSize * aspectRatio, baseSize);
     },
 
-    // New function to handle orientation
     applyAndStoreHomeOrientation() {
         if (!this.landscape) return;
         const S = this.app.vizSettings;
-        // We use a temporary object to calculate the rotation quaternion
         const tempLandscape = new THREE.Object3D(); 
         if (S.planeOrientation === 'xz') { tempLandscape.rotateX(-Math.PI / 2); } 
         else if (S.planeOrientation === 'yz') { tempLandscape.rotateY(Math.PI / 2); }
-        // For 'xy', no rotation is needed.
         
-        // Store this calculated orientation as our "home" state
+        // Store this calculated orientation as our "home" state for the CONTAINER
         this.state.homeQuaternion.copy(tempLandscape.quaternion);
     },
     
@@ -374,8 +381,8 @@ export const ImagePlaneManager = {
     },
 
     updateBoundingBox() {
-        if (!this.landscape) return;
-        this.landscape.geometry.computeBoundingBox();
-        this.boundingBox.copy(this.landscape.geometry.boundingBox).applyMatrix4(this.landscape.matrixWorld);
+        if (!this.landscapeContainer) return;
+        this.landscapeContainer.updateWorldMatrix(true, false);
+        this.boundingBox.setFromObject(this.landscapeContainer, true);
     }
 };

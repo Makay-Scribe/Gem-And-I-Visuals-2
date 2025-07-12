@@ -117,7 +117,7 @@ export const ComputeManager = {
             u_enableFoldTuck: { value: false },
             u_foldTuckAmount: { value: 0.0 },
             u_foldTuckReach: { value: 0.0 },
-            u_gpgpu_enableRipple: { value: true },
+            u_gpgpu_enableWaterRipple: { value: false }, // Renamed uniform
             u_gpgpu_rippleSpeed: { value: 0.5 },
             u_gpgpu_rippleStrength: { value: 1.0 },
             u_gpgpu_rippleFrequency: { value: 15.0 },
@@ -201,7 +201,7 @@ export const ComputeManager = {
 
         } else {
             // --- GPGPU MODE UNIFORMS ---
-            uniforms.u_gpgpu_enableRipple.value = S.gpgpu_enableRipple;
+            uniforms.u_gpgpu_enableWaterRipple.value = S.gpgpu_enableWaterRipple;
             uniforms.u_gpgpu_rippleSpeed.value = S.gpgpu_rippleSpeed;
             uniforms.u_gpgpu_rippleStrength.value = S.gpgpu_rippleStrength;
             uniforms.u_gpgpu_rippleFrequency.value = S.gpgpu_rippleFrequency;
@@ -268,7 +268,7 @@ export const ComputeManager = {
         uniform bool u_enableFoldTuck;
         uniform float u_foldTuckAmount;
         uniform float u_foldTuckReach;
-        uniform bool u_gpgpu_enableRipple;
+        uniform bool u_gpgpu_enableWaterRipple; // Renamed
         uniform float u_gpgpu_rippleSpeed;
         uniform float u_gpgpu_rippleStrength;
         uniform float u_gpgpu_rippleFrequency;
@@ -316,7 +316,6 @@ export const ComputeManager = {
             return vec3(0.0, 0.0, 1.0);
         }
 
-        // ** THE FIX IS HERE **
         vec3 calculateEqRipple(vec2 uv, sampler2D audioTex, float strength, float barCount, float barWidth, float rangeStart, float rangeEnd) {
             float rangeWidth = rangeEnd - rangeStart;
             if (rangeWidth <= EPSILON_SHADER || uv.x < rangeStart || uv.x > rangeEnd) {
@@ -325,20 +324,13 @@ export const ComputeManager = {
 
             float remappedUvX = (uv.x - rangeStart) / rangeWidth;
             
-            // This logic now correctly mimics the legacy shader.
-            // It finds which integer bar the current vertex belongs to.
             float barIndexFloat = remappedUvX * barCount;
             float barIndexInt = floor(barIndexFloat);
 
-            // It then calculates the precise texture coordinate for that bar's data.
             float texelCoordX = (barIndexInt + 0.5) / barCount;
             
-            // Sample the audio texture. Because the texture's filter is NEAREST,
-            // all vertices belonging to the same bar will get the exact same audio value.
             float audioValue = texture2D(audioTex, vec2(texelCoordX, 0.5)).r;
             
-            // The bar's width is now controlled by this window function.
-            // This creates a sharp, rectangular shape.
             float barProgress = fract(barIndexFloat);
             float halfBarW = barWidth * 0.5;
             float window = step(0.5 - halfBarW, barProgress) - step(0.5 + halfBarW, barProgress);
@@ -463,6 +455,7 @@ export const ComputeManager = {
         void main() {
             vec2 uv = gl_FragCoord.xy / resolution.xy;
             vec3 pos = texture2D(u_initialPosition, uv).xyz;
+            vec3 totalDisplacement = vec3(0.0);
 
             if (u_isLegacyMode) { // Legacy Mode Branch
                 if (u_warpMode > 0) {
@@ -476,33 +469,36 @@ export const ComputeManager = {
                         if (u_enableAudioDeform) {
                             float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
                             float audioDeform = u_audioLow * (1.0 + noise * 0.5);
-                            pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+                            totalDisplacement += getDisplacementNormal() * audioDeform * u_deformationStrength;
                         }
                         if (u_warpMode == 2) {
-                            pos += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
+                            totalDisplacement += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
                         } else if (u_warpMode == 5) {
-                            pos += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
+                            totalDisplacement += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
                         }
                     }
                 } else { 
                     if (u_enableAudioDeform) {
                         float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
                         float audioDeform = u_audioLow * (1.0 + noise * 0.5);
-                        pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+                        totalDisplacement += getDisplacementNormal() * audioDeform * u_deformationStrength;
                     }
                 }
                 
                 if (u_enablePeel > 0.5) {
                     float audio = u_peelEnableAudio ? u_peelAudio : 0.0;
-                    pos += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
+                    totalDisplacement += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
                 }
+                pos += totalDisplacement;
 
             } else { // GPGPU Mode Branch
-                if (u_gpgpu_enableRipple) {
-                    pos += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency);
-                } else if (u_gpgpu_enableEqRipple) { 
-                    pos += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd);
+                if (u_gpgpu_enableWaterRipple) {
+                    totalDisplacement += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency);
                 }
+                if (u_gpgpu_enableEqRipple) { 
+                    totalDisplacement += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd);
+                }
+                pos += totalDisplacement;
             }
 
             gl_FragColor = vec4(pos, 1.0);
@@ -515,6 +511,7 @@ export const ComputeManager = {
         
         vec3 getDeformedPosition(vec2 uv) {
             vec3 pos = texture2D(u_initialPosition, uv).xyz;
+            vec3 totalDisplacement = vec3(0.0);
 
             if (u_isLegacyMode) { 
                 if (u_warpMode > 0) {
@@ -528,33 +525,36 @@ export const ComputeManager = {
                         if (u_enableAudioDeform) {
                             float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
                             float audioDeform = u_audioLow * (1.0 + noise * 0.5);
-                            pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+                           totalDisplacement += getDisplacementNormal() * audioDeform * u_deformationStrength;
                         }
                         if (u_warpMode == 2) {
-                            pos += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
+                            totalDisplacement += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
                         } else if (u_warpMode == 5) {
-                            pos += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
+                            totalDisplacement += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
                         }
                     }
                 } else {
                     if (u_enableAudioDeform) {
                         float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
                         float audioDeform = u_audioLow * (1.0 + noise * 0.5);
-                        pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+                        totalDisplacement += getDisplacementNormal() * audioDeform * u_deformationStrength;
                     }
                 }
            
                 if (u_enablePeel > 0.5) {
                     float audio = u_peelEnableAudio ? u_peelAudio : 0.0;
-                    pos += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
+                    totalDisplacement += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
                 }
+                pos += totalDisplacement;
 
             } else { 
-                if (u_gpgpu_enableRipple) {
-                    pos += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency);
-                } else if (u_gpgpu_enableEqRipple) { 
-                     pos += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd);
+                if (u_gpgpu_enableWaterRipple) {
+                    totalDisplacement += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency);
                 }
+                if (u_gpgpu_enableEqRipple) { 
+                     totalDisplacement += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd);
+                }
+                pos += totalDisplacement;
             }
            
             return pos;

@@ -90,7 +90,7 @@ const App = {
         landscapeSpinSpeed: 0.0,
         planeAspectRatio: '1.0',
         planeOrientation: 'xy',
-        deformationEngine: 'legacy',
+        deformationEngine: 'gpgpu', // ** THE FIX IS HERE (Part 1) **
         enableAudioDeform: true,
         deformationStrength: 1.5,
         enablePeel: false,
@@ -129,7 +129,7 @@ const App = {
         foldTuckAmount: 0.0,
         foldTuckReach: 0.15,
         // --- GPGPU SETTINGS ---
-        gpgpu_enableRipple: false,
+        gpgpu_enableWaterRipple: false, // ** THE FIX IS HERE (Part 2) **
         gpgpu_rippleSpeed: 0.5,
         gpgpu_rippleStrength: 1.0,
         gpgpu_rippleFrequency: 15.0,
