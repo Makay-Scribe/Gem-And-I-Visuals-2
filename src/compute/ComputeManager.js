@@ -76,6 +76,7 @@ export const ComputeManager = {
             u_initialPosition: { value: this.initialPositionTexture },
             u_time: { value: 0 },
             u_audioLow: { value: 0 },
+            u_audioTexture: { value: this.app.AudioProcessor.audioTexture }, 
             u_planeDimensions: { value: planeDimensionsVec2 },
             u_isLegacyMode: { value: true },
             u_enableAudioDeform: { value: true },
@@ -120,6 +121,12 @@ export const ComputeManager = {
             u_gpgpu_rippleSpeed: { value: 0.5 },
             u_gpgpu_rippleStrength: { value: 1.0 },
             u_gpgpu_rippleFrequency: { value: 15.0 },
+            u_gpgpu_enableEqRipple: { value: false },
+            u_gpgpu_eqRippleStrength: { value: 2.0 },
+            u_gpgpu_eqRippleBarCount: { value: 64.0 },
+            u_gpgpu_eqRippleBarWidth: { value: 0.8 },
+            u_gpgpu_eqRippleRangeStart: { value: 0.0 },
+            u_gpgpu_eqRippleRangeEnd: { value: 1.0 },
         };
 
         this.positionVariable.material.uniforms = uniforms;
@@ -193,14 +200,25 @@ export const ComputeManager = {
             uniforms.u_foldTuckReach.value = S.foldTuckReach;
 
         } else {
+            // --- GPGPU MODE UNIFORMS ---
             uniforms.u_gpgpu_enableRipple.value = S.gpgpu_enableRipple;
             uniforms.u_gpgpu_rippleSpeed.value = S.gpgpu_rippleSpeed;
             uniforms.u_gpgpu_rippleStrength.value = S.gpgpu_rippleStrength;
             uniforms.u_gpgpu_rippleFrequency.value = S.gpgpu_rippleFrequency;
+            uniforms.u_gpgpu_enableEqRipple.value = S.gpgpu_enableEqRipple;
+            uniforms.u_gpgpu_eqRippleStrength.value = S.gpgpu_eqRippleStrength;
+            uniforms.u_gpgpu_eqRippleBarCount.value = S.gpgpu_eqRippleBarCount;
+            uniforms.u_gpgpu_eqRippleBarWidth.value = S.gpgpu_eqRippleBarWidth;
+            uniforms.u_gpgpu_eqRippleRangeStart.value = S.gpgpu_eqRippleRangeStart;
+            uniforms.u_gpgpu_eqRippleRangeEnd.value = S.gpgpu_eqRippleRangeEnd;
         }
 
+        // --- GLOBAL UNIFORMS (always updated) ---
         uniforms.u_time.value = this.app.currentTime;
         uniforms.u_audioLow.value = A.energy.low;
+        if (A.audioTexture) { 
+            uniforms.u_audioTexture.value = A.audioTexture;
+        }
         
         this.gpuCompute.compute();
     },
@@ -209,6 +227,7 @@ export const ComputeManager = {
         uniform sampler2D u_initialPosition;
         uniform float u_time;
         uniform float u_audioLow;
+        uniform sampler2D u_audioTexture; 
         uniform vec2 u_planeDimensions;
         uniform bool u_isLegacyMode;
         uniform bool u_enableAudioDeform;
@@ -253,6 +272,12 @@ export const ComputeManager = {
         uniform float u_gpgpu_rippleSpeed;
         uniform float u_gpgpu_rippleStrength;
         uniform float u_gpgpu_rippleFrequency;
+        uniform bool u_gpgpu_enableEqRipple; 
+        uniform float u_gpgpu_eqRippleStrength;
+        uniform float u_gpgpu_eqRippleBarCount;
+        uniform float u_gpgpu_eqRippleBarWidth;
+        uniform float u_gpgpu_eqRippleRangeStart;
+        uniform float u_gpgpu_eqRippleRangeEnd;
     `,
 
     commonShaderCode: `
@@ -289,6 +314,37 @@ export const ComputeManager = {
 
         vec3 getDisplacementNormal() {
             return vec3(0.0, 0.0, 1.0);
+        }
+
+        // ** THE FIX IS HERE **
+        vec3 calculateEqRipple(vec2 uv, sampler2D audioTex, float strength, float barCount, float barWidth, float rangeStart, float rangeEnd) {
+            float rangeWidth = rangeEnd - rangeStart;
+            if (rangeWidth <= EPSILON_SHADER || uv.x < rangeStart || uv.x > rangeEnd) {
+                return vec3(0.0);
+            }
+
+            float remappedUvX = (uv.x - rangeStart) / rangeWidth;
+            
+            // This logic now correctly mimics the legacy shader.
+            // It finds which integer bar the current vertex belongs to.
+            float barIndexFloat = remappedUvX * barCount;
+            float barIndexInt = floor(barIndexFloat);
+
+            // It then calculates the precise texture coordinate for that bar's data.
+            float texelCoordX = (barIndexInt + 0.5) / barCount;
+            
+            // Sample the audio texture. Because the texture's filter is NEAREST,
+            // all vertices belonging to the same bar will get the exact same audio value.
+            float audioValue = texture2D(audioTex, vec2(texelCoordX, 0.5)).r;
+            
+            // The bar's width is now controlled by this window function.
+            // This creates a sharp, rectangular shape.
+            float barProgress = fract(barIndexFloat);
+            float halfBarW = barWidth * 0.5;
+            float window = step(0.5 - halfBarW, barProgress) - step(0.5 + halfBarW, barProgress);
+
+            float displacement = audioValue * strength * window;
+            return getDisplacementNormal() * displacement;
         }
 
         vec3 calculateWaterRipple(vec2 uv, float time, float audio, float speed, float strength, float frequency) {
@@ -401,8 +457,6 @@ export const ComputeManager = {
     `,
 
     get positionShader() { return `
-        // --- THE FIX IS HERE (Part 5) ---
-        // Restore the uniform and common code injections
         ${this.uniformsShaderCode}
         ${this.commonShaderCode}
 
@@ -446,6 +500,8 @@ export const ComputeManager = {
             } else { // GPGPU Mode Branch
                 if (u_gpgpu_enableRipple) {
                     pos += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency);
+                } else if (u_gpgpu_enableEqRipple) { 
+                    pos += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd);
                 }
             }
 
@@ -496,6 +552,8 @@ export const ComputeManager = {
             } else { 
                 if (u_gpgpu_enableRipple) {
                     pos += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency);
+                } else if (u_gpgpu_enableEqRipple) { 
+                     pos += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd);
                 }
             }
            

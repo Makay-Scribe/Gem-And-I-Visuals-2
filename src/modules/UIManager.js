@@ -306,11 +306,11 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness'].includes(id)) {
                 precision = 2;
-            } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod'].includes(id)) {
+            } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod', 'gpgpu_eqRippleBarCount'].includes(id)) {
                 precision = 0;
             }
             display.textContent = parseFloat(value).toFixed(precision);

@@ -1,4 +1,5 @@
 import { Debugger } from './Debugger.js';
+import * as THREE from 'three';
 
 export const AudioProcessor = {
     app: null, // Will be set on init
@@ -17,7 +18,10 @@ export const AudioProcessor = {
     activeAudioSource: 'none',
 
     // --- Data Outputs ---
-    frequencyData: null, // Raw data for textures/EQ visualizer
+    frequencyData: null, 
+    smoothedFrequencyData: null, // ** NEW: Array to hold smoothed values
+    textureDataUint8: null,      // ** NEW: Array for the texture buffer
+    audioTexture: null, 
     energy: {
         low: 0.0,
         mid: 0.0,
@@ -64,7 +68,21 @@ export const AudioProcessor = {
             this.muteNode.gain.value = 0;
             this.muteNode.connect(this.audioContext.destination);
             this.butterchurnGainNode.connect(this.muteNode);
-            this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
+            
+            const bufferLength = this.analyser.frequencyBinCount;
+            this.frequencyData = new Uint8Array(bufferLength);
+            this.smoothedFrequencyData = new Float32Array(bufferLength); // Use Float32 for precision
+            this.textureDataUint8 = new Uint8Array(bufferLength); // Final buffer for texture
+            
+            this.audioTexture = new THREE.DataTexture(
+                this.textureDataUint8, // Use the new Uint8 buffer
+                bufferLength,
+                1,
+                THREE.RedFormat,
+                THREE.UnsignedByteType
+            );
+            this.audioTexture.needsUpdate = true;
+
             return true;
         } catch (e) {
             console.error("Could not initialize AudioContext.", e);
@@ -195,6 +213,8 @@ export const AudioProcessor = {
 
         if (!this.analyser || !this.frequencyData || this.activeAudioSource === 'none') {
             if (this.frequencyData) this.frequencyData.fill(0);
+            if (this.smoothedFrequencyData) this.smoothedFrequencyData.fill(0);
+            if (this.textureDataUint8) this.textureDataUint8.fill(0);
             if (this.app.UIManager && this.app.UIManager.eqCanvas) this.app.UIManager.updateEQ(this.frequencyData);
             this.energy.low = this.energy.mid = this.energy.high = this.energy.overall = 0;
             return;
@@ -202,6 +222,20 @@ export const AudioProcessor = {
 
         this.analyser.getByteFrequencyData(this.frequencyData);
         if (this.app.UIManager && this.app.UIManager.eqCanvas) this.app.UIManager.updateEQ(this.frequencyData);
+
+        // ** THE FIX IS HERE **
+        const smoothingFactor = this.app.vizSettings.gpgpu_eqRippleSmoothing;
+        for (let i = 0; i < this.frequencyData.length; i++) {
+            // Apply exponential moving average
+            this.smoothedFrequencyData[i] = this.smoothedFrequencyData[i] * smoothingFactor + this.frequencyData[i] * (1.0 - smoothingFactor);
+            // Copy the smoothed float value back to the Uint8 buffer for the texture
+            this.textureDataUint8[i] = Math.round(this.smoothedFrequencyData[i]);
+        }
+        if (this.audioTexture) {
+            this.audioTexture.needsUpdate = true;
+        }
+        // ** END OF FIX **
+
 
         const n = this.analyser.frequencyBinCount;
         const norm = 1 / 255.0;
@@ -213,7 +247,7 @@ export const AudioProcessor = {
 
         let lowSum = 0, midSum = 0, highSum = 0;
         for (let i = 0; i < n; i++) {
-            const val = this.frequencyData[i];
+            const val = this.frequencyData[i]; // Energy calculation still uses raw data
             if (i <= lowEnd) lowSum += val;
             if (i >= midStart && i <= midEnd) midSum += val;
             if (i >= highStart) highSum += val;
