@@ -90,7 +90,7 @@ const App = {
         landscapeSpinSpeed: 0.0,
         planeAspectRatio: '1.0',
         planeOrientation: 'xy',
-        deformationEngine: 'gpgpu', // ** THE FIX IS HERE (Part 1) **
+        deformationEngine: 'gpgpu',
         enableAudioDeform: true,
         deformationStrength: 1.5,
         enablePeel: false,
@@ -129,7 +129,7 @@ const App = {
         foldTuckAmount: 0.0,
         foldTuckReach: 0.15,
         // --- GPGPU SETTINGS ---
-        gpgpu_enableWaterRipple: false, // ** THE FIX IS HERE (Part 2) **
+        gpgpu_enableWaterRipple: false, 
         gpgpu_rippleSpeed: 0.5,
         gpgpu_rippleStrength: 1.0,
         gpgpu_rippleFrequency: 15.0,
@@ -140,6 +140,13 @@ const App = {
         gpgpu_eqRippleBarWidth: 0.8,
         gpgpu_eqRippleRangeStart: 0.0,
         gpgpu_eqRippleRangeEnd: 1.0,
+        gpgpu_enableCloth: false,
+        gpgpu_clothGravity: 9.8,
+        gpgpu_clothDamping: 0.98,
+        gpgpu_clothStiffness: 0.8,
+        // ** THE FIX IS HERE **
+        gpgpu_clothAudioForce: 10.0,
+        gpgpu_clothForceRadius: 0.25,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",

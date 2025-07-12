@@ -300,7 +300,6 @@
             </button>
             <div class="accordion-content">
                 
-                <!-- ** THE FIX IS HERE ** -->
                 <p class="sub-group-title">ACTIVE EFFECTS</p>
                 <div class="checkbox-label-container">
                     <label for="gpgpu_enableWaterRipple">Water Ripple</label>
@@ -309,6 +308,10 @@
                 <div class="checkbox-label-container">
                     <label for="gpgpu_enableEqRipple">EQ Ripple</label>
                     <input type="checkbox" id="gpgpu_enableEqRipple">
+                </div>
+                <div class="checkbox-label-container">
+                    <label for="gpgpu_enableCloth">Cloth Physics</label>
+                    <input type="checkbox" id="gpgpu_enableCloth">
                 </div>
 
                 <div class="accordion-item">
@@ -347,7 +350,41 @@
                         <input type="range" id="gpgpu_eqRippleBarWidth" min="0.1" max="1.0" step="0.01" value="0.8">
                     </div>
                 </div>
-                <!-- ** END OF FIX ** -->
+
+                <div class="accordion-item">
+                    <button class="accordion-header">Cloth Physics</button>
+                    <div class="accordion-content">
+                        <p class="sub-group-title">PHYSICS</p>
+                        <label>Gravity: <span id="gpgpu_clothGravityValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_clothGravity" min="-20.0" max="20.0" step="0.5" value="9.8">
+                        
+                        <label>Damping: <span id="gpgpu_clothDampingValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_clothDamping" min="0.9" max="1.0" step="0.001" value="0.98">
+                        
+                        <label>Stiffness: <span id="gpgpu_clothStiffnessValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_clothStiffness" min="0.0" max="1.0" step="0.05" value="0.8">
+                        
+                        <!-- ** THE FIX IS HERE ** -->
+                        <label>Iterations: <span id="gpgpu_clothIterationsValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_clothIterations" min="1" max="16" step="1" value="4">
+
+                        <p class="sub-group-title">ANCHORING</p>
+                        <label for="gpgpu_clothPinMode">Pinning</label>
+                        <select id="gpgpu_clothPinMode">
+                            <option value="none">None</option>
+                            <option value="corners" selected>Corners</option>
+                            <option value="top_edge">Top Edge</option>
+                            <option value="center">Center</option>
+                        </select>
+
+                        <p class="sub-group-title">AUDIO INTERACTION</p>
+                        <label>Audio Force: <span id="gpgpu_clothAudioForceValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_clothAudioForce" min="0.0" max="50.0" step="0.5" value="10.0">
+                        
+                        <label>Force Radius: <span id="gpgpu_clothForceRadiusValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_clothForceRadius" min="0.0" max="1.0" step="0.01" value="0.25">
+                    </div>
+                </div>
 
             </div>
         </div>
