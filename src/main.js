@@ -96,7 +96,7 @@ const App = {
         enablePeel: false,
         peelAmount: 0.2,
         peelCurl: 0.4,
-        peelEnableAudio: true, // <-- ** THE FIX IS HERE **
+        peelEnableAudio: true,
         peelDrift: 0.05,
         peelTextureAmount: 0.0,
         warpMode: 'none',
@@ -128,6 +128,12 @@ const App = {
         enableFoldTuck: false,
         foldTuckAmount: 0.0,
         foldTuckReach: 0.15,
+        // --- GPGPU SETTINGS ---
+        gpgpu_enableRipple: true,
+        gpgpu_rippleSpeed: 0.5,
+        gpgpu_rippleStrength: 1.0,
+        gpgpu_rippleFrequency: 15.0,
+        // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
         enableShaderMouse: false,

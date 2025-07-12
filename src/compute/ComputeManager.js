@@ -77,6 +77,7 @@ export const ComputeManager = {
             u_time: { value: 0 },
             u_audioLow: { value: 0 },
             u_planeDimensions: { value: planeDimensionsVec2 },
+            u_isLegacyMode: { value: true },
             u_enableAudioDeform: { value: true },
             u_deformationStrength: { value: 0.0 },
             u_enablePeel: { value: 0.0 },
@@ -115,6 +116,10 @@ export const ComputeManager = {
             u_enableFoldTuck: { value: false },
             u_foldTuckAmount: { value: 0.0 },
             u_foldTuckReach: { value: 0.0 },
+            u_gpgpu_enableRipple: { value: true },
+            u_gpgpu_rippleSpeed: { value: 0.5 },
+            u_gpgpu_rippleStrength: { value: 1.0 },
+            u_gpgpu_rippleFrequency: { value: 15.0 },
         };
 
         this.positionVariable.material.uniforms = uniforms;
@@ -137,62 +142,65 @@ export const ComputeManager = {
         const uniforms = this.positionVariable.material.uniforms;
 
         const isLegacyMode = S.deformationEngine === 'legacy';
+        uniforms.u_isLegacyMode.value = isLegacyMode;
 
-        const warpModeMap = { 'none': 0, 'sag': 2, 'droop': 5, 'cylinder': 4, 'bend': 3, 'fold': 1 };
-        uniforms.u_warpMode.value = isLegacyMode ? (warpModeMap[S.warpMode] || 0) : 0;
-        
-        let peelAudioValue = 0.0;
-        if (isLegacyMode && S.peelEnableAudio) {
-            peelAudioValue = A.energy.low;
+        if (isLegacyMode) {
+            const warpModeMap = { 'none': 0, 'sag': 2, 'droop': 5, 'cylinder': 4, 'bend': 3, 'fold': 1 };
+            uniforms.u_warpMode.value = warpModeMap[S.warpMode] || 0;
+            
+            let peelAudioValue = 0.0;
+            if (S.peelEnableAudio) {
+                peelAudioValue = A.energy.low;
+            }
+            
+            uniforms.u_enableAudioDeform.value = S.enableAudioDeform;
+            uniforms.u_deformationStrength.value = S.deformationStrength;
+            uniforms.u_enablePeel.value = S.enablePeel ? 1.0 : 0.0;
+            uniforms.u_peelAmount.value = S.peelAmount;
+            uniforms.u_peelCurl.value = S.peelCurl;
+            uniforms.u_peelEnableAudio.value = S.peelEnableAudio;
+            uniforms.u_peelTextureAmount.value = S.peelTextureAmount;
+            uniforms.u_peelDrift.value = S.peelDrift;
+            uniforms.u_peelAudio.value = peelAudioValue; 
+            uniforms.u_sagAmount.value = S.sagAmount;
+            uniforms.u_sagFalloffSharpness.value = S.sagFalloffSharpness;
+            uniforms.u_sagAudioMod.value = S.sagAudioMod;
+            uniforms.u_droopAmount.value = S.droopAmount;
+            uniforms.u_droopAudioMod.value = S.droopAudioMod;
+            uniforms.u_droopFalloffSharpness.value = S.droopFalloffSharpness;
+            uniforms.u_droopSupportedWidthFactor.value = S.droopSupportedWidthFactor;
+            uniforms.u_droopSupportedDepthFactor.value = S.droopSupportedDepthFactor;
+            uniforms.u_cylinderRadius.value = S.cylinderRadius;
+            uniforms.u_cylinderHeightScale.value = S.cylinderHeightScale;
+            const cylAxisMap = { 'y': 0, 'x': 1, 'z': 2 };
+            uniforms.u_cylinderAxisAlignment.value = cylAxisMap[S.cylinderAxisAlignment] || 0;
+            uniforms.u_cylinderArcAngle.value = S.cylinderArcAngle * (Math.PI / 180.0);
+            uniforms.u_cylinderArcOffset.value = S.cylinderArcOffset * (Math.PI / 180.0);
+            uniforms.u_bendAngle.value = S.bendAngle * (Math.PI / 180.0);
+            uniforms.u_bendAudioMod.value = S.bendAudioMod;
+            uniforms.u_bendFalloffSharpness.value = S.bendFalloffSharpness;
+            uniforms.u_bendAxis.value = S.bendAxis === 'primary' ? 0 : 1;
+            uniforms.u_foldAngle.value = S.foldAngle * (Math.PI / 180.0);
+            uniforms.u_foldDepth.value = S.foldDepth;
+            uniforms.u_foldRoundness.value = S.foldRoundness;
+            uniforms.u_foldAudioMod.value = S.foldAudioMod * (Math.PI / 180.0);
+            uniforms.u_foldNudge.value = S.foldNudge;
+            uniforms.u_enableFoldCrease.value = S.enableFoldCrease;
+            uniforms.u_foldCreaseDepth.value = S.foldCreaseDepth;
+            uniforms.u_foldCreaseSharpness.value = S.foldCreaseSharpness;
+            uniforms.u_enableFoldTuck.value = S.enableFoldTuck;
+            uniforms.u_foldTuckAmount.value = S.foldTuckAmount;
+            uniforms.u_foldTuckReach.value = S.foldTuckReach;
+
+        } else {
+            uniforms.u_gpgpu_enableRipple.value = S.gpgpu_enableRipple;
+            uniforms.u_gpgpu_rippleSpeed.value = S.gpgpu_rippleSpeed;
+            uniforms.u_gpgpu_rippleStrength.value = S.gpgpu_rippleStrength;
+            uniforms.u_gpgpu_rippleFrequency.value = S.gpgpu_rippleFrequency;
         }
-        
+
         uniforms.u_time.value = this.app.currentTime;
         uniforms.u_audioLow.value = A.energy.low;
-        
-        uniforms.u_enableAudioDeform.value = S.enableAudioDeform;
-        uniforms.u_deformationStrength.value = isLegacyMode ? S.deformationStrength : 0.0;
-        
-        uniforms.u_enablePeel.value = isLegacyMode && S.enablePeel ? 1.0 : 0.0;
-        uniforms.u_peelAmount.value = isLegacyMode ? S.peelAmount : 0.0;
-        uniforms.u_peelCurl.value = isLegacyMode ? S.peelCurl : 0.0;
-        uniforms.u_peelEnableAudio.value = S.peelEnableAudio;
-        uniforms.u_peelTextureAmount.value = isLegacyMode ? S.peelTextureAmount : 0.0;
-        uniforms.u_peelDrift.value = isLegacyMode ? S.peelDrift : 0.0;
-        uniforms.u_peelAudio.value = peelAudioValue; 
-        
-        uniforms.u_sagAmount.value = isLegacyMode ? S.sagAmount : 0.0;
-        uniforms.u_sagFalloffSharpness.value = isLegacyMode ? S.sagFalloffSharpness : 1.0;
-        uniforms.u_sagAudioMod.value = isLegacyMode ? S.sagAudioMod : 0.0;
-
-        uniforms.u_droopAmount.value = isLegacyMode ? S.droopAmount : 0.0;
-        uniforms.u_droopAudioMod.value = isLegacyMode ? S.droopAudioMod : 0.0;
-        uniforms.u_droopFalloffSharpness.value = isLegacyMode ? S.droopFalloffSharpness : 1.0;
-        uniforms.u_droopSupportedWidthFactor.value = isLegacyMode ? S.droopSupportedWidthFactor : 0.0;
-        uniforms.u_droopSupportedDepthFactor.value = isLegacyMode ? S.droopSupportedDepthFactor : 0.0;
-        
-        uniforms.u_cylinderRadius.value = isLegacyMode ? S.cylinderRadius : 5.0;
-        uniforms.u_cylinderHeightScale.value = isLegacyMode ? S.cylinderHeightScale : 1.0;
-        const cylAxisMap = { 'y': 0, 'x': 1, 'z': 2 };
-        uniforms.u_cylinderAxisAlignment.value = cylAxisMap[S.cylinderAxisAlignment] || 0;
-        uniforms.u_cylinderArcAngle.value = isLegacyMode ? S.cylinderArcAngle * (Math.PI / 180.0) : 0.0;
-        uniforms.u_cylinderArcOffset.value = isLegacyMode ? S.cylinderArcOffset * (Math.PI / 180.0) : 0.0;
-        
-        uniforms.u_bendAngle.value = isLegacyMode ? S.bendAngle * (Math.PI / 180.0) : 0.0;
-        uniforms.u_bendAudioMod.value = isLegacyMode ? S.bendAudioMod : 0.0;
-        uniforms.u_bendFalloffSharpness.value = isLegacyMode ? S.bendFalloffSharpness : 1.0;
-        uniforms.u_bendAxis.value = S.bendAxis === 'primary' ? 0 : 1;
-
-        uniforms.u_foldAngle.value = isLegacyMode ? S.foldAngle * (Math.PI / 180.0) : 0.0;
-        uniforms.u_foldDepth.value = isLegacyMode ? S.foldDepth : 0.0;
-        uniforms.u_foldRoundness.value = isLegacyMode ? S.foldRoundness : 0.0;
-        uniforms.u_foldAudioMod.value = isLegacyMode ? S.foldAudioMod * (Math.PI / 180.0) : 0.0;
-        uniforms.u_foldNudge.value = isLegacyMode ? S.foldNudge : 0.0;
-        uniforms.u_enableFoldCrease.value = isLegacyMode && S.enableFoldCrease;
-        uniforms.u_foldCreaseDepth.value = isLegacyMode ? S.foldCreaseDepth : 0.0;
-        uniforms.u_foldCreaseSharpness.value = isLegacyMode ? S.foldCreaseSharpness : 1.0;
-        uniforms.u_enableFoldTuck.value = isLegacyMode && S.enableFoldTuck;
-        uniforms.u_foldTuckAmount.value = isLegacyMode ? S.foldTuckAmount : 0.0;
-        uniforms.u_foldTuckReach.value = isLegacyMode ? S.foldTuckReach : 0.0;
         
         this.gpuCompute.compute();
     },
@@ -202,6 +210,7 @@ export const ComputeManager = {
         uniform float u_time;
         uniform float u_audioLow;
         uniform vec2 u_planeDimensions;
+        uniform bool u_isLegacyMode;
         uniform bool u_enableAudioDeform;
         uniform float u_deformationStrength;
         uniform float u_enablePeel;
@@ -240,6 +249,10 @@ export const ComputeManager = {
         uniform bool u_enableFoldTuck;
         uniform float u_foldTuckAmount;
         uniform float u_foldTuckReach;
+        uniform bool u_gpgpu_enableRipple;
+        uniform float u_gpgpu_rippleSpeed;
+        uniform float u_gpgpu_rippleStrength;
+        uniform float u_gpgpu_rippleFrequency;
     `,
 
     commonShaderCode: `
@@ -278,25 +291,24 @@ export const ComputeManager = {
             return vec3(0.0, 0.0, 1.0);
         }
 
+        vec3 calculateWaterRipple(vec2 uv, float time, float audio, float speed, float strength, float frequency) {
+            float dist = distance(uv, vec2(0.5));
+            float ripple = sin(dist * frequency - time * speed) * (1.0 - dist);
+            float audio_factor = 1.0 + audio * 2.0;
+            return getDisplacementNormal() * ripple * strength * audio_factor;
+        }
+
         vec3 calculatePeel(vec2 uv, float time, float audio, float peelAmount, float peelCurl, float peelDrift, float peelTextureAmount) {
             vec2 centeredUv = uv - 0.5;
             float cornerStrength = pow(length(centeredUv) * 1.414, 4.0);
-            
-            // --- THE FIX IS HERE ---
-            // The time offset is now a global constant (0.0), making the animation synchronous.
             float time_offset = 0.0; 
             float peelAnimation = (sin(time * 0.5 + time_offset) + 1.0) * 0.5;
-            
             float totalAmount = peelAmount * peelAnimation * (1.0 + audio * 3.0);
             float displacement = cornerStrength * totalAmount * 10.0;
-            
             displacement += snoise(uv * 20.0 + vec2(time * 0.1, 0.0)) * peelTextureAmount * displacement;
-            
             float drift_animation = sin(time * 0.2 + time_offset) * peelDrift;
             float final_curl = peelCurl + drift_animation;
-            
             vec2 offset_2d = safeNormalize(centeredUv) * -1.0 * displacement * final_curl;
-            
             vec3 displacement_vec = getDisplacementNormal() * displacement;
             displacement_vec.xy += offset_2d;
             return displacement_vec;
@@ -389,6 +401,8 @@ export const ComputeManager = {
     `,
 
     get positionShader() { return `
+        // --- THE FIX IS HERE (Part 5) ---
+        // Restore the uniform and common code injections
         ${this.uniformsShaderCode}
         ${this.commonShaderCode}
 
@@ -396,29 +410,43 @@ export const ComputeManager = {
             vec2 uv = gl_FragCoord.xy / resolution.xy;
             vec3 pos = texture2D(u_initialPosition, uv).xyz;
 
-            if (u_warpMode == 1) { 
-                pos = calculateFold(pos, uv, u_audioLow, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
-            } else if (u_warpMode == 3) {
-                pos = calculateBend(pos, uv, u_audioLow, u_planeDimensions, u_bendAngle, u_bendAudioMod, u_bendFalloffSharpness, u_bendAxis);
-            } else if (u_warpMode == 4) {
-                pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
-            } else {
-                if (u_enableAudioDeform) {
-                    float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
-                    float audioDeform = u_audioLow * (1.0 + noise * 0.5);
-                    pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+            if (u_isLegacyMode) { // Legacy Mode Branch
+                if (u_warpMode > 0) {
+                    if (u_warpMode == 1) { 
+                        pos = calculateFold(pos, uv, u_audioLow, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
+                    } else if (u_warpMode == 3) {
+                        pos = calculateBend(pos, uv, u_audioLow, u_planeDimensions, u_bendAngle, u_bendAudioMod, u_bendFalloffSharpness, u_bendAxis);
+                    } else if (u_warpMode == 4) {
+                        pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
+                    } else {
+                        if (u_enableAudioDeform) {
+                            float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
+                            float audioDeform = u_audioLow * (1.0 + noise * 0.5);
+                            pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+                        }
+                        if (u_warpMode == 2) {
+                            pos += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
+                        } else if (u_warpMode == 5) {
+                            pos += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
+                        }
+                    }
+                } else { 
+                    if (u_enableAudioDeform) {
+                        float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
+                        float audioDeform = u_audioLow * (1.0 + noise * 0.5);
+                        pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+                    }
+                }
+                
+                if (u_enablePeel > 0.5) {
+                    float audio = u_peelEnableAudio ? u_peelAudio : 0.0;
+                    pos += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
                 }
 
-                if (u_warpMode == 2) {
-                    pos += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
-                } else if (u_warpMode == 5) {
-                    pos += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
+            } else { // GPGPU Mode Branch
+                if (u_gpgpu_enableRipple) {
+                    pos += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency);
                 }
-            }
-            
-            if (u_enablePeel > 0.5) {
-                float audio = u_peelEnableAudio ? u_peelAudio : 0.0;
-                pos += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
             }
 
             gl_FragColor = vec4(pos, 1.0);
@@ -432,29 +460,43 @@ export const ComputeManager = {
         vec3 getDeformedPosition(vec2 uv) {
             vec3 pos = texture2D(u_initialPosition, uv).xyz;
 
-             if (u_warpMode == 1) {
-                pos = calculateFold(pos, uv, u_audioLow, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
-            } else if (u_warpMode == 3) {
-                pos = calculateBend(pos, uv, u_audioLow, u_planeDimensions, u_bendAngle, u_bendAudioMod, u_bendFalloffSharpness, u_bendAxis);
-            } else if (u_warpMode == 4) {
-                pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
-            } else {
-                if (u_enableAudioDeform) {
-                    float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
-                    float audioDeform = u_audioLow * (1.0 + noise * 0.5);
-                    pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+            if (u_isLegacyMode) { 
+                if (u_warpMode > 0) {
+                     if (u_warpMode == 1) {
+                        pos = calculateFold(pos, uv, u_audioLow, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
+                    } else if (u_warpMode == 3) {
+                        pos = calculateBend(pos, uv, u_audioLow, u_planeDimensions, u_bendAngle, u_bendAudioMod, u_bendFalloffSharpness, u_bendAxis);
+                    } else if (u_warpMode == 4) {
+                        pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
+                    } else {
+                        if (u_enableAudioDeform) {
+                            float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
+                            float audioDeform = u_audioLow * (1.0 + noise * 0.5);
+                            pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+                        }
+                        if (u_warpMode == 2) {
+                            pos += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
+                        } else if (u_warpMode == 5) {
+                            pos += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
+                        }
+                    }
+                } else {
+                    if (u_enableAudioDeform) {
+                        float noise = snoise(vec2(uv.x * 2.0, u_time * 0.1));
+                        float audioDeform = u_audioLow * (1.0 + noise * 0.5);
+                        pos += getDisplacementNormal() * audioDeform * u_deformationStrength;
+                    }
+                }
+           
+                if (u_enablePeel > 0.5) {
+                    float audio = u_peelEnableAudio ? u_peelAudio : 0.0;
+                    pos += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
                 }
 
-                if (u_warpMode == 2) {
-                    pos += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); 
-                } else if (u_warpMode == 5) {
-                    pos += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); 
+            } else { 
+                if (u_gpgpu_enableRipple) {
+                    pos += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency);
                 }
-            }
-           
-            if (u_enablePeel > 0.5) {
-                float audio = u_peelEnableAudio ? u_peelAudio : 0.0;
-                pos += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount);
             }
            
             return pos;
