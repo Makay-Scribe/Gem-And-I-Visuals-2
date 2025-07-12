@@ -12,22 +12,36 @@ const gpgpuDebugVertexShader = `
 const gpgpuDebugFragmentShader = `
     uniform sampler2D tDebug; 
     uniform vec2 u_planeDimensions;
+    uniform int u_debugMode; // 0 for position, 1 for normal, 2 for custom
 
     varying vec2 vUv;
 
+    // Remaps a value from one range to another.
     float remap(float value, float from1, float to1, float from2, float to2) {
-        if (to1 - from1 == 0.0) return from2;
+        if (to1 - from1 == 0.0) return from2; // Avoid division by zero
         return from2 + (value - from1) * (to2 - from2) / (to1 - from1);
     }
 
     void main() {
         vec4 data = texture2D(tDebug, vUv);
-        float halfWidth = u_planeDimensions.x / 2.0;
-        float halfHeight = u_planeDimensions.y / 2.0;
-        float r = remap(data.x, -halfWidth, halfWidth, 0.0, 1.0);
-        float g = remap(data.y, -halfHeight, halfHeight, 0.0, 1.0);
-        float b = remap(data.z, -5.0, 5.0, 0.0, 1.0);
-        gl_FragColor = vec4(r, g, b, 1.0);
+        vec3 color;
+
+        if (u_debugMode == 0) { // Position Data
+            // Remap position from world units to color range [0, 1]
+            float halfWidth = u_planeDimensions.x / 2.0;
+            float halfHeight = u_planeDimensions.y / 2.0;
+            color.r = remap(data.x, -halfWidth, halfWidth, 0.0, 1.0);
+            color.g = remap(data.y, -halfHeight, halfHeight, 0.0, 1.0);
+            color.b = remap(data.z, -15.0, 15.0, 0.0, 1.0); // Visualize Z displacement
+        } else if (u_debugMode == 1) { // Normal Data
+            // Remap normal vectors from [-1, 1] to color range [0, 1]
+            color = data.xyz * 0.5 + 0.5;
+        } else { // Custom or fallback
+            // Just display the raw data, useful for single-channel debug
+            color = data.xyz;
+        }
+
+        gl_FragColor = vec4(color, 1.0);
     }
 `;
 
@@ -37,6 +51,15 @@ export const GPGPUDebugger = {
     camera: null,
     mesh: null,
     
+    debugViewSelect: null,
+    pixelValueDisplay: null,
+    debugView: 'position',
+
+    // --- NEW PIXEL INSPECTOR PROPERTIES ---
+    isMouseOver: false,
+    mouse: new THREE.Vector2(), // Stores mouse position relative to the debug plane (0-1)
+    pixelBuffer: new Float32Array(4), // Buffer to hold the read pixel data
+    
     init(appInstance) {
         this.app = appInstance;
 
@@ -45,7 +68,9 @@ export const GPGPUDebugger = {
             return;
         }
         
-        // Create a dedicated scene and camera for the 2D overlay.
+        this.debugViewSelect = document.getElementById('gpgpuDebugViewSelect');
+        this.pixelValueDisplay = document.getElementById('gpgpuDebugPixelValue');
+
         this.scene = new THREE.Scene();
         const aspect = window.innerWidth / window.innerHeight;
         this.camera = new THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0, 1);
@@ -57,16 +82,54 @@ export const GPGPUDebugger = {
             fragmentShader: gpgpuDebugFragmentShader,
             uniforms: {
                 tDebug: { value: null },
-                u_planeDimensions: { value: this.app.ImagePlaneManager.planeDimensions }
+                u_planeDimensions: { value: this.app.ImagePlaneManager.planeDimensions },
+                u_debugMode: { value: 0 }
             }
         });
 
         this.mesh = new THREE.Mesh(geometry, material);
-        // Position the mesh in the bottom-right corner of the orthographic view.
         this.mesh.position.set(aspect - 0.22, -1.0 + 0.22, 0); 
         this.scene.add(this.mesh);
 
-        console.log("GPGPU Debugger re-initialized as a 2D overlay.");
+        if (this.debugViewSelect) {
+            this.debugViewSelect.addEventListener('change', (e) => {
+                this.debugView = e.target.value;
+                if(this.pixelValueDisplay) this.pixelValueDisplay.textContent = 'Hover over debug plane...';
+            });
+        }
+
+        console.log("GPGPU Debugger initialized with selectable views.");
+    },
+
+    // --- NEW MOUSE HANDLING FUNCTION ---
+    handleMouseMove(event) {
+        if (!this.mesh || !this.app.vizSettings.enableGPGPUDebugger) {
+            this.isMouseOver = false;
+            return;
+        }
+
+        // Convert mouse from screen coords to NDC (-1 to 1)
+        const mouseNDC = new THREE.Vector2(
+            (event.clientX / window.innerWidth) * 2 - 1,
+            -(event.clientY / window.innerHeight) * 2 + 1
+        );
+
+        // Get the debug plane's bounding box in NDC
+        const planeSizeNDC = { width: this.mesh.geometry.parameters.width, height: this.mesh.geometry.parameters.height };
+        const planePosNDC = { x: this.mesh.position.x, y: this.mesh.position.y };
+        const planeBox = new THREE.Box2(
+            new THREE.Vector2(planePosNDC.x - planeSizeNDC.width / 2, planePosNDC.y - planeSizeNDC.height / 2),
+            new THREE.Vector2(planePosNDC.x + planeSizeNDC.width / 2, planePosNDC.y + planeSizeNDC.height / 2)
+        );
+
+        if (planeBox.containsPoint(mouseNDC)) {
+            this.isMouseOver = true;
+            // Calculate the mouse position *within* the plane, from 0.0 to 1.0
+            this.mouse.x = (mouseNDC.x - planeBox.min.x) / planeSizeNDC.width;
+            this.mouse.y = (mouseNDC.y - planeBox.min.y) / planeSizeNDC.height;
+        } else {
+            this.isMouseOver = false;
+        }
     },
 
     onWindowResize() {
@@ -75,22 +138,67 @@ export const GPGPUDebugger = {
         this.camera.left = -aspect;
         this.camera.right = aspect;
         this.camera.updateProjectionMatrix();
-        // Reposition the mesh to keep it in the corner when the aspect ratio changes.
         this.mesh.position.x = aspect - 0.22;
     },
 
     update() {
         if (!this.mesh || !this.app.vizSettings.enableGPGPUDebugger) return;
 
+        let targetTexture;
         if (this.app.ComputeManager.gpuCompute) {
-            // Update the debug texture to the latest GPGPU output.
-            this.mesh.material.uniforms.tDebug.value = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable).texture;
+            let debugModeValue = 0;
+
+            switch (this.debugView) {
+                case 'position':
+                    targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+                    debugModeValue = 0;
+                    break;
+                case 'normal':
+                    targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.normalVariable);
+                    debugModeValue = 1;
+                    break;
+                case 'custom':
+                    targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+                    debugModeValue = 2; 
+                    break;
+                default:
+                    targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+                    debugModeValue = 0;
+            }
+
+            this.mesh.material.uniforms.tDebug.value = targetTexture.texture;
+            this.mesh.material.uniforms.u_debugMode.value = debugModeValue;
             this.mesh.material.uniforms.u_planeDimensions.value = this.app.ImagePlaneManager.planeDimensions;
+
+            // --- NEW PIXEL READING LOGIC ---
+            if (this.isMouseOver) {
+                const C = this.app.ComputeManager;
+                const texelX = Math.floor(this.mouse.x * C.WIDTH);
+                const texelY = Math.floor(this.mouse.y * C.HEIGHT);
+
+                this.app.renderer.readRenderTargetPixels(
+                    targetTexture,
+                    texelX,
+                    texelY,
+                    1,
+                    1,
+                    this.pixelBuffer
+                );
+
+                // Call UIManager to display the value
+                if (this.app.UIManager.updateGPGPUPixelValue) {
+                    this.app.UIManager.updateGPGPUPixelValue(this.pixelBuffer);
+                }
+
+            } else {
+                 if (this.app.UIManager.isDisplayingPixelValue) {
+                     this.app.UIManager.resetGPGPUPixelValue();
+                 }
+            }
         }
     },
 
     render() {
-        // Only render if enabled. This is called after the main scene render.
         if (this.scene && this.camera && this.app.vizSettings.enableGPGPUDebugger) {
             this.app.renderer.render(this.scene, this.camera);
         }

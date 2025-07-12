@@ -537,7 +537,22 @@
                     <label for="enableGPGPUDebugger">Enable Debug Plane</label>
                     <input type="checkbox" id="enableGPGPUDebugger" checked>
                 </div>
-                <div class="checkbox-label-container">
+                
+                <!-- ** THE FIX IS HERE ** -->
+                <label for="gpgpuDebugViewSelect">Debug View</label>
+                <select id="gpgpuDebugViewSelect">
+                    <option value="position" selected>Position Data</option>
+                    <option value="normal">Normal Data</option>
+                    <option value="custom">Custom Value</option>
+                </select>
+
+                <p class="sub-group-title">PIXEL INSPECTOR</p>
+                <div id="gpgpuDebugPixelValue" style="background-color: #2C2F31; border: 1px solid #333333; border-radius: 3px; padding: 4px; font-family: 'Courier New', Courier, monospace; min-height: 16px; margin-top: 2px;">
+                    Hover over debug plane...
+                </div>
+                <!-- ** END OF FIX ** -->
+
+                <div class="checkbox-label-container" style="margin-top: 6px;">
                     <label for="enableOnScreenDebugger">Enable On-Screen Text</label>
                     <input type="checkbox" id="enableOnScreenDebugger" checked>
                 </div>

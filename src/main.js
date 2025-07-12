@@ -248,12 +248,20 @@ const App = {
         const canvas = document.getElementById('glCanvas');
         window.addEventListener('resize', this.onWindowResize.bind(this));
         
-        canvas.addEventListener('mousemove', (event) => {
+        // --- THE FIX IS HERE ---
+        // Add a single listener to the window.
+        // It will handle both the ShaderToy mouse and the new GPGPU debugger mouse.
+        window.addEventListener('mousemove', (event) => {
             if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
                 this.mouseState.x = event.clientX;
                 this.mouseState.y = event.clientY;
             }
+            // Pass the event along to the GPGPU debugger's handler.
+            if (this.GPGPUDebugger && this.GPGPUDebugger.handleMouseMove) {
+                this.GPGPUDebugger.handleMouseMove(event);
+            }
         });
+        
         canvas.addEventListener('mousedown', (event) => {
              if (event.target !== canvas) return;
              if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {

@@ -12,11 +12,16 @@ export const UIManager = {
     glowTargets: {},
     currentGlowTarget: null,
 
+    // --- NEW GPGPU DEBUG PROPERTIES ---
+    gpgpuPixelValueDisplay: null,
+    isDisplayingPixelValue: false,
+
     init(appInstance) {
         this.app = appInstance;
 
         this.audioStatusP = document.getElementById('audioStatusP'); 
         this.debugDisplay = document.getElementById('debugDisplay');
+        this.gpgpuPixelValueDisplay = document.getElementById('gpgpuDebugPixelValue'); // Grab the new element
         
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
@@ -262,6 +267,24 @@ export const UIManager = {
             this.currentGlowTarget = null;
         }
     },
+
+    // --- NEW GPGPU DEBUGGER DISPLAY FUNCTIONS ---
+    updateGPGPUPixelValue(buffer) {
+        if (!this.gpgpuPixelValueDisplay) return;
+        const r = buffer[0].toFixed(3);
+        const g = buffer[1].toFixed(3);
+        const b = buffer[2].toFixed(3);
+        const a = buffer[3].toFixed(3);
+        this.gpgpuPixelValueDisplay.textContent = `R:${r} G:${g} B:${b} A:${a}`;
+        this.isDisplayingPixelValue = true;
+    },
+
+    resetGPGPUPixelValue() {
+        if (!this.gpgpuPixelValueDisplay) return;
+        this.gpgpuPixelValueDisplay.textContent = 'Hover over debug plane...';
+        this.isDisplayingPixelValue = false;
+    },
+    // --- END NEW FUNCTIONS ---
 
     logError(message) { 
         if (!this.debugDisplay) return; 
