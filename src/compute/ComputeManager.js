@@ -473,9 +473,10 @@ export const ComputeManager = {
                     
                     vec3 totalAcceleration = vec3(0.0);
 
+                    // ** THE FIX IS HERE **
                     vec3 noise_coord_1 = vec3(uv * u_gpgpu_ambientWindScale, u_time * u_gpgpu_ambientWindSpeed);
-                    vec3 noise_coord_2 = vec3(uv * u_gpgpu_ambientWindScale + 150.0, u_time * u_ambientWindSpeed);
-                    vec3 noise_coord_3 = vec3(uv * u_gpgpu_ambientWindScale + 300.0, u_time * u_ambientWindSpeed);
+                    vec3 noise_coord_2 = vec3(uv * u_gpgpu_ambientWindScale + 150.0, u_time * u_gpgpu_ambientWindSpeed);
+                    vec3 noise_coord_3 = vec3(uv * u_gpgpu_ambientWindScale + 300.0, u_time * u_gpgpu_ambientWindSpeed);
                     
                     vec3 ambientWind = vec3(snoise(noise_coord_1), snoise(noise_coord_2), snoise(noise_coord_3));
                     vec3 windForce = (ambientWind * u_gpgpu_ambientWindStrength) + u_gpgpu_directionalWind;
