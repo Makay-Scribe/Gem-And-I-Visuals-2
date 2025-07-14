@@ -1,5 +1,4 @@
 uniform sampler2D u_positionTexture; // GPGPU position output
-uniform sampler2D u_normalTexture;   // GPGPU normal output
 
 attribute vec2 uv_gpgpu; // Custom UV attribute to sample GPGPU textures
 
@@ -17,16 +16,16 @@ void main() {
     vec4 gpgpu_pos_data = texture2D(u_positionTexture, uv_gpgpu);
     vec3 transformedPosition = gpgpu_pos_data.xyz; // XYZ stores the position
 
-    vec4 gpgpu_norm_data = texture2D(u_normalTexture, uv_gpgpu);
-    vec3 transformedNormal = gpgpu_norm_data.xyz; // XYZ stores the normal
-
     // Calculate world position of the vertex
     vec4 worldPos4 = modelMatrix * vec4(transformedPosition, 1.0);
     vWorldPosition = worldPos4.xyz;
 
-    // Calculate world normal by transforming the original normal by the model matrix.
-    // We use a 4x4 matrix but treat the normal as a direction (w = 0.0).
-    vWorldNormal = normalize((modelMatrix * vec4(transformedNormal, 0.0)).xyz);
+    // ** THE FIX IS HERE **
+    // Calculate world normal from the base geometry's normal attribute.
+    // This will result in visually flat lighting because the normal does not
+    // account for the GPGPU deformation, but it's a necessary step to
+    // get the physics simulation working correctly.
+    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
 
     // Final screen position calculation
     gl_Position = projectionMatrix * viewMatrix * worldPos4;

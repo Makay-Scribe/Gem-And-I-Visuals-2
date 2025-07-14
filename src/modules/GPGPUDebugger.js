@@ -24,7 +24,7 @@ const gpgpuDebugFragmentShader = `
 
     void main() {
         vec4 data = texture2D(tDebug, vUv);
-        vec3 color;
+        vec3 color = vec3(0.0); // Initialize to black
 
         if (u_debugMode == 0) { // Position Data
             // Remap position from world units to color range [0, 1]

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visualizer - Rebuilt Foundation</title>
+    <link rel="icon" href="data:;base64,=">
     <!-- Three.js and Addons -->
 
     <!-- Butterchurn Libraries (Local) -->
@@ -107,7 +108,7 @@
                     <label>Vertical (Y): <span id="actorYValue" class="range-value-display">0.0</span></label>
                     <input type="range" id="actorY" min="-50" max="50" step="0.5" value="0">
 
-                    <label>Horizontal (X): <span id="actorXValue" class="range-value-display">0.0</span></label>
+                    <label>Horizontal (X): <span id="actorXValue" class="range-value-display"></span></label>
                     <input type="range" id="actorX" min="-50" max="50" step="0.5" value="0">
                 </div>
             </div>
@@ -299,7 +300,6 @@
                 <span class="status-light" id="gpgpuStatusLight"></span>
             </button>
             <div class="accordion-content">
-                
                 <p class="sub-group-title">ACTIVE EFFECTS</p>
                 <div class="checkbox-label-container">
                     <label for="gpgpu_enableWaterRipple">Water Ripple</label>
@@ -329,44 +329,62 @@
                 <div class="accordion-item">
                     <button class="accordion-header">EQ Ripple</button>
                     <div class="accordion-content">
+                        <!-- ** THE FIX IS HERE ** -->
+                        <p class="sub-group-title">MAIN CONTROLS</p>
                         <label>Strength: <span id="gpgpu_eqRippleStrengthValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_eqRippleStrength" min="0.0" max="10.0" step="0.1" value="2.0">
                         
                         <label>Smoothing: <span id="gpgpu_eqRippleSmoothingValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_eqRippleSmoothing" min="0.0" max="0.99" step="0.01" value="0.5">
                         
-                        <p class="sub-group-title">EFFECT AREA</p>
+                        <p class="sub-group-title">SHAPE & STYLE</p>
+                        <label for="gpgpu_eqRippleBarCount">Bar Count: <span id="gpgpu_eqRippleBarCountValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_eqRippleBarCount" min="4" max="128" step="1" value="64">
+                        
+                        <label for="gpgpu_eqRippleBarWidth">Bar Width: <span id="gpgpu_eqRippleBarWidthValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_eqRippleBarWidth" min="0.1" max="1.0" step="0.01" value="0.8">
+
+                        <p class="sub-group-title">AUDIO FREQUENCY RANGE</p>
                         <label>Range Start: <span id="gpgpu_eqRippleRangeStartValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_eqRippleRangeStart" min="0.0" max="1.0" step="0.01" value="0.0">
 
                         <label>Range End: <span id="gpgpu_eqRippleRangeEndValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_eqRippleRangeEnd" min="0.0" max="1.0" step="0.01" value="1.0">
-
-                        <p class="sub-group-title">BAR SHAPE</p>
-                        <label>Bar Count: <span id="gpgpu_eqRippleBarCountValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_eqRippleBarCount" min="4" max="128" step="1" value="64">
-                        
-                        <label>Bar Width: <span id="gpgpu_eqRippleBarWidthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_eqRippleBarWidth" min="0.1" max="1.0" step="0.01" value="0.8">
                     </div>
                 </div>
 
                 <div class="accordion-item">
                     <button class="accordion-header">Cloth Physics</button>
                     <div class="accordion-content">
-                        <p class="sub-group-title">PHYSICS</p>
-                        <label>Gravity: <span id="gpgpu_clothGravityValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothGravity" min="-20.0" max="20.0" step="0.5" value="9.8">
-                        
+                        <p class="sub-group-title">BASE PHYSICS</p>
                         <label>Damping: <span id="gpgpu_clothDampingValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothDamping" min="0.9" max="1.0" step="0.001" value="0.98">
-                        
+                        <input type="range" id="gpgpu_clothDamping" min="0.9" max="1.0" step="0.001" value="1.0">
                         <label>Stiffness: <span id="gpgpu_clothStiffnessValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_clothStiffness" min="0.0" max="1.0" step="0.05" value="0.8">
-                        
-                        <!-- ** THE FIX IS HERE ** -->
                         <label>Iterations: <span id="gpgpu_clothIterationsValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothIterations" min="1" max="16" step="1" value="4">
+                        <input type="range" id="gpgpu_clothIterations" min="1" max="16" step="1" value="1.0">
+                        <label>Blend Time (s): <span id="gpgpu_clothBlendTimeValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_clothBlendTime" min="0.0" max="10.0" step="0.1" value="9.6">
+                        
+                        <p class="sub-group-title">TETHER</p>
+                        <label>Tether Strength: <span id="gpgpu_tetherStrengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_tetherStrength" min="0.0" max="100.0" step="0.5" value="82.0">
+
+                        <p class="sub-group-title">AMBIENT WIND (TURBULENCE)</p>
+                        <label>Strength: <span id="gpgpu_ambientWindStrengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_ambientWindStrength" min="0.0" max="5.0" step="0.05" value="4.0">
+                        <label>Speed: <span id="gpgpu_ambientWindSpeedValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_ambientWindSpeed" min="0.0" max="2.0" step="0.05" value="0.3">
+                        <label>Scale: <span id="gpgpu_ambientWindScaleValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_ambientWindScale" min="0.1" max="5.0" step="0.05" value="2.0">
+
+                        <p class="sub-group-title">DIRECTIONAL WIND</p>
+                        <label>Wind X: <span id="gpgpu_directionalWindXValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_directionalWindX" min="-20.0" max="20.0" step="0.2" value="0.0">
+                        <label>Wind Y (Up/Down): <span id="gpgpu_directionalWindYValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_directionalWindY" min="-20.0" max="20.0" step="0.2" value="1.6">
+                        <label>Wind Z: <span id="gpgpu_directionalWindZValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_directionalWindZ" min="-10.0" max="10.0" step="0.1" value="5.8">
 
                         <p class="sub-group-title">ANCHORING</p>
                         <label for="gpgpu_clothPinMode">Pinning</label>
@@ -379,10 +397,23 @@
 
                         <p class="sub-group-title">AUDIO INTERACTION</p>
                         <label>Audio Force: <span id="gpgpu_clothAudioForceValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothAudioForce" min="0.0" max="50.0" step="0.5" value="10.0">
+                        <input type="range" id="gpgpu_clothAudioForce" min="0.0" max="2000.0" step="10" value="500.0">
                         
                         <label>Force Radius: <span id="gpgpu_clothForceRadiusValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothForceRadius" min="0.0" max="1.0" step="0.01" value="0.25">
+                        <input type="range" id="gpgpu_clothForceRadius" min="0.0" max="1.0" step="0.01" value="0.3">
+                    </div>
+                </div>
+                
+                <div class="accordion-item" id="pointDeformerAccordion">
+                    <button class="accordion-header">Point Deformers</button>
+                    <div class="accordion-content">
+                        <div class="button-row">
+                            <button id="addPointDeformerButton">Add Point</button>
+                            <button id="clearPointDeformersButton">Clear All</button>
+                        </div>
+                        <div id="pointDeformersContainer">
+                            <!-- Dynamic point deformer accordions will be added here -->
+                        </div>
                     </div>
                 </div>
 
@@ -645,6 +676,33 @@
     <audio id="audioSourceElement" loop style="display:none;"></audio>
 
     <div id="onScreenDebugPanel" style="display: none;"></div>
+
+    <template id="pointDeformerTemplate">
+        <div class="accordion-item point-deformer-instance">
+            <button class="accordion-header">
+                <span class="header-title">Point</span>
+                <button class="remove-point-deformer-button" style="padding: 1px 5px; font-size: 10px; min-height: 0; width: auto; background-color: #8c3a3a;">X</button>
+            </button>
+            <div class="accordion-content">
+                <label>Type</label>
+                <select class="point-deformer-type">
+                    <option value="0" selected>Bulge</option>
+                    <option value="1">Pinch</option>
+                </select>
+                <label>Amount: <span class="point-deformer-amount-value range-value-display"></span></label>
+                <input type="range" class="point-deformer-amount" min="-20.0" max="20.0" step="0.1" value="5.0">
+
+                <label>Radius: <span class="point-deformer-radius-value" class="range-value-display"></span></label>
+                <input type="range" class="point-deformer-radius" min="0.0" max="0.7" step="0.01" value="0.2">
+
+                <label>Position X: <span class="point-deformer-posX-value" class="range-value-display"></span></label>
+                <input type="range" id="point-deformer-posX" min="0.0" max="1.0" step="0.01" value="0.5">
+
+                <label>Position Y: <span class="point-deformer-posY-value" class="range-value-display"></span></label>
+                <input type="range" id="point-deformer-posY" min="0.0" max="1.0" step="0.01" value="0.5">
+            </div>
+        </div>
+    </template>
     
     <script type="module" src="/src/main.js"></script>
 

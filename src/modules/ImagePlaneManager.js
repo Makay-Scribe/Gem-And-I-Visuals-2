@@ -222,7 +222,6 @@ export const ImagePlaneManager = {
         
         // Apply spin directly to the mesh
         if (S.enableLandscapeSpin && S.landscapeSpinSpeed !== 0) {
-            // ** THE FIX IS HERE **
             this.landscape.rotateOnAxis(new THREE.Vector3(0, 0, 1), -S.landscapeSpinSpeed * cappedDelta);
         }
         
@@ -295,13 +294,14 @@ export const ImagePlaneManager = {
         const textureToUse = this.currentTexture || new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
 
+        // ** THE FIX IS HERE **
         const positionRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
-        const normalRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.normalVariable);
+        
         this.landscapeMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: positionRenderTarget.texture }, 
-                u_normalTexture: { value: normalRenderTarget.texture },   
+                // Removed u_normalTexture
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
@@ -359,9 +359,10 @@ export const ImagePlaneManager = {
 
     updateDeformationUniforms() {
         if (!this.landscapeMaterial || !this.app.ComputeManager || !this.app.ComputeManager.gpuCompute) { return; }
+        // ** THE FIX IS HERE **
         const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
-        const normalTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.normalVariable);
-        if (!positionTarget || !normalTarget) return; 
+        if (!positionTarget) return; 
+
         const S = this.app.vizSettings;
         const U = this.landscapeMaterial.uniforms;
         U.u_time.value = this.app.currentTime;
@@ -369,7 +370,7 @@ export const ImagePlaneManager = {
         U.u_audioLow.value = this.app.AudioProcessor.energy.low;
         U.u_audioMid.value = this.app.AudioProcessor.energy.mid;
         U.u_positionTexture.value = positionTarget.texture;
-        U.u_normalTexture.value = normalTarget.texture;
+        // Removed u_normalTexture update
         U.u_metalness.value = S.metalness;
         U.u_roughness.value = S.roughness;
         U.u_envMapIntensity.value = S.reflectionStrength;
