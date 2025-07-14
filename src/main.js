@@ -136,8 +136,11 @@ const App = {
         gpgpu_enableEqRipple: false,
         gpgpu_eqRippleStrength: 2.0,
         gpgpu_eqRippleSmoothing: 0.5,
-        // ** THE FIX IS HERE ** - Removed old EQ settings
-        gpgpu_eqRippleIsMirrored: false, 
+        gpgpu_eqRippleBarCount: 64,
+        gpgpu_eqRippleBarWidth: 0.8,
+        gpgpu_eqRippleRangeStart: 0.0,
+        gpgpu_eqRippleRangeEnd: 1.0,
+        gpgpu_eqRippleStyle: 'Left', // ** THE FIX IS HERE **
         gpgpu_enableCloth: false,
         gpgpu_clothDamping: 1.0,
         gpgpu_clothStiffness: 0.8,
