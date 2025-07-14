@@ -230,7 +230,6 @@ export const ComputeManager = {
             uniforms.u_gpgpu_rippleFrequency.value = S.gpgpu_rippleFrequency;
             uniforms.u_gpgpu_enableEqRipple.value = S.gpgpu_enableEqRipple;
             uniforms.u_gpgpu_eqRippleStrength.value = S.gpgpu_eqRippleStrength;
-            // ** THE FIX IS HERE **
             const styleMap = { 'Left': 0, 'Center': 1, 'Full': 2 };
             uniforms.u_gpgpu_eqRippleStyle.value = styleMap[S.gpgpu_eqRippleStyle] || 0;
             uniforms.u_gpgpu_eqRippleBarCount.value = S.gpgpu_eqRippleBarCount;
@@ -318,7 +317,6 @@ export const ComputeManager = {
         uniform float u_gpgpu_rippleFrequency;
         uniform bool u_gpgpu_enableEqRipple; 
         uniform float u_gpgpu_eqRippleStrength;
-        // ** THE FIX IS HERE **
         uniform int u_gpgpu_eqRippleStyle;
         uniform float u_gpgpu_eqRippleBarCount;
         uniform float u_gpgpu_eqRippleBarWidth;
@@ -394,7 +392,6 @@ export const ComputeManager = {
         mat3 rotationMatrix3(vec3 axis, float angle){axis=normalize(axis);float s=sin(angle);float c=cos(angle);float oc=1.0-c;return mat3(oc*axis.x*axis.x+c,oc*axis.x*axis.y-axis.z*s,oc*axis.z*axis.x+axis.y*s,oc*axis.x*axis.y+axis.z*s,oc*axis.y*axis.y+c,oc*axis.y*axis.z-axis.x*s,oc*axis.z*axis.x-axis.y*s,oc*axis.y*axis.z+axis.x*s,oc*axis.z*axis.z+c);}
         vec3 getDisplacementNormal() { return vec3(0.0, 0.0, 1.0); }
         
-        // ** THE FIX IS HERE ** - New EQ Ripple logic
         vec3 calculateEqRipple(vec2 uv, sampler2D audioTex, float strength, int style, float barCount, float barWidth, float rangeStart, float rangeEnd) { 
             float rangeWidth = rangeEnd - rangeStart; 
             if (rangeWidth <= 0.0) return vec3(0.0);
@@ -405,7 +402,6 @@ export const ComputeManager = {
             } else if (style == 2) { // Full
                 remappedUvX = uv.x;
             } else { // Left (Default)
-                // This will effectively use the left half of the plane for the EQ
                 remappedUvX = uv.x;
                 rangeWidth *= 0.5;
             }
@@ -478,8 +474,8 @@ export const ComputeManager = {
                     vec3 totalAcceleration = vec3(0.0);
 
                     vec3 noise_coord_1 = vec3(uv * u_gpgpu_ambientWindScale, u_time * u_gpgpu_ambientWindSpeed);
-                    vec3 noise_coord_2 = vec3(uv * u_gpgpu_ambientWindScale + 150.0, u_time * u_gpgpu_ambientWindSpeed);
-                    vec3 noise_coord_3 = vec3(uv * u_gpgpu_ambientWindScale + 300.0, u_time * u_gpgpu_ambientWindSpeed);
+                    vec3 noise_coord_2 = vec3(uv * u_gpgpu_ambientWindScale + 150.0, u_time * u_ambientWindSpeed);
+                    vec3 noise_coord_3 = vec3(uv * u_gpgpu_ambientWindScale + 300.0, u_time * u_ambientWindSpeed);
                     
                     vec3 ambientWind = vec3(snoise(noise_coord_1), snoise(noise_coord_2), snoise(noise_coord_3));
                     vec3 windForce = (ambientWind * u_gpgpu_ambientWindStrength) + u_gpgpu_directionalWind;

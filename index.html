@@ -329,7 +329,6 @@
                 <div class="accordion-item">
                     <button class="accordion-header">EQ Ripple</button>
                     <div class="accordion-content">
-                        <!-- ** THE FIX IS HERE ** -->
                         <p class="sub-group-title">MAIN CONTROLS</p>
                         <label>Strength: <span id="gpgpu_eqRippleStrengthValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_eqRippleStrength" min="0.0" max="10.0" step="0.1" value="2.0">
@@ -411,18 +410,8 @@
                     </div>
                 </div>
                 
-                <div class="accordion-item" id="pointDeformerAccordion">
-                    <button class="accordion-header">Point Deformers</button>
-                    <div class="accordion-content">
-                        <div class="button-row">
-                            <button id="addPointDeformerButton">Add Point</button>
-                            <button id="clearPointDeformersButton">Clear All</button>
-                        </div>
-                        <div id="pointDeformersContainer">
-                            <!-- Dynamic point deformer accordions will be added here -->
-                        </div>
-                    </div>
-                </div>
+                <!-- ** THE FIX IS HERE ** -->
+                <!-- The Point Deformer accordion has been removed from the GPGPU section -->
 
             </div>
         </div>
@@ -661,7 +650,6 @@
                 <label for="gpgpuDebugViewSelect">Debug View</label>
                 <select id="gpgpuDebugViewSelect">
                     <option value="position" selected>Position Data</option>
-                    <!-- ** THE FIX IS HERE ** -->
                     <option value="custom">Custom Value</option>
                 </select>
 
