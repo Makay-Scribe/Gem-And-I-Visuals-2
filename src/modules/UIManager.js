@@ -649,16 +649,32 @@ export const UIManager = {
         this.eqCanvas = document.getElementById('eqVisualizerCanvas'); 
         if (!this.eqCanvas) { console.warn("UIManager.setupEQCanvas: #eqVisualizerCanvas not found."); return; } 
         this.eqCtx = this.eqCanvas.getContext('2d'); 
-        this.eqCanvas.width = this.eqCanvas.clientWidth; 
-        this.eqCanvas.height = this.eqCanvas.clientHeight; 
-        this.eqGradient = this.eqCtx.createLinearGradient(0, 0, this.eqCanvas.width, 0); 
+
+        // ** THE FIX IS HERE **
+        const dpr = window.devicePixelRatio || 1;
+        const rect = this.eqCanvas.getBoundingClientRect();
+
+        this.eqCanvas.width = rect.width * dpr;
+        this.eqCanvas.height = rect.height * dpr;
+        
+        this.eqCtx.scale(dpr, dpr);
+
+        this.eqCanvas.style.width = `${rect.width}px`;
+        this.eqCanvas.style.height = `${rect.height}px`;
+
+        this.eqGradient = this.eqCtx.createLinearGradient(0, 0, rect.width, 0); 
         this.eqGradient.addColorStop(0, '#007AFF'); 
         this.eqGradient.addColorStop(0.5, '#5856D6'); 
         this.eqGradient.addColorStop(1, '#FF2D55');
     },
     updateEQ(data) {
         if (!this.eqCtx || !data) return; 
-        const { width, height } = this.eqCanvas; 
+
+        // ** THE FIX IS HERE **
+        // Use clientWidth and clientHeight for drawing logic to respect CSS dimensions.
+        const width = this.eqCanvas.clientWidth;
+        const height = this.eqCanvas.clientHeight; 
+
         this.eqCtx.clearRect(0, 0, width, height); 
         const numBars = 64; 
         const barWidth = width / numBars; 
