@@ -33,7 +33,7 @@ const gpgpuDebugFragmentShader = `
             color.r = remap(data.x, -halfWidth, halfWidth, 0.0, 1.0);
             color.g = remap(data.y, -halfHeight, halfHeight, 0.0, 1.0);
             color.b = remap(data.z, -15.0, 15.0, 0.0, 1.0); // Visualize Z displacement
-        } else if (u_debugMode == 1) { // Normal Data
+        } else if (u_debugMode == 1) { // Normal Data (No longer used, but keeping shader code for future)
             // Remap normal vectors from [-1, 1] to color range [0, 1]
             color = data.xyz * 0.5 + 0.5;
         } else { // Custom or fallback
@@ -153,10 +153,7 @@ export const GPGPUDebugger = {
                     targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
                     debugModeValue = 0;
                     break;
-                case 'normal':
-                    targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.normalVariable);
-                    debugModeValue = 1;
-                    break;
+                // ** THE FIX IS HERE ** - Removed the 'normal' case that was causing the crash.
                 case 'custom':
                     targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
                     debugModeValue = 2; 
@@ -165,6 +162,8 @@ export const GPGPUDebugger = {
                     targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
                     debugModeValue = 0;
             }
+            
+            if (!targetTexture) return; // Prevent errors if the texture is somehow null
 
             this.mesh.material.uniforms.tDebug.value = targetTexture.texture;
             this.mesh.material.uniforms.u_debugMode.value = debugModeValue;
