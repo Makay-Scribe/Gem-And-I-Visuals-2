@@ -80,23 +80,14 @@ void main() {
     vTriangleId = triangleId;
     
     vec3 transformedPosition;
-    
-    // ** THE FIX IS HERE **
-    // Select the base position. If TriangleWave is active, use the raw geometry `position`.
-    // Otherwise, use the data from the GPGPU texture.
+
+    // ** THE FIX IS HERE: Clean if/else if structure **
     if (u_gpgpu_enableTriangleWave) {
         transformedPosition = position;
-    } else {
-        vec4 gpgpu_pos_data = texture2D(u_positionTexture, uv_gpgpu);
-        transformedPosition = gpgpu_pos_data.xyz;
-    }
-
-    // Now, if TriangleWave is active, apply its transformation on top of the base position.
-    if (u_gpgpu_enableTriangleWave) {
         vec3 center = triangleCenter;
         
-        vec3 noiseCoord = vec3(center.xy * u_gpgpu_triWaveFrequency * 0.1, u_time * u_gpgpu_triWaveSpeed);
-        float wave = snoise(noiseCoord) * u_gpgpu_triWaveAmplitude;
+        vec3 noiseCoord = vec3(mod(vTriangleId, 128.0) * 0.1, floor(vTriangleId / 128.0) * 0.1, u_time * u_gpgpu_triWaveSpeed);
+        float wave = snoise(noiseCoord * u_gpgpu_triWaveFrequency) * u_gpgpu_triWaveAmplitude;
         
         transformedPosition.z += wave;
 
@@ -104,6 +95,11 @@ void main() {
         mat3 rotMat = rotationMatrix3(rotAxis, wave * 0.1); 
         
         transformedPosition = rotMat * (transformedPosition - center) + center;
+
+    } else {
+        // Default GPGPU behavior for all other effects
+        vec4 gpgpu_pos_data = texture2D(u_positionTexture, uv_gpgpu);
+        transformedPosition = gpgpu_pos_data.xyz;
     }
 
     vec4 worldPos4 = modelMatrix * vec4(transformedPosition, 1.0);
