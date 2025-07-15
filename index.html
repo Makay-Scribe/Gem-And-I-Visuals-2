@@ -341,6 +341,10 @@
                     <label for="gpgpu_enableTendrils">Tendrils</label>
                     <input type="checkbox" id="gpgpu_enableTendrils">
                 </div>
+                <div class="checkbox-label-container">
+                    <label for="gpgpu_enableTriangleWave">Triangle Wave</label>
+                    <input type="checkbox" id="gpgpu_enableTriangleWave">
+                </div>
 
                 <div class="accordion-item">
                     <button class="accordion-header">Water Ripple</button>
@@ -437,28 +441,46 @@
                         <input type="range" id="gpgpu_clothForceRadius" min="0.0" max="1.0" step="0.01" value="0.3">
                     </div>
                 </div>
-
-                <!-- ** THE FIX IS HERE: NEW TENDRILS SECTION ** -->
+                
                 <div class="accordion-item">
                     <button class="accordion-header">Tendrils</button>
                     <div class="accordion-content">
                         <p class="sub-group-title">MOTION</p>
                         <label>Length: <span id="gpgpu_tendrilLengthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_tendrilLength" min="0.0" max="100.0" step="0.5" value="40.0">
+                        <input type="range" id="gpgpu_tendrilLength" min="0.0" max="10.0" step="0.1" value="0.0">
                         <label>Sway: <span id="gpgpu_tendrilSwayValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_tendrilSway" min="0.0" max="5.0" step="0.05" value="1.0">
+                        <input type="range" id="gpgpu_tendrilSway" min="0.0" max="1.0" step="0.01" value="0.1">
                         <label>Speed: <span id="gpgpu_tendrilSpeedValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_tendrilSpeed" min="0.0" max="1.0" step="0.01" value="0.2">
+                        <input type="range" id="gpgpu_tendrilSpeed" min="0.0" max="1.0" step="0.01" value="0.5">
                         
                         <p class="sub-group-title">SHAPE</p>
                         <label>Population: <span id="gpgpu_tendrilPopulationValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_tendrilPopulation" min="1.0" max="50.0" step="0.5" value="10.0">
+                        <input type="range" id="gpgpu_tendrilPopulation" min="1.0" max="128.0" step="0.5" value="128.0">
                         <label>Audio Reactivity: <span id="gpgpu_tendrilAudioReactivityValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_tendrilAudioReactivity" min="0.0" max="2.0" step="0.05" value="0.5">
+                        <input type="range" id="gpgpu_tendrilAudioReactivity" min="0.0" max="2.0" step="0.05" value="0.0">
 
                         <p class="sub-group-title">VISUALS</p>
                         <label>Glow Falloff: <span id="gpgpu_tendrilGlowFalloffValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_tendrilGlowFalloff" min="0.01" max="0.5" step="0.005" value="0.1">
+                        <input type="range" id="gpgpu_tendrilGlowFalloff" min="0.0" max="0.5" step="0.005" value="0.0">
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <button class="accordion-header">Triangle Wave</button>
+                    <div class="accordion-content">
+                        <p class="sub-group-title">WAVE</p>
+                        <label>Amplitude: <span id="gpgpu_triWaveAmplitudeValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_triWaveAmplitude" min="0.0" max="20.0" step="0.1" value="5.0">
+                        <label>Frequency: <span id="gpgpu_triWaveFrequencyValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_triWaveFrequency" min="0.0" max="5.0" step="0.01" value="1.0">
+                        <label>Speed: <span id="gpgpu_triWaveSpeedValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_triWaveSpeed" min="0.0" max="2.0" step="0.01" value="0.5">
+                        
+                        <p class="sub-group-title">COLOR</p>
+                        <label for="gpgpu_triWaveColor1">Color A:</label>
+                        <input type="color" id="gpgpu_triWaveColor1" value="#ff0040">
+                        <label for="gpgpu_triWaveColor2">Color B:</label>
+                        <input type="color" id="gpgpu_triWaveColor2" value="#000000">
                     </div>
                 </div>
                 
@@ -694,6 +716,12 @@
                     <option value="xy" selected>XY (Wall)</option>
                     <option value="xz">XZ (Floor)</option>
                     <option value="yz">YZ (Side Wall)</option>
+                </select>
+
+                <label for="gpgpuGeometryMode">Geometry Mode</label>
+                <select id="gpgpuGeometryMode">
+                    <option value="continuous" selected>Continuous</option>
+                    <option value="faceted">Faceted (Non-Indexed)</option>
                 </select>
                 
                 <label for="gpgpuDebugViewSelect">Debug View</label>

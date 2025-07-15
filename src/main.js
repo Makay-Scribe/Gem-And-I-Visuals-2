@@ -162,14 +162,14 @@ const App = {
         gpgpu_directionalWindY: 1.6,
         gpgpu_directionalWindZ: 5.8,
         gpgpu_clothBlendTime: 9.6,
-        // ** THE FIX IS HERE: NEW TENDRIL SETTINGS **
+        // ** THE FIX IS HERE: REFINED TENDRIL DEFAULT VALUES **
         gpgpu_enableTendrils: false,
-        gpgpu_tendrilLength: 40.0,
-        gpgpu_tendrilSway: 1.0,
-        gpgpu_tendrilSpeed: 0.2,
-        gpgpu_tendrilPopulation: 10.0,
-        gpgpu_tendrilAudioReactivity: 0.5,
-        gpgpu_tendrilGlowFalloff: 0.1,
+        gpgpu_tendrilLength: 0.0,
+        gpgpu_tendrilSway: 0.1,
+        gpgpu_tendrilSpeed: 0.5,
+        gpgpu_tendrilPopulation: 128.0,
+        gpgpu_tendrilAudioReactivity: 0.0,
+        gpgpu_tendrilGlowFalloff: 0.0,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
