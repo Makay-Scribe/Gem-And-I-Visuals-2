@@ -128,14 +128,12 @@ const App = {
         enableFoldTuck: false,
         foldTuckAmount: 0.0,
         foldTuckReach: 0.15,
-        // ** THE FIX IS HERE: SIMPLIFIED IMAGE EFFECTS **
         imageEffect_enableBalloon: false,
         imageEffect_pointX: 0.5,
         imageEffect_pointY: 0.5,
         imageEffect_strength: 0.5,
         imageEffect_radius: 0.3,
         imageEffect_audioInfluence: 0.5,
-        // --- END IMAGE EFFECTS ---
         // --- GPGPU SETTINGS ---
         gpgpu_enableWaterRipple: false,
         gpgpu_rippleSpeed: 0.5,
@@ -163,7 +161,15 @@ const App = {
         gpgpu_directionalWindX: 0.0,
         gpgpu_directionalWindY: 1.6,
         gpgpu_directionalWindZ: 5.8,
-        gpgpu_clothBlendTime: 9.6, 
+        gpgpu_clothBlendTime: 9.6,
+        // ** THE FIX IS HERE: NEW TENDRIL SETTINGS **
+        gpgpu_enableTendrils: false,
+        gpgpu_tendrilLength: 40.0,
+        gpgpu_tendrilSway: 1.0,
+        gpgpu_tendrilSpeed: 0.2,
+        gpgpu_tendrilPopulation: 10.0,
+        gpgpu_tendrilAudioReactivity: 0.5,
+        gpgpu_tendrilGlowFalloff: 0.1,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",

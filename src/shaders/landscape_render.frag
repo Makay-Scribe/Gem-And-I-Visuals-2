@@ -22,6 +22,11 @@ uniform float u_imageEffect_strength;
 uniform float u_imageEffect_radius;
 uniform float u_imageEffect_audioInfluence;
 
+// ** THE FIX IS HERE: TENDRIL GLOW UNIFORMS **
+uniform bool u_gpgpu_enableTendrils;
+uniform float u_gpgpu_tendrilGlowFalloff;
+
+
 // Data from vertex shader (now in world space)
 varying vec2 vUv;
 varying vec3 vWorldPosition;
@@ -37,7 +42,6 @@ vec2 balloonLensEffect(vec2 uv, vec2 effectCenter, float audio, float amount, fl
     float outerRadius = radius * (0.3 + audio * 1.0);
     float innerRadius = outerRadius * (0.2 + (1.0 - amount) * 0.6);
     
-    // ** THE FIX IS HERE: Correct smoothstep usage for radial falloff **
     // We want the effect to be 1.0 inside the innerRadius and 0.0 outside the outerRadius.
     float falloff = 1.0 - smoothstep(innerRadius, outerRadius, dist);
 
@@ -125,6 +129,15 @@ void main() {
     vec3 ambient = (kD * envColor * albedo) + (specular * envColor);
     
     vec3 color = Lo + ambient + u_ambientLightColor * albedo;
+
+    // ** THE FIX IS HERE: ADD TENDRIL GLOW **
+    if (u_gpgpu_enableTendrils) {
+        float glowAmount = smoothstep(1.0 - u_gpgpu_tendrilGlowFalloff, 1.0, vUv.y);
+        vec3 glowColor = vec3(1.0, 1.0, 1.0); // White glow
+        color = mix(color, glowColor, glowAmount); // Mix the glow color in
+        color += glowColor * glowAmount * 2.0; // Additive emissive glow
+    }
+
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
 

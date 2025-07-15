@@ -136,6 +136,13 @@ export const ComputeManager = {
             u_gpgpu_directionalWind: { value: new THREE.Vector3(0, 1.6, 5.8) },
             u_gpgpu_clothBlendTime: { value: 9.6 },
             u_gpgpu_clothBlendFactor: { value: 0.0 },
+            // ** THE FIX IS HERE: NEW TENDRIL UNIFORMS **
+            u_gpgpu_enableTendrils: { value: false },
+            u_gpgpu_tendrilLength: { value: 40.0 },
+            u_gpgpu_tendrilSway: { value: 1.0 },
+            u_gpgpu_tendrilSpeed: { value: 0.2 },
+            u_gpgpu_tendrilPopulation: { value: 10.0 },
+            u_gpgpu_tendrilAudioReactivity: { value: 0.5 },
         };
 
         this.positionVariable.material.uniforms = uniforms;
@@ -249,6 +256,14 @@ export const ComputeManager = {
             uniforms.u_gpgpu_ambientWindSpeed.value = S.gpgpu_ambientWindSpeed;
             uniforms.u_gpgpu_ambientWindScale.value = S.gpgpu_ambientWindScale;
             uniforms.u_gpgpu_directionalWind.value.set(S.gpgpu_directionalWindX, S.gpgpu_directionalWindY, S.gpgpu_directionalWindZ);
+            
+            // ** THE FIX IS HERE: PASS TENDRIL SETTINGS TO SHADER **
+            uniforms.u_gpgpu_enableTendrils.value = S.gpgpu_enableTendrils;
+            uniforms.u_gpgpu_tendrilLength.value = S.gpgpu_tendrilLength;
+            uniforms.u_gpgpu_tendrilSway.value = S.gpgpu_tendrilSway;
+            uniforms.u_gpgpu_tendrilSpeed.value = S.gpgpu_tendrilSpeed;
+            uniforms.u_gpgpu_tendrilPopulation.value = S.gpgpu_tendrilPopulation;
+            uniforms.u_gpgpu_tendrilAudioReactivity.value = S.gpgpu_tendrilAudioReactivity;
         }
 
         // --- GLOBAL UNIFORMS (always updated) ---
@@ -335,6 +350,13 @@ export const ComputeManager = {
         uniform float u_gpgpu_ambientWindScale;
         uniform vec3 u_gpgpu_directionalWind;
         uniform float u_gpgpu_clothBlendFactor;
+        // ** THE FIX IS HERE: DECLARE TENDRIL UNIFORMS **
+        uniform bool u_gpgpu_enableTendrils;
+        uniform float u_gpgpu_tendrilLength;
+        uniform float u_gpgpu_tendrilSway;
+        uniform float u_gpgpu_tendrilSpeed;
+        uniform float u_gpgpu_tendrilPopulation;
+        uniform float u_gpgpu_tendrilAudioReactivity;
     `,
 
     commonShaderCode: `
@@ -429,6 +451,27 @@ export const ComputeManager = {
         vec3 calculateBend(vec3 p, vec2 uv, float audio, vec2 planeSize, float bendAngle, float bendAudioMod, float bendFalloffSharpness, int bendAxis) { float falloff_coord = (bendAxis == 0) ? abs(uv.y - 0.5) * 2.0 : abs(uv.x - 0.5) * 2.0; float falloff_multiplier = pow(falloff_coord, bendFalloffSharpness); float total_bend_angle = bendAngle * (1.0 + audio * bendAudioMod) * falloff_multiplier; if (abs(total_bend_angle) < EPSILON_SHADER) { return p; } vec3 segment_axis = (bendAxis == 0) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0); float segment_extent = (bendAxis == 0) ? planeSize.y : planeSize.x; vec3 bend_axis_dir = normalize(cross(getDisplacementNormal(), segment_axis)); float half_extent = segment_extent * 0.5; float bend_radius = half_extent / max(EPSILON_SHADER, abs(sin(total_bend_angle * 0.5))); float segment_val = dot(p, segment_axis); float angle_on_arc = (segment_val / max(EPSILON_SHADER, half_extent)) * (total_bend_angle * 0.5); vec3 bent_position = bend_axis_dir * dot(p, bend_axis_dir); bent_position += segment_axis * (sin(angle_on_arc) * bend_radius); bent_position += getDisplacementNormal() * ((cos(angle_on_arc) - 1.0) * bend_radius * -sign(total_bend_angle)); return bent_position; }
         vec3 calculateFold(vec3 flat_pos, vec2 uv_param, float audio, vec2 planeSize, float foldAngle, float foldDepth, float foldRoundness, float foldAudioMod, float foldNudge, bool enableFoldCrease, float foldCreaseDepth, float foldCreaseSharpness, bool enableFoldTuck, float foldTuckAmount, float foldTuckReach, float deformationStrength) { vec2 local_uv; int corner_index; if(uv_param.x<0.5&&uv_param.y<0.5){local_uv=uv_param;corner_index=0;}else if(uv_param.x>0.5&&uv_param.y<0.5){local_uv=vec2(1.0-uv_param.x,uv_param.y);corner_index=1;}else if(uv_param.x<0.5&&uv_param.y>0.5){local_uv=vec2(uv_param.x,1.0-uv_param.y);corner_index=2;}else{local_uv=vec2(1.0-uv_param.x,1.0-uv_param.y);corner_index=3;} vec3 axis_U = vec3(1.0, 0.0, 0.0); vec3 axis_V = vec3(0.0, 1.0, 0.0); vec3 axis_W = getDisplacementNormal(); float uv_sum_diag=local_uv.x+local_uv.y; if(uv_sum_diag>=foldDepth+foldRoundness+EPSILON_SHADER){return flat_pos + axis_W * audio * deformationStrength;} float arm_U=foldDepth*planeSize.x;float arm_V=foldDepth*planeSize.y; vec3 corner_sign=(corner_index==0)?vec3(-1,-1,1):(corner_index==1)?vec3(1,-1,-1):(corner_index==2)?vec3(-1,1,-1):vec3(1,1,1); vec3 hinge_start=corner_sign.x*axis_U*(planeSize.x*0.5-arm_U)+corner_sign.y*axis_V*(planeSize.y*0.5); vec3 hinge_end=corner_sign.x*axis_U*(planeSize.x*0.5)+corner_sign.y*axis_V*(planeSize.y*0.5-arm_V); vec3 hinge_axis=normalize(hinge_end-hinge_start); float main_fold_angle=(-foldAngle+foldAudioMod*audio)*corner_sign.z; float blend_factor=1.0-smoothstep(foldDepth-foldRoundness,foldDepth+u_foldRoundness,uv_sum_diag); float actual_rotation_angle=main_fold_angle*blend_factor; mat3 R = rotationMatrix3(hinge_axis, actual_rotation_angle); vec3 folded_pos = hinge_start + R * (flat_pos - hinge_start); vec3 transformed_normal = R * axis_W; if(abs(foldNudge)>0.001){float progress_along_hinge=clamp(dot(flat_pos-hinge_start,hinge_axis)/length(hinge_end-hinge_start),0.0,1.0);float arch_factor=sin(progress_along_hinge*PI);folded_pos+=transformed_normal*foldNudge*arch_factor*blend_factor;} if(enableFoldTuck){float tuck_falloff=1.0-smoothstep(0.0,foldTuckReach,length(local_uv));if(tuck_falloff>0.0){vec3 outward_vector=normalize(corner_sign.x*axis_U+corner_sign.y*axis_V);float tuck_strength=foldTuckAmount*-0.5;folded_pos+=outward_vector*tuck_strength*tuck_falloff*blend_factor;}} if(enableFoldCrease){float dist_from_diag=abs(local_uv.x-local_uv.y)/1.4142;float crease_mask=1.0-smoothstep(0.0,foldDepth*0.5,dist_from_diag);crease_mask=pow(crease_mask,foldCreaseSharpness*0.5);folded_pos+=transformed_normal*foldCreaseDepth*crease_mask*blend_factor;} folded_pos+=transformed_normal*audio*deformationStrength; return folded_pos; }
         void satisfyConstraints(inout vec3 p, vec2 uv, float stiffness, float restLength) { vec2 texelSize = 1.0 / resolution.xy; vec3 pRight = texture2D(texturePosition, uv + vec2(texelSize.x, 0.0)).xyz; vec3 delta = pRight - p; float deltaLength = length(delta); if (deltaLength > 0.0) { float diff = (deltaLength - restLength) / deltaLength; p += delta * 0.5 * stiffness * diff; } vec3 pLeft = texture2D(texturePosition, uv - vec2(texelSize.x, 0.0)).xyz; delta = pLeft - p; deltaLength = length(delta); if (deltaLength > 0.0) { float diff = (deltaLength - restLength) / deltaLength; p += delta * 0.5 * stiffness * diff; } vec3 pUp = texture2D(texturePosition, uv + vec2(0.0, texelSize.y)).xyz; delta = pUp - p; deltaLength = length(delta); if (deltaLength > 0.0) { float diff = (deltaLength - restLength) / deltaLength; p += delta * 0.5 * stiffness * diff; } vec3 pDown = texture2D(texturePosition, uv - vec2(0.0, texelSize.y)).xyz; delta = pDown - p; deltaLength = length(delta); if (deltaLength > 0.0) { float diff = (deltaLength - restLength) / deltaLength; p += delta * 0.5 * stiffness * diff; } }
+        
+        // ** THE FIX IS HERE: NEW TENDRIL FUNCTION **
+        vec3 calculateTendrils(vec2 uv, float time, float audio, float length, float sway, float speed, float population, float audioReactivity) {
+            float tendrilMask = smoothstep(0.5, 1.0, uv.y);
+            if (tendrilMask < 0.001) return vec3(0.0);
+
+            float tendrilId = floor(uv.x * population);
+
+            vec3 noise_coord = vec3(tendrilId * 0.1, uv.y * 2.0, time * speed);
+            vec3 velocity = vec3(
+                snoise(noise_coord),
+                snoise(noise_coord + vec3(10.0, 0.0, 0.0)),
+                snoise(noise_coord + vec3(20.0, 0.0, 0.0))
+            ) * 2.0 - 1.0;
+
+            float audioMod = 1.0 + audio * audioReactivity;
+            vec3 swayDisplacement = velocity * sway * tendrilMask * audioMod;
+            vec3 stretchDisplacement = vec3(0.0, length, 0.0) * pow(uv.y, 2.0) * tendrilMask;
+            
+            return stretchDisplacement + swayDisplacement;
+        }
     `,
 
     get copyShader() { return `
@@ -460,62 +503,47 @@ export const ComputeManager = {
                 if (u_enablePeel > 0.5) { float audio = u_peelEnableAudio ? u_peelAudio : 0.0; totalDisplacement += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount); }
                 finalPos = pos + totalDisplacement;
             } else { 
-                vec3 currentPos = texture2D(texturePosition, uv).xyz;
-                vec3 prevPos = texture2D(texturePreviousPosition, uv).xyz;
                 vec3 initialPos = texture2D(u_initialPosition, uv).xyz;
 
-                vec3 gpgpuDisplacement = vec3(0.0);
-                if (u_gpgpu_enableWaterRipple) { gpgpuDisplacement += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency); }
-                if (u_gpgpu_enableEqRipple) { gpgpuDisplacement += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleStyle, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd); }
+                // ** THE FIX IS HERE: NEW GPGPU EFFECT LOGIC ORDER **
+                if (u_gpgpu_enableTendrils) {
+                    vec3 tendrilDisplacement = calculateTendrils(uv, u_time, u_audioLow, u_gpgpu_tendrilLength, u_gpgpu_tendrilSway, u_gpgpu_tendrilSpeed, u_gpgpu_tendrilPopulation, u_gpgpu_tendrilAudioReactivity);
+                    finalPos = initialPos + tendrilDisplacement;
                 
-                if (u_gpgpu_enableCloth) {
+                } else if (u_gpgpu_enableCloth) {
+                    vec3 currentPos = texture2D(texturePosition, uv).xyz;
+                    vec3 prevPos = texture2D(texturePreviousPosition, uv).xyz;
                     vec3 velocity = (currentPos - prevPos) * u_gpgpu_clothDamping;
-                    
                     vec3 totalAcceleration = vec3(0.0);
-
-                    // ** THE FIX IS HERE **
                     vec3 noise_coord_1 = vec3(uv * u_gpgpu_ambientWindScale, u_time * u_gpgpu_ambientWindSpeed);
                     vec3 noise_coord_2 = vec3(uv * u_gpgpu_ambientWindScale + 150.0, u_time * u_gpgpu_ambientWindSpeed);
                     vec3 noise_coord_3 = vec3(uv * u_gpgpu_ambientWindScale + 300.0, u_time * u_gpgpu_ambientWindSpeed);
-                    
                     vec3 ambientWind = vec3(snoise(noise_coord_1), snoise(noise_coord_2), snoise(noise_coord_3));
                     vec3 windForce = (ambientWind * u_gpgpu_ambientWindStrength) + u_gpgpu_directionalWind;
-                    
                     windForce *= u_gpgpu_clothBlendFactor;
-                    
                     vec3 windTargetPos = initialPos + windForce;
                     totalAcceleration += (windTargetPos - currentPos) * u_gpgpu_tetherStrength;
-
                     float distFromCenter = distance(uv, vec2(0.5));
                     if (distFromCenter < u_gpgpu_clothForceRadius) {
                         float falloff = 1.0 - smoothstep(0.0, u_gpgpu_clothForceRadius, distFromCenter);
                         vec3 audioAccel = vec3(0.0, 0.0, 1.0) * u_audioLow * u_gpgpu_clothAudioForce * falloff;
                         totalAcceleration += audioAccel * u_gpgpu_clothBlendFactor;
                     }
-                    
                     finalPos = currentPos + velocity + totalAcceleration * u_delta * u_delta;
-
                     float restLength = u_planeDimensions.x / resolution.x;
                     for (int i = 0; i < 16; i++) {
                         if (i >= gpgpu_clothIterations) { break; }
                         satisfyConstraints(finalPos, uv, u_gpgpu_clothStiffness, restLength);
                     }
-                    
-                    if (gpgpu_clothPinMode == 1) { // Corners
-                        if (uv.x < 0.01 && uv.y < 0.01 || uv.x > 0.99 && uv.y < 0.01 || uv.x < 0.01 && uv.y > 0.99 || uv.x > 0.99 && uv.y > 0.99) {
-                           finalPos = initialPos;
-                        }
-                    } else if (gpgpu_clothPinMode == 2) { // Top Edge
-                        if (uv.y > 0.99) {
-                            finalPos = initialPos;
-                        }
-                    } else if (gpgpu_clothPinMode == 3) { // Center
-                        if (distance(uv, vec2(0.5)) < 0.05) {
-                            finalPos = initialPos;
-                        }
+                    if (gpgpu_clothPinMode == 1) { if (uv.x < 0.01 && uv.y < 0.01 || uv.x > 0.99 && uv.y < 0.01 || uv.x < 0.01 && uv.y > 0.99 || uv.x > 0.99 && uv.y > 0.99) { finalPos = initialPos; }
+                    } else if (gpgpu_clothPinMode == 2) { if (uv.y > 0.99) { finalPos = initialPos; }
+                    } else if (gpgpu_clothPinMode == 3) { if (distance(uv, vec2(0.5)) < 0.05) { finalPos = initialPos; }
                     }
 
                 } else {
+                    vec3 gpgpuDisplacement = vec3(0.0);
+                    if (u_gpgpu_enableWaterRipple) { gpgpuDisplacement += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency); }
+                    if (u_gpgpu_enableEqRipple) { gpgpuDisplacement += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleStyle, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd); }
                     finalPos = initialPos + gpgpuDisplacement;
                 }
             }

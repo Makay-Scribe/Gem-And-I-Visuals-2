@@ -291,7 +291,6 @@ export const ImagePlaneManager = {
         
         this.landscapeMaterial = new THREE.ShaderMaterial({
             uniforms: {
-                // ** THE FIX IS HERE: COMPLETE AND CORRECT UNIFORM LIST **
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: positionRenderTarget.texture }, 
                 u_metalness: { value: S.metalness },
@@ -310,6 +309,9 @@ export const ImagePlaneManager = {
                 u_imageEffect_strength: { value: S.imageEffect_strength },
                 u_imageEffect_radius: { value: S.imageEffect_radius },
                 u_imageEffect_audioInfluence: { value: S.imageEffect_audioInfluence },
+                // ** THE FIX IS HERE: ADD TENDRIL GLOW UNIFORMS **
+                u_gpgpu_enableTendrils: { value: S.gpgpu_enableTendrils },
+                u_gpgpu_tendrilGlowFalloff: { value: S.gpgpu_tendrilGlowFalloff },
             },
             vertexShader: landscapeRenderVertexShader,
             fragmentShader: landscapeRenderFragmentShader,
@@ -360,7 +362,6 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const U = this.landscapeMaterial.uniforms;
         
-        // Update original uniforms
         U.u_time.value = this.app.currentTime;
         U.u_audioLow.value = this.app.AudioProcessor.energy.low;
         U.u_positionTexture.value = positionTarget.texture;
@@ -373,13 +374,18 @@ export const ImagePlaneManager = {
         U.u_ambientLightColor.value.set(S.ambientLightColor);
         U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
 
-        // Update balloon effect uniforms
         U.u_imageEffect_enableBalloon.value = S.imageEffect_enableBalloon;
         if (S.imageEffect_enableBalloon) {
             U.u_imageEffect_point.value.set(S.imageEffect_pointX, S.imageEffect_pointY);
             U.u_imageEffect_strength.value = S.imageEffect_strength;
             U.u_imageEffect_radius.value = S.imageEffect_radius;
             U.u_imageEffect_audioInfluence.value = S.imageEffect_audioInfluence;
+        }
+
+        // ** THE FIX IS HERE: UPDATE TENDRIL GLOW UNIFORMS **
+        U.u_gpgpu_enableTendrils.value = S.gpgpu_enableTendrils;
+        if (S.gpgpu_enableTendrils) {
+            U.u_gpgpu_tendrilGlowFalloff.value = S.gpgpu_tendrilGlowFalloff;
         }
     },
 

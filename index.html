@@ -294,7 +294,6 @@
             </div>
         </div>
         
-        <!-- ** THE FIX IS HERE: SIMPLIFIED IMAGE EFFECTS ACCORDION ** -->
         <div class="accordion-item" id="imageEffectsAccordion">
             <button class="accordion-header">Image Effects</button>
             <div class="accordion-content">
@@ -337,6 +336,10 @@
                 <div class="checkbox-label-container">
                     <label for="gpgpu_enableCloth">Cloth Physics</label>
                     <input type="checkbox" id="gpgpu_enableCloth">
+                </div>
+                <div class="checkbox-label-container">
+                    <label for="gpgpu_enableTendrils">Tendrils</label>
+                    <input type="checkbox" id="gpgpu_enableTendrils">
                 </div>
 
                 <div class="accordion-item">
@@ -432,6 +435,30 @@
                         
                         <label>Force Radius: <span id="gpgpu_clothForceRadiusValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_clothForceRadius" min="0.0" max="1.0" step="0.01" value="0.3">
+                    </div>
+                </div>
+
+                <!-- ** THE FIX IS HERE: NEW TENDRILS SECTION ** -->
+                <div class="accordion-item">
+                    <button class="accordion-header">Tendrils</button>
+                    <div class="accordion-content">
+                        <p class="sub-group-title">MOTION</p>
+                        <label>Length: <span id="gpgpu_tendrilLengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_tendrilLength" min="0.0" max="100.0" step="0.5" value="40.0">
+                        <label>Sway: <span id="gpgpu_tendrilSwayValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_tendrilSway" min="0.0" max="5.0" step="0.05" value="1.0">
+                        <label>Speed: <span id="gpgpu_tendrilSpeedValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_tendrilSpeed" min="0.0" max="1.0" step="0.01" value="0.2">
+                        
+                        <p class="sub-group-title">SHAPE</p>
+                        <label>Population: <span id="gpgpu_tendrilPopulationValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_tendrilPopulation" min="1.0" max="50.0" step="0.5" value="10.0">
+                        <label>Audio Reactivity: <span id="gpgpu_tendrilAudioReactivityValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_tendrilAudioReactivity" min="0.0" max="2.0" step="0.05" value="0.5">
+
+                        <p class="sub-group-title">VISUALS</p>
+                        <label>Glow Falloff: <span id="gpgpu_tendrilGlowFalloffValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_tendrilGlowFalloff" min="0.01" max="0.5" step="0.005" value="0.1">
                     </div>
                 </div>
                 
@@ -709,7 +736,7 @@
                 <label>Amount: <span class="point-deformer-amount-value range-value-display"></span></label>
                 <input type="range" class="point-deformer-amount" min="-20.0" max="20.0" step="0.1" value="5.0">
 
-                <label>Radius: <span class="point-deformer-radius-value" class="range-value-display"></span></label>
+                <label>Radius: <span class="point-deformer-radius-value range-value-display"></span></label>
                 <input type="range" class="point-deformer-radius" min="0.0" max="0.7" step="0.01" value="0.2">
 
                 <label>Position X: <span class="point-deformer-posX-value" class="range-value-display"></span></label>
