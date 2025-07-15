@@ -23,6 +23,12 @@ export const UIManager = {
         this.debugDisplay = document.getElementById('debugDisplay');
         this.gpgpuPixelValueDisplay = document.getElementById('gpgpuDebugPixelValue'); // Grab the new element
         
+        // ** THE FIX IS HERE: Add initial glow to the Show button **
+        const toggleButton = document.getElementById('controlsToggleButton');
+        if (toggleButton) {
+            toggleButton.classList.add('initial-glow');
+        }
+
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
             if (el && !el.closest('#cameraOptions') && !el.closest('#imageEffectsAccordion')) { 
@@ -268,7 +274,8 @@ export const UIManager = {
             audio: document.querySelector('.browse-btn[data-target="audioFileInput"]'),
             play: document.getElementById('playPauseAudioButton')
         };
-        this.setGlowTarget('image');
+        // By default, no glow target is set until an action is completed.
+        this.currentGlowTarget = null;
     },
 
     setGlowTarget(targetKey) {
@@ -452,7 +459,6 @@ export const UIManager = {
             });
         }
         
-        // ** THE FIX IS HERE: EVENT LISTENER FOR GEOMETRY MODE **
         const gpgpuGeometryModeSelect = document.getElementById('gpgpuGeometryMode');
         if (gpgpuGeometryModeSelect) {
             gpgpuGeometryModeSelect.addEventListener('change', (e) => {
@@ -526,6 +532,11 @@ export const UIManager = {
             const panel = document.getElementById('controlsPanel'); 
             panel.classList.toggle('visible'); 
             e.target.textContent = panel.classList.contains('visible') ? "Hide" : "Show"; 
+            
+            // ** THE FIX IS HERE: Remove glow on first click **
+            if (e.target.classList.contains('initial-glow')) {
+                e.target.classList.remove('initial-glow');
+            }
         });
 
         document.querySelectorAll('.accordion-header').forEach(header => {
@@ -691,7 +702,11 @@ export const UIManager = {
         switch (sourceType) {
             case 'none': message = "AUDIO: IDLE"; break; 
             case 'mic': message = "AUDIO: Mic/System"; this.setGlowTarget(null); break; 
-            case 'file_ready': message = "AUDIO: File Ready"; if (playButton) playButton.textContent = "Play File"; break; 
+            case 'file_ready': 
+                message = "AUDIO: File Ready"; 
+                if (playButton) playButton.textContent = "Play File"; 
+                this.setGlowTarget('play'); // ** THE FIX IS HERE **
+                break; 
             case 'file_playing': message = "AUDIO: Playing"; if (playButton) playButton.textContent = "Pause File"; break; 
             case 'file_paused': message = "AUDIO: Paused"; if (playButton) playButton.textContent = "Play File"; break; 
             case 'testTone': message = "AUDIO: Test Tone"; this.setGlowTarget(null); break;

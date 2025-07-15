@@ -66,6 +66,13 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
 }
 #controlsToggleButton:hover { background-color: var(--sub-header-hover-bg); }
 
+/* ** THE FIX IS HERE ** */
+#controlsToggleButton.initial-glow {
+    animation: slow-yellow-glow 3s ease-in-out infinite;
+    border: 1px solid var(--glow-color-yellow);
+}
+
+
 .controls-panel {
     position: fixed; 
     top: 0; 
@@ -580,7 +587,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     font-size: 10px;
     font-weight: 500;
     
-    /* ** THE FIX IS HERE ** */
     display: flex;
     justify-content: center;
     align-items: center;

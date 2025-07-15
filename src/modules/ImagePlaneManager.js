@@ -2,13 +2,25 @@ import * as THREE from 'three';
 import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
 
-const PRESET_DEFAULT_SPEEDS = {
-    autopilotPreset1: 1.0, 
-    autopilotPreset2: 1.0,
-    autopilotPreset3: 1.0,
-    autopilotPreset4: 1.0,
-    autopilotPreset5: 0.7 
-};
+/**
+ * Generates a random number based on a weighted distribution.
+ * @param {Array<Object>} distribution - An array of objects, e.g., [{ range: [min, max], weight: 0.5 }, ...]
+ * The weights should add up to 1.0.
+ * @returns {number} A randomly generated number within one of the specified ranges.
+ */
+function getWeightedRandom(distribution) {
+    const rand = Math.random();
+    let cumulativeWeight = 0;
+    for (const item of distribution) {
+        cumulativeWeight += item.weight;
+        if (rand < cumulativeWeight) {
+            return THREE.MathUtils.randFloat(item.range[0], item.range[1]);
+        }
+    }
+    // Fallback for floating point precision issues
+    const lastItem = distribution[distribution.length - 1];
+    return THREE.MathUtils.randFloat(lastItem.range[0], lastItem.range[1]);
+}
 
 export const ImagePlaneManager = {
     app: null,
@@ -22,6 +34,8 @@ export const ImagePlaneManager = {
 
     state: {
         isUnderManualControl: false,
+        manualControlReleaseTime: -1, 
+        manualControlTimeoutId: null, // To manage scroll wheel end detection
         targetPosition: new THREE.Vector3(),
         targetQuaternion: new THREE.Quaternion(),
         homePosition: new THREE.Vector3(),
@@ -31,12 +45,8 @@ export const ImagePlaneManager = {
     autopilot: {
         active: false,
         preset: null,
-        isTransitioningToHome: false, 
-        nextPresetId: null, 
         waypointProgress: 1.0, 
-        waypointTransitionDuration: 10.0,
-        holdTimer: 0,
-        randomBounds: null,
+        waypointTransitionDuration: 20.0, // Default duration
         startPos: new THREE.Vector3(),
         endPos: new THREE.Vector3(),
         startQuat: new THREE.Quaternion(),
@@ -55,143 +65,109 @@ export const ImagePlaneManager = {
     startAutopilot(presetId) {
         if (!this.landscape) return;
         const ap = this.autopilot;
-        const S = this.app.vizSettings;
 
         ap.active = true;
         ap.preset = presetId;
-        ap.isTransitioningToHome = false;
-
-        S.landscapeAutopilotSpeed = PRESET_DEFAULT_SPEEDS[presetId] || 1.0;
         
-        if (this.app.UIManager) {
-            this.app.UIManager.updateMasterControls();
-        }
+        if (this.app.UIManager) this.app.UIManager.updateMasterControls();
 
         ap.waypointProgress = 1.0; 
-        ap.holdTimer = 0;
         
-        const home = this.state.homePosition;
-        switch(presetId) {
-            case 'autopilotPreset1':
-                ap.randomBounds = new THREE.Box3(new THREE.Vector3(-2, -1.5, -5), new THREE.Vector3(2, 1.5, 0));
-                break;
-            case 'autopilotPreset2':
-                ap.randomBounds = new THREE.Box3(new THREE.Vector3(-35, -25, -50), new THREE.Vector3(35, 25, 10));
-                break;
-            case 'autopilotPreset3':
-                ap.randomBounds = new THREE.Box3(new THREE.Vector3(-45, -30, -70), new THREE.Vector3(45, 30, 5));
-                break;
-            case 'autopilotPreset4':
-                 ap.randomBounds = new THREE.Box3(new THREE.Vector3(-60, -35, -90), new THREE.Vector3(60, 35, 0));
-                 break;
-            case 'autopilotPreset5': 
-                 ap.randomBounds = new THREE.Box3(new THREE.Vector3(-50, -5, -40), new THREE.Vector3(50, 5, -10));
-                 break;
-        }
-        
-        console.log(`ImagePlane Autopilot STARTED with preset: ${presetId} at speed ${S.landscapeAutopilotSpeed}`);
-        this.generateNewRandomWaypoint();
-    },
-
-    initiateReturnToHome(nextPreset = null) {
-        const ap = this.autopilot;
-        
-        ap.isTransitioningToHome = true;
-        ap.nextPresetId = nextPreset;
-        ap.active = true; 
-        ap.preset = null; 
-
-        ap.startPos.copy(this.state.targetPosition);
-        ap.endPos.copy(this.state.homePosition);
-        ap.startQuat.copy(this.state.targetQuaternion);
-        ap.endQuat.copy(this.state.homeQuaternion); 
-        ap.waypointProgress = 0;
-        
-        ap.waypointTransitionDuration = 6.0;
-        
-        console.log(`Landscape: Initiating return to home. Next preset: ${nextPreset}`);
+        console.log(`ImagePlane Autopilot STARTED with preset: ${presetId}`);
     },
 
     stopAutopilot() {
-        this.initiateReturnToHome(null);
-        console.log("ImagePlane Autopilot STOP triggered. Starting transition to home.");
+        const ap = this.autopilot;
+        ap.active = false;
+        ap.preset = null;
+        console.log("ImagePlane Autopilot STOP triggered. Will return to home.");
     },
     
     generateNewRandomWaypoint() {
         const ap = this.autopilot;
-        const S = this.app.vizSettings;
         
         ap.startPos.copy(this.state.targetPosition);
         ap.startQuat.copy(this.state.targetQuaternion);
 
-        ap.endPos.set(
-            THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
-            THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
-            THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z) 
-        );
-
-        let randomRot;
-        if (ap.preset === 'autopilotPreset1' || ap.preset === 'autopilotPreset5') {
-            randomRot = new THREE.Euler(
-                (Math.random() - 0.5) * 0.05,
-                (Math.random() - 0.5) * 0.05,
-                (Math.random() - 0.5) * 0.02
-            );
-        } else {
-            randomRot = new THREE.Euler((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.2);
-        }
-        ap.endQuat.setFromEuler(randomRot);
+        let endPosX, endPosY, endPosZ;
+        let eulerX, eulerY, eulerZ;
         
-        const distance = ap.startPos.distanceTo(ap.endPos);
-        const speedFactor = S.landscapeAutopilotSpeed;
-        ap.waypointTransitionDuration = THREE.MathUtils.clamp(distance / speedFactor, 12, 35);
+        const orbitalTiltDistribution = [
+            { range: [-5, 5], weight: 0.50 },      // 50% little/no tilt
+            { range: [5, 15], weight: 0.20 },      // 40% marginal tilt
+            { range: [-15, -5], weight: 0.20 },
+            { range: [15, 30], weight: 0.05 },     // 10% medium tilt
+            { range: [-30, -15], weight: 0.05 }
+        ];
 
+        if (ap.preset === 'autopilotPreset1') { // CALM DRIFT
+            endPosX = THREE.MathUtils.randFloat(-15, 15);
+            endPosY = THREE.MathUtils.randFloat(-10, 10);
+            endPosZ = THREE.MathUtils.randFloat(-5, 5);
+            eulerX = THREE.MathUtils.randFloat(-2, 2); // very little tilt
+            eulerY = THREE.MathUtils.randFloat(-5, 5); // very little turn
+            eulerZ = THREE.MathUtils.randFloat(-1, 1); // very little roll
+
+        } else if (ap.preset === 'autopilotPreset2') { // BREATHING ZOOM
+            endPosX = THREE.MathUtils.randFloat(-5, 5);
+            endPosY = THREE.MathUtils.randFloat(-5, 5);
+            endPosZ = THREE.MathUtils.randFloat(-30, 10); // focus on z-axis
+            eulerX = THREE.MathUtils.randFloat(-4, 4);
+            eulerY = THREE.MathUtils.randFloat(-8, 8);
+            eulerZ = THREE.MathUtils.randFloat(-2, 2);
+            
+        } else if (ap.preset === 'autopilotPreset3') { // TIGHT LEASH
+            endPosX = THREE.MathUtils.randFloat(-30, 30);
+            endPosY = THREE.MathUtils.randFloat(-20, 20);
+            endPosZ = THREE.MathUtils.randFloat(-40, 10);
+            eulerX = getWeightedRandom(orbitalTiltDistribution);
+            eulerY = getWeightedRandom([ { range: [-15, 15], weight: 0.8 }, { range: [-30, 30], weight: 0.2 } ]);
+            eulerZ = THREE.MathUtils.randFloat(-5, 5);
+
+        } else if (ap.preset === 'autopilotPreset4') { // MEDIUM LEASH
+            endPosX = THREE.MathUtils.randFloat(-50, 50);
+            endPosY = THREE.MathUtils.randFloat(-35, 35);
+            endPosZ = THREE.MathUtils.randFloat(-45, 10);
+            eulerX = getWeightedRandom(orbitalTiltDistribution);
+            eulerY = getWeightedRandom([ { range: [-20, 20], weight: 0.4 }, { range: [20, 30], weight: 0.25 }, { range: [-30, -20], weight: 0.25 }, { range: [35, 45], weight: 0.05 }, { range: [-45, -35], weight: 0.05 } ]);
+            eulerZ = THREE.MathUtils.randFloat(-10, 10);
+
+        } else if (ap.preset === 'autopilotPreset5') { // LOOSE LEASH
+            endPosX = THREE.MathUtils.randFloat(-70, 70);
+            endPosY = THREE.MathUtils.randFloat(-50, 50);
+            endPosZ = THREE.MathUtils.randFloat(-50, 10);
+            eulerX = getWeightedRandom(orbitalTiltDistribution);
+            eulerY = getWeightedRandom([ { range: [-15, 15], weight: 0.35 }, { range: [-35, 35], weight: 0.4 }, { range: [35, 50], weight: 0.125 }, { range: [-50, -35], weight: 0.125 } ]);
+            eulerZ = THREE.MathUtils.randFloat(-15, 15);
+        }
+
+        ap.endPos.set(endPosX, endPosY, endPosZ);
+
+        const endRot = new THREE.Euler(
+            THREE.MathUtils.degToRad(eulerX),
+            THREE.MathUtils.degToRad(eulerY),
+            THREE.MathUtils.degToRad(eulerZ),
+            'YXZ' 
+        );
+        ap.endQuat.setFromEuler(endRot);
+        
+        ap.waypointTransitionDuration = THREE.MathUtils.randFloat(18.0, 22.0);
         ap.waypointProgress = 0;
     },
     
-    runMovementLogic(delta) {
+    updateAutopilot(delta) {
         const ap = this.autopilot;
+        if (!ap.active) return;
+
+        if (ap.waypointProgress >= 1.0) {
+            this.generateNewRandomWaypoint();
+        }
 
         ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
         const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
         
         this.state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
-        this.state.targetQuaternion.copy(ap.startQuat).slerp(ap.endQuat, ease);
-
-        if (ap.waypointProgress >= 1.0) {
-            if (ap.isTransitioningToHome) {
-                ap.isTransitioningToHome = false;
-                if (ap.nextPresetId) {
-                    this.startAutopilot(ap.nextPresetId);
-                } else {
-                    ap.active = false;
-                    ap.preset = null;
-                }
-            } else {
-                ap.holdTimer = Math.random() * 1.5 + 0.5;
-            }
-        }
-    },
-
-    updateAutopilot(delta) {
-        const ap = this.autopilot;
-        
-        if (ap.isTransitioningToHome) {
-            this.runMovementLogic(delta);
-            return; 
-        }
-
-        if (ap.preset) {
-            if (ap.waypointProgress >= 1.0 && ap.holdTimer > 0) {
-                ap.holdTimer -= delta;
-            } else if (ap.waypointProgress >= 1.0 && ap.holdTimer <= 0) {
-                this.generateNewRandomWaypoint();
-            }
-            
-            if (ap.waypointProgress < 1.0) {
-                 this.runMovementLogic(delta);
-            }
-        }
+        this.state.targetQuaternion.slerp(ap.startQuat, ap.endQuat, ease);
     },
 
     update(cappedDelta) {
@@ -204,14 +180,19 @@ export const ImagePlaneManager = {
         }
         this.landscapeContainer.visible = true;
 
+        const state = this.state;
+        const now = this.app.currentTime;
+        const manualReturnDelay = 0.5; // ** THE FIX IS HERE **
+
         if (this.autopilot.active) {
             this.updateAutopilot(cappedDelta);
-        } else if (this.state.isUnderManualControl) {
-            // Do nothing. The mouse/sliders are controlling the target state directly.
+        } else if (state.isUnderManualControl) {
+            state.manualControlReleaseTime = -1;
+        } else if (state.manualControlReleaseTime > 0 && (now - state.manualControlReleaseTime < manualReturnDelay)) {
+            // Do nothing, leave landscape where user placed it.
         } else {
-            // When not under manual or autopilot control, gently return to home.
-            this.state.targetPosition.lerp(this.state.homePosition, 0.02);
-            this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
+            state.targetPosition.lerp(state.homePosition, 0.02);
+            state.targetQuaternion.slerp(state.homeQuaternion, 0.02);
         }
 
         this.landscapeContainer.position.lerp(this.state.targetPosition, 0.05);
@@ -396,11 +377,8 @@ export const ImagePlaneManager = {
         
         const U = this.landscapeMaterial.uniforms;
         
-        // **THE FIX IS HERE**
-        // Always update the time uniform for the vertex shader
         U.u_time.value = this.app.currentTime;
 
-        // Only update the GPGPU texture if TriangleWave is NOT active.
         if (S.deformationEngine === 'gpgpu' && !S.gpgpu_enableTriangleWave) {
             const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
             U.u_positionTexture.value = positionTarget.texture;

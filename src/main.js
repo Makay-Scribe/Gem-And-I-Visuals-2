@@ -25,7 +25,7 @@ const App = {
         isRotating: false,
         startMouse: new THREE.Vector2(),
         rotationSpeed: 0.005,
-        panSpeed: 0.05,
+        panSpeed: 0.15,
         zoomSpeed: 0.5,
     },
 
@@ -170,7 +170,6 @@ const App = {
         gpgpu_tendrilPopulation: 128.0,
         gpgpu_tendrilAudioReactivity: 0.0,
         gpgpu_tendrilGlowFalloff: 0.0,
-        // ** THE FIX IS HERE: NEW TRIANGLE WAVE SETTINGS **
         gpgpu_enableTriangleWave: false,
         gpgpu_triWaveAmplitude: 5.0,
         gpgpu_triWaveFrequency: 1.0,
@@ -342,9 +341,25 @@ const App = {
         event.preventDefault();
         const activeManager = this._getActiveManager();
         if (!activeManager || !activeManager.state) return;
-        
+
+        activeManager.state.isUnderManualControl = true;
         const delta = -Math.sign(event.deltaY);
         activeManager.state.targetPosition.z += delta * this.mouseInteraction.zoomSpeed;
+
+        // ** THE FIX IS HERE **
+        // Clear any previous timer to reset the delay
+        if (activeManager.state.manualControlTimeoutId) {
+            clearTimeout(activeManager.state.manualControlTimeoutId);
+        }
+
+        // Set a new timer. When it completes, it will end manual control.
+        activeManager.state.manualControlTimeoutId = setTimeout(() => {
+            if (activeManager.state) { // Check if manager still exists
+                activeManager.state.isUnderManualControl = false;
+                activeManager.state.manualControlReleaseTime = this.currentTime; // Start the return-to-home countdown
+                activeManager.state.manualControlTimeoutId = null;
+            }
+        }, 250); // A 250ms delay feels responsive for scrolling
     },
 
     onPointerDown(event) {
@@ -352,6 +367,12 @@ const App = {
         const activeManager = this._getActiveManager();
         if (!activeManager || !activeManager.state) return;
         
+        // Clear any lingering scroll wheel timeout if the user clicks.
+        if (activeManager.state.manualControlTimeoutId) {
+            clearTimeout(activeManager.state.manualControlTimeoutId);
+            activeManager.state.manualControlTimeoutId = null;
+        }
+
         activeManager.state.isUnderManualControl = true;
 
         if (event.button === 0) {
@@ -396,8 +417,13 @@ const App = {
 
     onPointerUp(event) {
         const MI = this.mouseInteraction;
-        if (this.ImagePlaneManager.state) this.ImagePlaneManager.state.isUnderManualControl = false;
-        if (this.ModelManager.state) this.ModelManager.state.isUnderManualControl = false;
+        
+        // This logic now applies to any manager that supports the state properties
+        const activeManager = this._getActiveManager();
+        if (activeManager && activeManager.state && activeManager.state.isUnderManualControl) {
+            activeManager.state.manualControlReleaseTime = this.currentTime;
+            activeManager.state.isUnderManualControl = false;
+        }
 
         MI.isRotating = false;
         MI.isDragging = false;
