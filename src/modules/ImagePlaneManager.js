@@ -235,13 +235,42 @@ export const ImagePlaneManager = {
             if (this.landscapeMaterial) this.landscapeMaterial.dispose();
         }
 
-        if (this.app.ComputeManager) {
+        if (!this.app.ComputeManager.gpuCompute) {
             this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
-        } else { return; }
+        }
         
-        this.createMaterials(); 
-        
-        const landGeom = new THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
+        let landGeom = new THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
+
+        if (this.app.vizSettings.gpgpuGeometryMode === 'faceted') {
+            console.log("Creating faceted (non-indexed) geometry.");
+            landGeom = landGeom.toNonIndexed();
+            const positions = landGeom.attributes.position.array;
+            const vertexCount = landGeom.attributes.position.count;
+            const triangleCenters = new Float32Array(vertexCount * 3);
+
+            for (let i = 0; i < vertexCount; i += 3) {
+                const vA = new THREE.Vector3().fromArray(positions, i * 3);
+                const vB = new THREE.Vector3().fromArray(positions, (i + 1) * 3);
+                const vC = new THREE.Vector3().fromArray(positions, (i + 2) * 3);
+                const center = new THREE.Vector3().add(vA).add(vB).add(vC).divideScalar(3);
+                center.toArray(triangleCenters, i * 3);
+                center.toArray(triangleCenters, (i + 1) * 3);
+                center.toArray(triangleCenters, (i + 2) * 3);
+            }
+            landGeom.setAttribute('triangleCenter', new THREE.BufferAttribute(triangleCenters, 3));
+
+        } else {
+            console.log("Creating continuous (standard) geometry.");
+        }
+
+        const vertexCount = landGeom.attributes.position.count;
+        const triangleIds = new Float32Array(vertexCount);
+        for(let i = 0; i < vertexCount; i++) {
+            triangleIds[i] = Math.floor(i / 3);
+        }
+        landGeom.setAttribute('triangleId', new THREE.BufferAttribute(triangleIds, 1));
+
+
         const uvCount = this.planeResolution.x * this.planeResolution.y;
         const uv_gpgpu = new Float32Array(uvCount * 2);
         for (let i = 0; i < this.planeResolution.y; i++) {
@@ -252,6 +281,8 @@ export const ImagePlaneManager = {
             }
         }
         landGeom.setAttribute('uv_gpgpu', new THREE.BufferAttribute(uv_gpgpu, 2));
+        
+        this.createMaterials();
         this.landscape = new THREE.Mesh(landGeom, this.landscapeMaterial);
         this.landscape.frustumCulled = false;
         
@@ -297,7 +328,7 @@ export const ImagePlaneManager = {
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
                 u_time: { value: 0.0 },
-                u_audioLow: { value: 0.0 },
+                u_audioLow: { value: S.audioLow },
                 u_planeResolution: { value: this.planeResolution },
                 u_lightColor: { value: new THREE.Color(S.lightColor) },
                 u_ambientLightColor: { value: new THREE.Color(S.ambientLightColor) },
@@ -309,9 +340,14 @@ export const ImagePlaneManager = {
                 u_imageEffect_strength: { value: S.imageEffect_strength },
                 u_imageEffect_radius: { value: S.imageEffect_radius },
                 u_imageEffect_audioInfluence: { value: S.imageEffect_audioInfluence },
-                // ** THE FIX IS HERE: ADD TENDRIL GLOW UNIFORMS **
                 u_gpgpu_enableTendrils: { value: S.gpgpu_enableTendrils },
                 u_gpgpu_tendrilGlowFalloff: { value: S.gpgpu_tendrilGlowFalloff },
+                u_gpgpu_enableTriangleWave: { value: S.gpgpu_enableTriangleWave },
+                u_gpgpu_triWaveColor1: { value: new THREE.Color(S.gpgpu_triWaveColor1) },
+                u_gpgpu_triWaveColor2: { value: new THREE.Color(S.gpgpu_triWaveColor2) },
+                u_gpgpu_triWaveAmplitude: { value: S.gpgpu_triWaveAmplitude },
+                u_gpgpu_triWaveFrequency: { value: S.gpgpu_triWaveFrequency },
+                u_gpgpu_triWaveSpeed: { value: S.gpgpu_triWaveSpeed },
             },
             vertexShader: landscapeRenderVertexShader,
             fragmentShader: landscapeRenderFragmentShader,
@@ -356,15 +392,21 @@ export const ImagePlaneManager = {
 
     updateDeformationUniforms() {
         if (!this.landscapeMaterial || !this.app.ComputeManager || !this.app.ComputeManager.gpuCompute) { return; }
-        const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
-        if (!positionTarget) return; 
-
         const S = this.app.vizSettings;
+        
         const U = this.landscapeMaterial.uniforms;
         
+        // **THE FIX IS HERE**
+        // Always update the time uniform for the vertex shader
         U.u_time.value = this.app.currentTime;
+
+        // Only update the GPGPU texture if TriangleWave is NOT active.
+        if (S.deformationEngine === 'gpgpu' && !S.gpgpu_enableTriangleWave) {
+            const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+            U.u_positionTexture.value = positionTarget.texture;
+        }
+        
         U.u_audioLow.value = this.app.AudioProcessor.energy.low;
-        U.u_positionTexture.value = positionTarget.texture;
         U.u_metalness.value = S.metalness;
         U.u_roughness.value = S.roughness;
         U.u_envMapIntensity.value = S.reflectionStrength;
@@ -382,10 +424,18 @@ export const ImagePlaneManager = {
             U.u_imageEffect_audioInfluence.value = S.imageEffect_audioInfluence;
         }
 
-        // ** THE FIX IS HERE: UPDATE TENDRIL GLOW UNIFORMS **
         U.u_gpgpu_enableTendrils.value = S.gpgpu_enableTendrils;
         if (S.gpgpu_enableTendrils) {
             U.u_gpgpu_tendrilGlowFalloff.value = S.gpgpu_tendrilGlowFalloff;
+        }
+
+        U.u_gpgpu_enableTriangleWave.value = S.gpgpu_enableTriangleWave;
+        if (S.gpgpu_enableTriangleWave) {
+            U.u_gpgpu_triWaveColor1.value.set(S.gpgpu_triWaveColor1);
+            U.u_gpgpu_triWaveColor2.value.set(S.gpgpu_triWaveColor2);
+            U.u_gpgpu_triWaveAmplitude.value = S.gpgpu_triWaveAmplitude;
+            U.u_gpgpu_triWaveFrequency.value = S.gpgpu_triWaveFrequency;
+            U.u_gpgpu_triWaveSpeed.value = S.gpgpu_triWaveSpeed;
         }
     },
 

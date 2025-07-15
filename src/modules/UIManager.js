@@ -321,7 +321,7 @@ export const UIManager = {
             let precision = 1;
              if (['masterScale', 'masterSpeed', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence'].includes(id)) {
                 precision = 2;
-            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness'].includes(id)) {
+            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed'].includes(id)) {
                 precision = 2;
             } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod', 'gpgpu_eqRippleBarCount'].includes(id)) {
                 precision = 0;
@@ -452,6 +452,15 @@ export const UIManager = {
             });
         }
         
+        // ** THE FIX IS HERE: EVENT LISTENER FOR GEOMETRY MODE **
+        const gpgpuGeometryModeSelect = document.getElementById('gpgpuGeometryMode');
+        if (gpgpuGeometryModeSelect) {
+            gpgpuGeometryModeSelect.addEventListener('change', (e) => {
+                this.app.vizSettings.gpgpuGeometryMode = e.target.value;
+                this.app.ImagePlaneManager.createDefaultLandscape();
+            });
+        }
+        
         document.querySelectorAll('#deformationEngineToggle button').forEach(button => {
             button.addEventListener('click', (e) => {
                 const btn = e.target.closest('.segmented-control-button');
@@ -462,7 +471,7 @@ export const UIManager = {
             });
         });
 
-        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select').forEach(control => {
+        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select:not(#gpgpuGeometryMode)').forEach(control => {
             if (control.closest('#cameraOptions') || control.closest('#deformationEngineToggle') || control.closest('#imageEffectsAccordion')) return;
             
             control.addEventListener('input', (e) => {

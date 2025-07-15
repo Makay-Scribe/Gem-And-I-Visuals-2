@@ -22,15 +22,21 @@ uniform float u_imageEffect_strength;
 uniform float u_imageEffect_radius;
 uniform float u_imageEffect_audioInfluence;
 
-// ** THE FIX IS HERE: TENDRIL GLOW UNIFORMS **
+// TENDRIL GLOW UNIFORMS
 uniform bool u_gpgpu_enableTendrils;
 uniform float u_gpgpu_tendrilGlowFalloff;
+
+// ** THE FIX IS HERE: TRIANGLE WAVE RENDER UNIFORMS **
+uniform bool u_gpgpu_enableTriangleWave;
+uniform vec3 u_gpgpu_triWaveColor1;
+uniform vec3 u_gpgpu_triWaveColor2;
 
 
 // Data from vertex shader (now in world space)
 varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
+varying float vTriangleId;
 
 #define PI 3.14159265359
 
@@ -100,6 +106,22 @@ void main() {
     }
 
     vec3 albedo = texture2D(u_map, workingUV).rgb;
+    
+    // ** THE FIX IS HERE: TRIANGLE WAVE LOGIC **
+    if (u_gpgpu_enableTriangleWave) {
+        vec3 faceNormal = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
+        float lighting = dot(faceNormal, u_lightDirection) * 0.5 + 0.5;
+        
+        // Alternate colors based on the triangle's ID
+        float isEven = mod(vTriangleId, 2.0);
+        vec3 baseColor = mix(u_gpgpu_triWaveColor1, u_gpgpu_triWaveColor2, isEven);
+
+        vec3 color = baseColor * lighting;
+        gl_FragColor = vec4(color, 1.0);
+        return; // Exit here, bypassing PBR for this effect
+    }
+
+
     float metalness = u_metalness;
     float roughness = u_roughness;
     
@@ -130,7 +152,6 @@ void main() {
     
     vec3 color = Lo + ambient + u_ambientLightColor * albedo;
 
-    // ** THE FIX IS HERE: ADD TENDRIL GLOW **
     if (u_gpgpu_enableTendrils) {
         float glowAmount = smoothstep(1.0 - u_gpgpu_tendrilGlowFalloff, 1.0, vUv.y);
         vec3 glowColor = vec3(1.0, 1.0, 1.0); // White glow

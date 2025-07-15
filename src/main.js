@@ -135,6 +135,7 @@ const App = {
         imageEffect_radius: 0.3,
         imageEffect_audioInfluence: 0.5,
         // --- GPGPU SETTINGS ---
+        gpgpuGeometryMode: 'continuous',
         gpgpu_enableWaterRipple: false,
         gpgpu_rippleSpeed: 0.5,
         gpgpu_rippleStrength: 1.0,
@@ -162,7 +163,6 @@ const App = {
         gpgpu_directionalWindY: 1.6,
         gpgpu_directionalWindZ: 5.8,
         gpgpu_clothBlendTime: 9.6,
-        // ** THE FIX IS HERE: REFINED TENDRIL DEFAULT VALUES **
         gpgpu_enableTendrils: false,
         gpgpu_tendrilLength: 0.0,
         gpgpu_tendrilSway: 0.1,
@@ -170,6 +170,13 @@ const App = {
         gpgpu_tendrilPopulation: 128.0,
         gpgpu_tendrilAudioReactivity: 0.0,
         gpgpu_tendrilGlowFalloff: 0.0,
+        // ** THE FIX IS HERE: NEW TRIANGLE WAVE SETTINGS **
+        gpgpu_enableTriangleWave: false,
+        gpgpu_triWaveAmplitude: 5.0,
+        gpgpu_triWaveFrequency: 1.0,
+        gpgpu_triWaveSpeed: 0.5,
+        gpgpu_triWaveColor1: '#ff0040',
+        gpgpu_triWaveColor2: '#000000',
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
