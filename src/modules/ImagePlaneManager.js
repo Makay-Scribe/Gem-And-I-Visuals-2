@@ -182,7 +182,7 @@ export const ImagePlaneManager = {
 
         const state = this.state;
         const now = this.app.currentTime;
-        const manualReturnDelay = 0.5; // ** THE FIX IS HERE **
+        const manualReturnDelay = 0.5;
 
         if (this.autopilot.active) {
             this.updateAutopilot(cappedDelta);
@@ -216,9 +216,10 @@ export const ImagePlaneManager = {
             if (this.landscapeMaterial) this.landscapeMaterial.dispose();
         }
 
-        if (!this.app.ComputeManager.gpuCompute) {
-            this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
-        }
+        // ** THE FIX IS HERE **
+        // Unconditionally re-initialize the ComputeManager whenever the landscape is created.
+        // This ensures the GPGPU simulation always matches the visual plane's dimensions.
+        this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
         
         let landGeom = new THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
 
