@@ -25,7 +25,7 @@ export const UIManager = {
         
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
-            if (el && !el.closest('#cameraOptions')) { 
+            if (el && !el.closest('#cameraOptions') && !el.closest('#imageEffectsAccordion')) { 
                 if (el.type === 'checkbox') {
                     el.checked = this.app.vizSettings[key];
                 } else if (el.type === 'range') {
@@ -37,6 +37,9 @@ export const UIManager = {
             }
         });
 
+        // Initialize Image Effects controls separately
+        this.initImageEffectsControls();
+
         this.setupMasterControls();
         this.setupEQCanvas(); 
         this.setupEventListeners();
@@ -45,20 +48,32 @@ export const UIManager = {
         this.updateWarpControlsVisibility(true);
         
         this.updateDeformationEngineControls(true);
+        this.updateImageEffectsVisibility(true); // Initial call for image effects
 
         this.updateMasterControls();
-        // this.openDebugAccordions(); // This line is now commented out
     },
     
-    // openDebugAccordions() {
-    //     document.querySelectorAll('.accordion-header.debug-header').forEach(header => {
-    //         const content = header.nextElementSibling;
-    //         if (content && content.classList.contains('accordion-content')) {
-    //             content.classList.add('open');
-    //             content.style.maxHeight = content.scrollHeight + 'px';
-    //         }
-    //     });
-    // },
+    initImageEffectsControls() {
+        const S = this.app.vizSettings;
+        const controls = [
+            'imageEffectType', 'imageEffect_targetColor', 'imageEffect_colorTolerance',
+            'imageEffect_edgeSoftness', 'imageEffect_tintColor', 'imageEffect_pointX',
+            'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius',
+            'imageEffect_audioInfluence'
+        ];
+
+        controls.forEach(key => {
+            const el = document.getElementById(key);
+            if (el) {
+                if (el.type === 'range') {
+                    el.value = S[key];
+                    this.updateRangeDisplay(key, el.value);
+                } else {
+                    el.value = S[key];
+                }
+            }
+        });
+    },
 
     syncManualSlidersFromState() {
         const S = this.app.vizSettings;
@@ -268,7 +283,6 @@ export const UIManager = {
         }
     },
 
-    // --- NEW GPGPU DEBUGGER DISPLAY FUNCTIONS ---
     updateGPGPUPixelValue(buffer) {
         if (!this.gpgpuPixelValueDisplay) return;
         const r = buffer[0].toFixed(3);
@@ -284,7 +298,6 @@ export const UIManager = {
         this.gpgpuPixelValueDisplay.textContent = 'Hover over debug plane...';
         this.isDisplayingPixelValue = false;
     },
-    // --- END NEW FUNCTIONS ---
 
     logError(message) { 
         if (!this.debugDisplay) return; 
@@ -306,7 +319,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness'].includes(id)) {
                 precision = 2;
@@ -346,6 +359,24 @@ export const UIManager = {
         if (!isInitial) this.refreshAccordion(document.getElementById('warpMode'));
     },
 
+    updateImageEffectsVisibility(isInitial = false) {
+        const type = this.app.vizSettings.imageEffectType;
+        const selectiveContainer = document.getElementById('imageEffects_selectiveParams');
+        const tintContainer = document.getElementById('imageEffects_tintParams');
+
+        if (!selectiveContainer || !tintContainer) return;
+
+        const isSelective = type === 'selective_balloon' || type === 'selective_pinch';
+        const isTint = type === 'tint_pulse';
+
+        selectiveContainer.style.display = isSelective ? 'block' : 'none';
+        tintContainer.style.display = isTint ? 'block' : 'none';
+
+        if (!isInitial) {
+            this.refreshAccordion(document.getElementById('imageEffectType'));
+        }
+    },
+
     updateDeformationEngineControls(isInitial = false) {
         const S = this.app.vizSettings;
         const engineMode = S.deformationEngine;
@@ -359,11 +390,9 @@ export const UIManager = {
     
         const isGpuMode = engineMode === 'gpgpu';
     
-        // Update containers
         legacyContainer.classList.toggle('container-disabled', isGpuMode);
         gpgpuAccordion.classList.toggle('container-disabled', !isGpuMode);
     
-        // Update button active states and their internal lights
         toggleContainer.querySelectorAll('.segmented-control-button').forEach(btn => {
             const light = btn.querySelector('.status-light');
             const isActive = btn.dataset.mode === engineMode;
@@ -373,7 +402,6 @@ export const UIManager = {
             }
         });
     
-        // Update the separate GPGPU accordion's header light
         gpgpuStatusLight.classList.toggle('active', isGpuMode);
     
         if (!isInitial) {
@@ -426,7 +454,6 @@ export const UIManager = {
         
         document.querySelectorAll('#deformationEngineToggle button').forEach(button => {
             button.addEventListener('click', (e) => {
-                // Find the actual button element if a child span was clicked
                 const btn = e.target.closest('.segmented-control-button');
                 if (btn) {
                     this.app.vizSettings.deformationEngine = btn.dataset.mode;
@@ -436,7 +463,7 @@ export const UIManager = {
         });
 
         document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select').forEach(control => {
-            if (control.closest('#cameraOptions') || control.closest('#deformationEngineToggle')) return;
+            if (control.closest('#cameraOptions') || control.closest('#deformationEngineToggle') || control.closest('#imageEffectsAccordion')) return;
             
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -446,7 +473,7 @@ export const UIManager = {
 
                 if (e.target.type === 'checkbox') {
                     S[id] = value;
-                } else if (e.target.type === 'range' || e.target.type === 'number' || e.target.id === 'peelAnimationStyle') {
+                } else if (e.target.type === 'range' || e.target.type === 'number') {
                     S[id] = parseFloat(value);
                 } else {
                     S[id] = value;
@@ -462,6 +489,24 @@ export const UIManager = {
                     if (this.app.vizSettings.landscapeAutopilotOn && this.app.vizSettings.activeLandscapePreset) {
                         this.app.ImagePlaneManager.startAutopilot(this.app.vizSettings.activeLandscapePreset);
                     }
+                }
+            });
+        });
+
+        document.querySelectorAll('#imageEffectsAccordion input, #imageEffectsAccordion select').forEach(control => {
+            control.addEventListener('input', e => {
+                const id = e.target.id;
+                const S = this.app.vizSettings;
+                if (S[id] !== undefined) {
+                    if (e.target.type === 'range') {
+                        S[id] = parseFloat(e.target.value);
+                        this.updateRangeDisplay(id, S[id]);
+                    } else {
+                        S[id] = e.target.value;
+                    }
+                }
+                if (id === 'imageEffectType') {
+                    this.updateImageEffectsVisibility();
                 }
             });
         });
@@ -650,7 +695,6 @@ export const UIManager = {
         if (!this.eqCanvas) { console.warn("UIManager.setupEQCanvas: #eqVisualizerCanvas not found."); return; } 
         this.eqCtx = this.eqCanvas.getContext('2d'); 
 
-        // ** THE FIX IS HERE **
         const dpr = window.devicePixelRatio || 1;
         const rect = this.eqCanvas.getBoundingClientRect();
 
@@ -669,9 +713,6 @@ export const UIManager = {
     },
     updateEQ(data) {
         if (!this.eqCtx || !data) return; 
-
-        // ** THE FIX IS HERE **
-        // Use clientWidth and clientHeight for drawing logic to respect CSS dimensions.
         const width = this.eqCanvas.clientWidth;
         const height = this.eqCanvas.clientHeight; 
 

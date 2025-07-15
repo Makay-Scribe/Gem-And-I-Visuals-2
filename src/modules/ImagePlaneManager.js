@@ -13,7 +13,7 @@ const PRESET_DEFAULT_SPEEDS = {
 export const ImagePlaneManager = {
     app: null,
     landscape: null,
-    landscapeContainer: null, // ** NEW: The grouping parent
+    landscapeContainer: null, 
     landscapeMaterial: null,
     boundingBox: new THREE.Box3(),
     planeDimensions: new THREE.Vector2(40, 40),
@@ -47,7 +47,6 @@ export const ImagePlaneManager = {
         this.app = appInstance;
         this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionLandscape);
         this.state.targetPosition.copy(this.state.homePosition);
-        // ** NEW: Initialize the container
         this.landscapeContainer = new THREE.Group();
         this.app.scene.add(this.landscapeContainer);
         this.createDefaultLandscape();
@@ -215,12 +214,10 @@ export const ImagePlaneManager = {
             this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
         }
 
-        // Apply position and orientation to the container
         this.landscapeContainer.position.lerp(this.state.targetPosition, 0.05);
         this.landscapeContainer.quaternion.slerp(this.state.targetQuaternion, 0.05);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
-        // Apply spin directly to the mesh
         if (S.enableLandscapeSpin && S.landscapeSpinSpeed !== 0) {
             this.landscape.rotateOnAxis(new THREE.Vector3(0, 0, 1), -S.landscapeSpinSpeed * cappedDelta);
         }
@@ -232,7 +229,6 @@ export const ImagePlaneManager = {
 
     createDefaultLandscape() {
         this.updatePlaneDimensions();
-        // Clear any previous landscape from the container
         if (this.landscape) {
             this.landscapeContainer.remove(this.landscape);
             if (this.landscape.geometry) this.landscape.geometry.dispose();
@@ -259,12 +255,10 @@ export const ImagePlaneManager = {
         this.landscape = new THREE.Mesh(landGeom, this.landscapeMaterial);
         this.landscape.frustumCulled = false;
         
-        // Add the landscape mesh to the container, NOT the scene
         this.landscapeContainer.add(this.landscape);
 
         this.applyAndStoreHomeOrientation();
         
-        // Set the container's initial state
         this.landscapeContainer.position.copy(this.state.homePosition);
         this.landscapeContainer.quaternion.copy(this.state.homeQuaternion);
         this.state.targetPosition.copy(this.state.homePosition);
@@ -285,7 +279,6 @@ export const ImagePlaneManager = {
         if (S.planeOrientation === 'xz') { tempLandscape.rotateX(-Math.PI / 2); } 
         else if (S.planeOrientation === 'yz') { tempLandscape.rotateY(Math.PI / 2); }
         
-        // Store this calculated orientation as our "home" state for the CONTAINER
         this.state.homeQuaternion.copy(tempLandscape.quaternion);
     },
     
@@ -294,27 +287,29 @@ export const ImagePlaneManager = {
         const textureToUse = this.currentTexture || new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
 
-        // ** THE FIX IS HERE **
         const positionRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
         
         this.landscapeMaterial = new THREE.ShaderMaterial({
             uniforms: {
+                // ** THE FIX IS HERE: COMPLETE AND CORRECT UNIFORM LIST **
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: positionRenderTarget.texture }, 
-                // Removed u_normalTexture
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
                 u_time: { value: 0.0 },
-                u_beat: { value: 0.0 },
                 u_audioLow: { value: 0.0 },
-                u_audioMid: { value: 0.0 },
                 u_planeResolution: { value: this.planeResolution },
                 u_lightColor: { value: new THREE.Color(S.lightColor) },
                 u_ambientLightColor: { value: new THREE.Color(S.ambientLightColor) },
                 u_lightDirection: { value: new THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
                 u_cameraPosition: { value: this.app.camera.position },
-                t_envMap: { value: this.app.hdrTexture }, 
+                t_envMap: { value: this.app.hdrTexture },
+                u_imageEffect_enableBalloon: { value: S.imageEffect_enableBalloon },
+                u_imageEffect_point: { value: new THREE.Vector2(S.imageEffect_pointX, S.imageEffect_pointY) },
+                u_imageEffect_strength: { value: S.imageEffect_strength },
+                u_imageEffect_radius: { value: S.imageEffect_radius },
+                u_imageEffect_audioInfluence: { value: S.imageEffect_audioInfluence },
             },
             vertexShader: landscapeRenderVertexShader,
             fragmentShader: landscapeRenderFragmentShader,
@@ -359,18 +354,16 @@ export const ImagePlaneManager = {
 
     updateDeformationUniforms() {
         if (!this.landscapeMaterial || !this.app.ComputeManager || !this.app.ComputeManager.gpuCompute) { return; }
-        // ** THE FIX IS HERE **
         const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
         if (!positionTarget) return; 
 
         const S = this.app.vizSettings;
         const U = this.landscapeMaterial.uniforms;
+        
+        // Update original uniforms
         U.u_time.value = this.app.currentTime;
-        U.u_beat.value = this.app.AudioProcessor.triggers.beat ? 1.0 : 0.0;
         U.u_audioLow.value = this.app.AudioProcessor.energy.low;
-        U.u_audioMid.value = this.app.AudioProcessor.energy.mid;
         U.u_positionTexture.value = positionTarget.texture;
-        // Removed u_normalTexture update
         U.u_metalness.value = S.metalness;
         U.u_roughness.value = S.roughness;
         U.u_envMapIntensity.value = S.reflectionStrength;
@@ -379,6 +372,15 @@ export const ImagePlaneManager = {
         U.u_lightColor.value.set(S.lightColor);
         U.u_ambientLightColor.value.set(S.ambientLightColor);
         U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+
+        // Update balloon effect uniforms
+        U.u_imageEffect_enableBalloon.value = S.imageEffect_enableBalloon;
+        if (S.imageEffect_enableBalloon) {
+            U.u_imageEffect_point.value.set(S.imageEffect_pointX, S.imageEffect_pointY);
+            U.u_imageEffect_strength.value = S.imageEffect_strength;
+            U.u_imageEffect_radius.value = S.imageEffect_radius;
+            U.u_imageEffect_audioInfluence.value = S.imageEffect_audioInfluence;
+        }
     },
 
     updateBoundingBox() {

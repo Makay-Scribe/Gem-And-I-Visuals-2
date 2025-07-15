@@ -128,6 +128,14 @@ const App = {
         enableFoldTuck: false,
         foldTuckAmount: 0.0,
         foldTuckReach: 0.15,
+        // ** THE FIX IS HERE: SIMPLIFIED IMAGE EFFECTS **
+        imageEffect_enableBalloon: false,
+        imageEffect_pointX: 0.5,
+        imageEffect_pointY: 0.5,
+        imageEffect_strength: 0.5,
+        imageEffect_radius: 0.3,
+        imageEffect_audioInfluence: 0.5,
+        // --- END IMAGE EFFECTS ---
         // --- GPGPU SETTINGS ---
         gpgpu_enableWaterRipple: false,
         gpgpu_rippleSpeed: 0.5,
@@ -140,7 +148,7 @@ const App = {
         gpgpu_eqRippleBarWidth: 0.8,
         gpgpu_eqRippleRangeStart: 0.0,
         gpgpu_eqRippleRangeEnd: 1.0,
-        gpgpu_eqRippleStyle: 'Left', // ** THE FIX IS HERE **
+        gpgpu_eqRippleStyle: 'Left',
         gpgpu_enableCloth: false,
         gpgpu_clothDamping: 1.0,
         gpgpu_clothStiffness: 0.8,
@@ -156,7 +164,6 @@ const App = {
         gpgpu_directionalWindY: 1.6,
         gpgpu_directionalWindZ: 5.8,
         gpgpu_clothBlendTime: 9.6, 
-        pointDeformers: [],
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",

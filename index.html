@@ -95,7 +95,7 @@
                     <input type="range" id="masterScale" min="0.1" max="3.0" step="0.01" value="1.0">
                     
                     <div id="masterSpeedContainer" style="display: none;">
-                        <label>Speed: <span id="masterSpeedValue" class="range-value-display">1.0</span></label>
+                        <label>Speed: <span id="masterSpeedValue" class="range-value-display"></span></label>
                         <input type="range" id="masterSpeed" min="0.1" max="5.0" step="0.05" value="1.0">
                     </div>
                 </div>
@@ -294,6 +294,31 @@
             </div>
         </div>
         
+        <!-- ** THE FIX IS HERE: SIMPLIFIED IMAGE EFFECTS ACCORDION ** -->
+        <div class="accordion-item" id="imageEffectsAccordion">
+            <button class="accordion-header">Image Effects</button>
+            <div class="accordion-content">
+                <div class="checkbox-label-container">
+                    <label for="imageEffect_enableBalloon">Enable Balloon Effect</label>
+                    <input type="checkbox" id="imageEffect_enableBalloon">
+                </div>
+                
+                <p class="sub-group-title">EFFECT POSITION (UV COORDS)</p>
+                <label>Position X: <span id="imageEffect_pointXValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_pointX" min="0.0" max="1.0" step="0.01" value="0.5">
+                <label>Position Y: <span id="imageEffect_pointYValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_pointY" min="0.0" max="1.0" step="0.01" value="0.5">
+
+                <p class="sub-group-title">EFFECT PARAMETERS</p>
+                <label>Strength/Amount: <span id="imageEffect_strengthValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_strength" min="0.0" max="1.0" step="0.01" value="0.5">
+                <label>Radius: <span id="imageEffect_radiusValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_radius" min="0.0" max="1.0" step="0.01" value="0.3">
+                <label>Audio Influence: <span id="imageEffect_audioInfluenceValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_audioInfluence" min="0.0" max="1.0" step="0.01" value="0.5">
+            </div>
+        </div>
+        
         <div class="accordion-item" id="gpgpuEffectsAccordion">
             <button class="accordion-header">
                 <span class="header-title">GPGPU Effects</span>
@@ -410,9 +435,6 @@
                     </div>
                 </div>
                 
-                <!-- ** THE FIX IS HERE ** -->
-                <!-- The Point Deformer accordion has been removed from the GPGPU section -->
-
             </div>
         </div>
 
