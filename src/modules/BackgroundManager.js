@@ -5,6 +5,7 @@ import backgroundFragmentShader from '../rendering/shaders/background.frag?raw';
 export const BackgroundManager = {
     app: null, // Will be set on init
     cubeCamera: null, // Will capture the live background for reflections
+    activePresetId: null, // ** NEW: Track active preset **
 
     init(appInstance) {
         this.app = appInstance;
@@ -163,8 +164,6 @@ export const BackgroundManager = {
         }
         
         // --- RENDER VISIBLE BACKGROUND ---
-        // This function no longer calls .clear() or .setClearColor().
-        // It is only responsible for drawing the background plane if it's active.
         if (isBackgroundActive) {
             this.app.renderer.render(this.app.backgroundScene, this.app.backgroundCamera);
         }

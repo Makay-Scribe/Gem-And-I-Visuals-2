@@ -293,6 +293,27 @@ export const UIManager = {
         }
     },
 
+    updateModelPresetGlow() {
+        const activePresetId = this.app.ModelManager.activePresetId;
+        for (let i = 1; i <= 12; i++) {
+            const button = document.getElementById(`modelPreset${i}`);
+            if (button) {
+                button.classList.toggle('button-glow-effect', button.id === activePresetId);
+            }
+        }
+    },
+
+    // ** NEW: Highlight the active background shader preset **
+    updateBackgroundPresetGlow() {
+        const activePresetId = this.app.BackgroundManager.activePresetId;
+        for (let i = 1; i <= 8; i++) {
+            const button = document.getElementById(`presetBg${i}`);
+            if (button) {
+                button.classList.toggle('button-glow-effect', button.id === activePresetId);
+            }
+        }
+    },
+
     updateGPGPUPixelValue(buffer) {
         if (!this.gpgpuPixelValueDisplay) return;
         const r = buffer[0].toFixed(3);
@@ -433,6 +454,7 @@ export const UIManager = {
     toggleLightSliders() { 
         const disabled = this.app.vizSettings.enableLightOrbit; 
         document.getElementById('lightDirectionX').disabled = disabled;
+        document.getElementById('lightDirectionY').disabled = disabled;
         document.getElementById('lightDirectionZ').disabled = disabled;
     },
 
@@ -446,8 +468,7 @@ export const UIManager = {
         }
     },
     
-    // ** THE FIX IS HERE: New function to load user shader **
-    loadUserShader() {
+    loadUserShader(presetId) {
         const userFragmentShader = this.app.vizSettings.shaderToyGLSL;
         if (!userFragmentShader) {
             console.warn("No ShaderToy GLSL provided.");
@@ -456,13 +477,14 @@ export const UIManager = {
         
         if (this.app.BackgroundManager) {
             this.app.BackgroundManager.updateShader(userFragmentShader);
+            this.app.BackgroundManager.activePresetId = presetId;
+            this.updateBackgroundPresetGlow();
             this.logSuccess("Shader loaded successfully.");
         } else {
             this.logError("BackgroundManager not found to update shader.");
         }
     },
     
-    // ** THE FIX IS HERE: New function to load channel textures **
     loadChannelTexture(channelIndex, file) {
         if (!this.app.BackgroundManager) {
             this.logError("BackgroundManager not found for texture loading.");
@@ -474,7 +496,6 @@ export const UIManager = {
             const uniformName = `iChannel${channelIndex}`;
             
             if (this.app.shaderMaterial.uniforms[uniformName]) {
-                // Dispose of the old texture to free up GPU memory
                 const oldTexture = this.app.shaderMaterial.uniforms[uniformName].value;
                 if(oldTexture && typeof oldTexture.dispose === 'function') {
                     oldTexture.dispose();
@@ -482,7 +503,6 @@ export const UIManager = {
 
                 this.app.shaderMaterial.uniforms[uniformName].value = texture;
                 
-                // Also update the resolution uniform for that channel
                 const resUniformName = `iChannelResolution`;
                 if(this.app.shaderMaterial.uniforms[resUniformName]) {
                     this.app.shaderMaterial.uniforms[resUniformName].value[channelIndex].set(texture.image.width, texture.image.height, 1);
@@ -505,11 +525,27 @@ export const UIManager = {
         document.getElementById('playTestToneButton').addEventListener('click', () => this.app.AudioProcessor.toggleTestTone());
         document.querySelectorAll('.browse-btn').forEach(btn => btn.addEventListener('click', () => document.getElementById(btn.dataset.target).click()));
         
-        // ** THE FIX IS HERE: "Load" button now calls the function in this manager **
         document.getElementById('loadShaderCode').addEventListener('click', () => this.loadUserShader());
 
-        document.getElementById('clearShaderCode').addEventListener('click', () => { document.getElementById('shaderToyGLSL').value = ''; this.app.vizSettings.shaderToyGLSL = ''; this.logSuccess('Shader cleared.'); });
-        document.getElementById('pasteShaderCode').addEventListener('click', async () => { try { const text = await navigator.clipboard.readText(); document.getElementById('shaderToyGLSL').value = text; this.app.vizSettings.shaderToyGLSL = text; this.logSuccess('Pasted from clipboard.'); } catch (err) { this.logError('Failed to read from clipboard.'); } });
+        document.getElementById('clearShaderCode').addEventListener('click', () => { 
+            document.getElementById('shaderToyGLSL').value = ''; 
+            this.app.vizSettings.shaderToyGLSL = ''; 
+            this.app.BackgroundManager.activePresetId = null;
+            this.updateBackgroundPresetGlow();
+            this.logSuccess('Shader cleared.'); 
+        });
+        document.getElementById('pasteShaderCode').addEventListener('click', async () => { 
+            try { 
+                const text = await navigator.clipboard.readText(); 
+                document.getElementById('shaderToyGLSL').value = text; 
+                this.app.vizSettings.shaderToyGLSL = text; 
+                this.app.BackgroundManager.activePresetId = null;
+                this.updateBackgroundPresetGlow();
+                this.logSuccess('Pasted from clipboard.'); 
+            } catch (err) { 
+                this.logError('Failed to read from clipboard.'); 
+            } 
+        });
         document.getElementById('landscapeResetButton').addEventListener('click', () => this.resetLandscapeSettings());
         
         const fileInputIds = ['mainTextureInput', 'videoTextureInput', 'audioFileInput', 'gltfModelInput', 'hdriInput', 'iChannel0Input', 'iChannel1Input', 'iChannel2Input', 'iChannel3Input'];
@@ -573,8 +609,8 @@ export const UIManager = {
                 let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
 
                 if (S[id] !== undefined) {
-                     if (e.target.type === 'range' || e.target.type === 'number') {
-                        S[id] = parseFloat(value);
+                     if (e.target.type === 'range' || e.target.type === 'number' || e.target.type === 'color') {
+                        S[id] = e.target.type === 'range' ? parseFloat(value) : value;
                     } else {
                         S[id] = value;
                     }
@@ -582,18 +618,30 @@ export const UIManager = {
                 
                 if (e.target.type === 'range') this.updateRangeDisplay(id, value);
                 
-                if (id === 'backgroundMode') this.updateBackgroundControlsVisibility();
-                
-                if (id === 'warpMode') {
-                    this.app.vizSettings.warpMode = value; // Directly update the settings
+                if (id === 'toneMappingMode') {
+                    const toneMappingOptions = { 'ACESFilmic': this.app.THREE.ACESFilmicToneMapping, 'Reinhard': this.app.THREE.ReinhardToneMapping, 'Linear': this.app.THREE.LinearToneMapping };
+                    if (this.app.renderer) this.app.renderer.toneMapping = toneMappingOptions[value];
+                } else if (id === 'toneMappingExposure') {
+                    if (this.app.renderer) this.app.renderer.toneMappingExposure = parseFloat(value);
+                } else if (id === 'backgroundMode') {
+                    this.updateBackgroundControlsVisibility();
+                } else if (id === 'warpMode') {
+                    this.app.vizSettings.warpMode = value; 
                     const isEnabled = value !== 'none';
                     this.app.vizSettings.enableWarp = isEnabled;
                     document.getElementById('enableWarp').checked = isEnabled;
                     this.updateWarpControlsVisibility();
-                }
-
-                if (id === 'enableLightOrbit') this.toggleLightSliders();
-                if (id === 'planeAspectRatio' || id === 'planeOrientation') {
+                } else if (id === 'enableLightOrbit') {
+                    this.toggleLightSliders();
+                } else if (id === 'lightColor') {
+                    if (this.app.directionalLight) this.app.directionalLight.color.set(value);
+                } else if (id === 'ambientLightColor') {
+                    if (this.app.ambientLight) this.app.ambientLight.color.set(value);
+                } else if (id === 'lightDirectionX' || id === 'lightDirectionY' || id === 'lightDirectionZ') {
+                    if (this.app.directionalLight) {
+                        this.app.directionalLight.position.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+                    }
+                } else if (id === 'planeAspectRatio' || id === 'planeOrientation') {
                     this.app.ImagePlaneManager.createDefaultLandscape();
                     if (this.app.vizSettings.landscapeAutopilotOn && this.app.vizSettings.activeLandscapePreset) {
                         this.app.ImagePlaneManager.startAutopilot(this.app.vizSettings.activeLandscapePreset);
@@ -608,6 +656,16 @@ export const UIManager = {
                  if (this.app.vizSettings[e.target.id] !== undefined) {
                      this.app.vizSettings[e.target.id] = e.target.checked;
                  }
+
+                if (e.target.id === 'enablePBRColor') {
+                    const ipm = this.app.ImagePlaneManager;
+                    if (ipm && ipm.currentTexture) {
+                        const isChecked = e.target.checked;
+                        ipm.currentTexture.colorSpace = isChecked ? this.app.THREE.SRGBColorSpace : this.app.THREE.NoColorSpace;
+                        ipm.currentTexture.needsUpdate = true;
+                    }
+                }
+
              });
         });
 
@@ -677,12 +735,13 @@ export const UIManager = {
         for (let i = 1; i <= 8; i++) {
             const btn = document.getElementById(`presetBg${i}`);
             if (btn) btn.addEventListener('click', () => { 
-                const shaderCode = this.app.shaderPresets[`presetBg${i}`]; 
+                const presetId = `presetBg${i}`;
+                const shaderCode = this.app.shaderPresets[presetId]; 
                 if (shaderCode) { 
                     document.getElementById('shaderToyGLSL').value = shaderCode; 
                     this.app.vizSettings.shaderToyGLSL = shaderCode; 
-                    this.logSuccess(`Preset 'presetBg${i}' loaded.`); 
-                    document.getElementById('loadShaderCode').click(); 
+                    this.logSuccess(`Preset '${presetId}' loaded.`); 
+                    this.loadUserShader(presetId); // Pass the ID
                 }
             });
         }
@@ -692,7 +751,7 @@ export const UIManager = {
             if(btn) {
                 btn.addEventListener('click', () => {
                     const preset = this.app.modelPresets[presetId];
-                    if (preset) this.app.ModelManager.loadGLTFModel(preset.path);
+                    if (preset) this.app.ModelManager.loadGLTFModel(preset);
                 });
             }
         });
@@ -776,7 +835,6 @@ export const UIManager = {
 
         if (id.startsWith('iChannel')) {
             const channelIndex = parseInt(id.charAt(id.length - 1));
-            // ** THE FIX IS HERE: Call the function in this manager **
             this.loadChannelTexture(channelIndex, file);
             return;
         }
@@ -797,7 +855,8 @@ export const UIManager = {
                 break;
             case 'gltfModelInput':
                 this.updateFileNameDisplay('gltf', file.name);
-                this.app.ModelManager.loadGLTFModel(URL.createObjectURL(file)); 
+                const preset = { path: URL.createObjectURL(file), name: file.name, id: null, homeOffset: new THREE.Vector3() };
+                this.app.ModelManager.loadGLTFModel(preset); 
                 break;
         }
     },

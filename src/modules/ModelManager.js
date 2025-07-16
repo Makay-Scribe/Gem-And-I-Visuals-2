@@ -13,6 +13,7 @@ export const ModelManager = {
     app: null,
     gltfModel: null,
     animationMixer: null,
+    activePresetId: null,
     baseScale: new THREE.Vector3(1, 1, 1),
     boundingSphere: new THREE.Sphere(),
     _waypointRetryCount: 0, 
@@ -65,7 +66,7 @@ export const ModelManager = {
         ap.waypointProgress = 1.0; 
         ap.holdTimer = 0;
         
-        const home = this.state.homePosition;
+        const home = this.state.targetPosition; 
 
         switch(presetId) {
             case 'autopilotPreset1': 
@@ -117,6 +118,10 @@ export const ModelManager = {
         ap.startQuat.copy(this.state.targetQuaternion);
 
         ap.endPos.copy(this.state.homePosition);
+        if (this.activePresetId && this.app.modelPresets[this.activePresetId]?.homeOffset) {
+            ap.endPos.add(this.app.modelPresets[this.activePresetId].homeOffset);
+        }
+
         ap.endQuat.copy(this.state.homeQuaternion); 
         ap.waypointProgress = 0;
 
@@ -220,16 +225,19 @@ export const ModelManager = {
         }
     },
 
-    loadGLTFModel(path) {
-        if (!path) {
-            console.error("No GLTF model path provided.");
-            if (this.app.UIManager) this.app.UIManager.logError("Cannot load model: No path specified.");
+    loadGLTFModel(preset) {
+        if (!preset || !preset.path) {
+            console.error("No valid GLTF model preset provided.");
+            if (this.app.UIManager) this.app.UIManager.logError("Cannot load model: Invalid preset.");
             return;
         }
 
+        this.activePresetId = preset.id;
+        if (this.app.UIManager) this.app.UIManager.updateModelPresetGlow();
+
         const loader = new GLTFLoader();
         loader.load(
-            path,
+            preset.path,
             (gltf) => {
                 if (this.gltfModel) {
                     this.gltfModel.removeFromParent();
@@ -243,9 +251,13 @@ export const ModelManager = {
                 this.app.gltfModel = gltf.scene;
                 
                 this.app.scene.add(this.gltfModel);
-
-                this.gltfModel.position.copy(this.state.homePosition);
-                this.state.targetPosition.copy(this.state.homePosition);
+                
+                const finalHomePos = new THREE.Vector3().copy(this.state.homePosition);
+                if (preset.homeOffset) {
+                    finalHomePos.add(preset.homeOffset);
+                }
+                this.gltfModel.position.copy(finalHomePos);
+                this.state.targetPosition.copy(finalHomePos);
                 
                 const box = new THREE.Box3().setFromObject(this.gltfModel);
                 box.getBoundingSphere(this.boundingSphere);
@@ -264,7 +276,7 @@ export const ModelManager = {
                     this.app.animationMixer = this.animationMixer;
                 }
                 
-                if (this.app.UIManager) this.app.UIManager.logSuccess(`Model loaded: ${path.split('/').pop()}`);
+                if (this.app.UIManager) this.app.UIManager.logSuccess(`Model loaded: ${preset.name}`);
                 
                 this.gltfModel.scale.multiplyScalar(this.app.defaultVisualizerSettings.modelScale);
                 
@@ -292,14 +304,17 @@ export const ModelManager = {
         } else if (this.state.isUnderManualControl) {
             // Do nothing. The mouse/sliders are controlling the target state directly.
         } else {
-            this.state.targetPosition.lerp(this.state.homePosition, 0.02);
+            const finalHomePos = new THREE.Vector3().copy(this.state.homePosition);
+            if (this.activePresetId && this.app.modelPresets[this.activePresetId]?.homeOffset) {
+                finalHomePos.add(this.app.modelPresets[this.activePresetId].homeOffset);
+            }
+            this.state.targetPosition.lerp(finalHomePos, 0.02);
             this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
         }
         
         this.gltfModel.position.lerp(this.state.targetPosition, 0.05);
         this.gltfModel.quaternion.slerp(this.state.targetQuaternion, 0.05);
         
-        // ** THE FIX IS HERE: The spin logic is now driven by the new model-specific settings **
         if (S.enableModelSpin) {
             this.gltfModel.rotation.y += S.modelSpinSpeed * delta;
         }

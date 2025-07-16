@@ -494,18 +494,6 @@
         <div class="accordion-item">
             <button class="accordion-header" data-header-id="model">3D Model</button>
             <div class="accordion-content">
-                <div class="checkbox-label-container">
-                    <label for="enableModel">Enable</label>
-                    <input type="checkbox" id="enableModel" checked>
-                </div>
-                
-                <p class="sub-group-title">ASSETS</p>
-                <div class="file-input-row">
-                    <button class="browse-btn" data-target="gltfModelInput">Load Model...</button>
-                    <span id="gltfFileName" class="file-name-display">No model selected.</span>
-                    <input type="file" id="gltfModelInput" accept=".gltf,.glb" style="display:none;">
-                </div>
-
                 <p class="sub-group-title">MODEL PRESETS</p>
                 <div class="model-preset-grid">
                     <button id="modelPreset1">1</button>
@@ -521,6 +509,18 @@
                     <button id="modelPreset11">11</button>
                     <button id="modelPreset12">12</button>
                 </div>
+
+                <p class="sub-group-title">ASSETS</p>
+                <div class="file-input-row">
+                    <button class="browse-btn" data-target="gltfModelInput">Load Model...</button>
+                    <span id="gltfFileName" class="file-name-display">No model selected.</span>
+                    <input type="file" id="gltfModelInput" accept=".gltf,.glb" style="display:none;">
+                </div>
+
+                <div class="checkbox-label-container">
+                    <label for="enableModel">Enable</label>
+                    <input type="checkbox" id="enableModel" checked>
+                </div>
             </div>
         </div>
 
@@ -528,25 +528,23 @@
         <div class="accordion-item">
             <button class="accordion-header" data-header-id="material">Material</button>
             <div class="accordion-content">
-                <p class="sub-group-title">PBR SURFACE</p>
-                <label for="metalness">Metalness: <span id="metalnessValue" class="range-value-display"></span></label>
-                <input type="range" id="metalness" min="0.0" max="1.0" step="0.01" value="0.0">
-                <label for="roughness">Roughness: <span id="roughnessValue" class="range-value-display"></span></label>
-                <input type="range" id="roughness" min="0.0" max="1.0" step="0.01" value="0.35">
-
-                <p class="sub-group-title">COLOR & TONE</p>
-                <div class="checkbox-label-container">
-                    <label for="enablePBRColor" title="Enables physically correct color space for textures. Uncheck for a softer, legacy look.">Correct Color (PBR)</label>
-                    <input type="checkbox" id="enablePBRColor" checked>
+                <div class="accordion-item">
+                    <button class="accordion-header">Color & Tone</button>
+                    <div class="accordion-content">
+                        <div class="checkbox-label-container">
+                            <label for="enablePBRColor" title="Enables physically correct color space for textures. Uncheck for a softer, legacy look.">Correct Color (PBR)</label>
+                            <input type="checkbox" id="enablePBRColor" checked>
+                        </div>
+                        <label for="toneMappingMode">Tone Mapping</label>
+                        <select id="toneMappingMode">
+                            <option value="Reinhard">Reinhard (Balanced)</option>
+                            <option value="ACESFilmic" selected>ACES Filmic (Cinematic)</option>
+                            <option value="Linear">Linear (Bold/Unprocessed)</option>
+                        </select>
+                        <label for="toneMappingExposure">Exposure: <span id="toneMappingExposureValue" class="range-value-display"></span></label>
+                        <input type="range" id="toneMappingExposure" min="0.0" max="3.0" step="0.01" value="1.2">
+                    </div>
                 </div>
-                <label for="toneMappingMode">Tone Mapping</label>
-                <select id="toneMappingMode">
-                    <option value="Reinhard" selected>Reinhard (Balanced)</option>
-                    <option value="ACESFilmic">ACES Filmic (Cinematic)</option>
-                    <option value="Linear">Linear (Bold/Unprocessed)</option>
-                </select>
-                <label for="toneMappingExposure">Exposure: <span id="toneMappingExposureValue" class="range-value-display"></span></label>
-                <input type="range" id="toneMappingExposure" min="0.0" max="3.0" step="0.01" value="1.2">
 
                 <div class="accordion-item">
                     <button class="accordion-header">Reflections</button>
@@ -565,13 +563,30 @@
                     </div>
                 </div>
 
+                <div class="accordion-item">
+                    <button class="accordion-header">PBR Surface</button>
+                    <div class="accordion-content">
+                        <label for="metalness">Metalness: <span id="metalnessValue" class="range-value-display"></span></label>
+                        <input type="range" id="metalness" min="0.0" max="1.0" step="0.01" value="0.0">
+                        <label for="roughness">Roughness: <span id="roughnessValue" class="range-value-display"></span></label>
+                        <input type="range" id="roughness" min="0.0" max="1.0" step="0.01" value="1.0">
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Lighting Section -->
         <div class="accordion-item">
             <button class="accordion-header" data-header-id="lighting">Lighting</button>
-            <div class="accordion-content"><label for="lightColor">Directional Color:</label><input type="color" id="lightColor" value="#FFF5E1"><label for="ambientLightColor">Ambient Color:</label><input type="color" id="ambientLightColor" value="#663300"><p class="sub-group-title">DIRECTION</p><div class="checkbox-label-container"><label for="enableLightOrbit">Enable Orbit</label><input type="checkbox" id="enableLightOrbit" checked></div><label>Orbit Speed: <span id="lightOrbitSpeedValue" class="range-value-display"></span></label><input type="range" id="lightOrbitSpeed" min="0.0" max="1.0" step="0.01" value="0.2"><hr style="border-color: #444; margin: 10px 0;"><label>Direction X: <span id="lightDirectionXValue" class="range-value-display"></span></label><input type="range" id="lightDirectionX" min="-1.0" max="1.0" step="0.05" value="0.5"><label>Direction Y: <span id="lightDirectionYValue" class="range-value-display"></span></label><input type="range" id="lightDirectionY" min="-1.0" max="1.0" step="0.05" value="0.8"><label>Direction Z: <span id="lightDirectionZValue" class="range-value-display"></span></label><input type="range" id="lightDirectionZ" min="-1.0" max="1.0" step="0.05" value="0.5"><p class="sub-group-title">VISUALS</p><div class="checkbox-label-container"><label for="enableGuideLaser">Enable Guide Laser</label><input type="checkbox" id="enableGuideLaser"></div></div>
+            <div class="accordion-content">
+                <label for="lightColor">Directional Color:</label>
+                <input type="color" id="lightColor" value="#FF80C0">
+                <label for="ambientLightColor">Ambient Color:</label>
+                <input type="color" id="ambientLightColor" value="#DBDBDB">
+                <p class="sub-group-title">DIRECTION</p>
+                <div class="checkbox-label-container"><label for="enableLightOrbit">Enable Orbit</label><input type="checkbox" id="enableLightOrbit" checked></div>
+                <label>Orbit Speed: <span id="lightOrbitSpeedValue" class="range-value-display"></span></label><input type="range" id="lightOrbitSpeed" min="0.0" max="1.0" step="0.01" value="0.2"><hr style="border-color: #444; margin: 10px 0;"><label>Direction X: <span id="lightDirectionXValue" class="range-value-display"></span></label><input type="range" id="lightDirectionX" min="-1.0" max="1.0" step="0.05" value="0.5"><label>Direction Y: <span id="lightDirectionYValue" class="range-value-display"></span></label><input type="range" id="lightDirectionY" min="-1.0" max="1.0" step="0.05" value="0.8"><label>Direction Z: <span id="lightDirectionZValue" class="range-value-display"></span></label><input type="range" id="lightDirectionZ" min="-1.0" max="1.0" step="0.05" value="0.5"><p class="sub-group-title">VISUALS</p><div class="checkbox-label-container"><label for="enableGuideLaser">Enable Guide Laser</label><input type="checkbox" id="enableGuideLaser"></div>
+            </div>
         </div>
 
         <!-- Background FX Section -->
@@ -589,28 +604,24 @@
                 <!-- Container for ShaderToy specific controls -->
                 <div id="shaderToyControls" style="display: none;">
                     <hr style="border-color: #444; margin: 15px 0;">
-                    
+                    <p class="sub-group-title">PRESETS</p>
+                    <div class="preset-buttons">
+                        <button id="presetBg1">Preset 1</button>
+                        <button id="presetBg2">Preset 2</button>
+                        <button id="presetBg3">Preset 3</button>
+                        <button id="presetBg4">Preset 4</button>
+                        <button id="presetBg5">Preset 5</button>
+                        <button id="presetBg6">Preset 6</button>
+                        <button id="presetBg7">Preset 7</button>
+                        <button id="presetBg8">Preset 8</button>
+                    </div>
+
                     <p class="sub-group-title">MOUSE INTERACTION</p>
                     <div class="checkbox-label-container">
                         <label for="enableShaderMouse">Enable Drag-to-Move</label>
                         <input type="checkbox" id="enableShaderMouse">
                     </div>
-                    
-                    <p class="sub-group-title">SHADER CHANNELS</p>
-                    <div class="channel-input-grid">
-                        <label for="iChannel0Input">iChannel0:</label><input type="file" id="iChannel0Input" class="channel-input" accept="image/*">
-                        <label for="iChannel1Input">iChannel1:</label><input type="file" id="iChannel1Input" class="channel-input" accept="image/*">
-                        <label for="iChannel2Input">iChannel2:</label><input type="file" id="iChannel2Input" class="channel-input" accept="image/*">
-                        <label for="iChannel3Input">iChannel3:</label><input type="file" id="iChannel3Input" class="channel-input" accept="image/*">
-                    </div>
-                    <p class="sub-group-title">SHADER CODE</p>
-                    <textarea id="shaderToyGLSL"></textarea>
-                    <div class="button-row">
-                        <button id="clearShaderCode">Clear</button>
-                        <button id="pasteShaderCode">Paste</button>
-                        <button id="loadShaderCode">Load</button>
-                    </div>
-                    
+
                     <p class="sub-group-title">AUDIO REACTIVITY</p>
                     <div id="shaderAudioControlsContainer">
                         <div class="button-row" style="align-items: center;">
@@ -632,17 +643,21 @@
                         <label>Smoothing: <span id="shaderAudioSmoothingValue" class="range-value-display"></span></label>
                         <input type="range" id="shaderAudioSmoothing" min="0.0" max="0.99" step="0.01" value="0.5">
                     </div>
+
+                    <p class="sub-group-title">SHADER CODE</p>
+                    <textarea id="shaderToyGLSL"></textarea>
+                    <div class="button-row">
+                        <button id="clearShaderCode">Clear</button>
+                        <button id="pasteShaderCode">Paste</button>
+                        <button id="loadShaderCode">Load</button>
+                    </div>
                     
-                    <p class="sub-group-title">PRESETS</p>
-                    <div class="preset-buttons">
-                        <button id="presetBg1">Preset 1</button>
-                        <button id="presetBg2">Preset 2</button>
-                        <button id="presetBg3">Preset 3</button>
-                        <button id="presetBg4">Preset 4</button>
-                        <button id="presetBg5">Preset 5</button>
-                        <button id="presetBg6">Preset 6</button>
-                        <button id="presetBg7">Preset 7</button>
-                        <button id="presetBg8">Preset 8</button>
+                    <p class="sub-group-title">SHADER CHANNELS</p>
+                    <div class="channel-input-grid">
+                        <label for="iChannel0Input">iChannel0:</label><input type="file" id="iChannel0Input" class="channel-input" accept="image/*">
+                        <label for="iChannel1Input">iChannel1:</label><input type="file" id="iChannel1Input" class="channel-input" accept="image/*">
+                        <label for="iChannel2Input">iChannel2:</label><input type="file" id="iChannel2Input" class="channel-input" accept="image/*">
+                        <label for="iChannel3Input">iChannel3:</label><input type="file" id="iChannel3Input" class="channel-input" accept="image/*">
                     </div>
                     <div id="debugDisplay"></div>
                 </div>
@@ -749,13 +764,13 @@
                 <label>Amount: <span class="point-deformer-amount-value range-value-display"></span></label>
                 <input type="range" class="point-deformer-amount" min="-20.0" max="20.0" step="0.1" value="5.0">
 
-                <label>Radius: <span class="point-deformer-radius-value range-value-display"></span></label>
+                <label>Radius: <span class="point-deformer-radius-value" class="range-value-display"></span></label>
                 <input type="range" class="point-deformer-radius" min="0.0" max="0.7" step="0.01" value="0.2">
 
-                <label>Position X: <span class="point-deformer-posX-value range-value-display"></span></label>
+                <label>Position X: <span class="point-deformer-posX-value" class="range-value-display"></span></label>
                 <input type="range" id="point-deformer-posX" min="0.0" max="1.0" step="0.01" value="0.5">
 
-                <label>Position Y: <span class="point-deformer-posY-value range-value-display"></span></label>
+                <label>Position Y: <span class="point-deformer-posY-value" class="range-value-display"></span></label>
                 <input type="range" id="point-deformer-posY" min="0.0" max="1.0" step="0.01" value="0.5">
             </div>
         </div>

@@ -238,8 +238,26 @@ export const ImagePlaneManager = {
             }
             landGeom.setAttribute('triangleCenter', new THREE.BufferAttribute(triangleCenters, 3));
 
+            const uvGpgpuAttribute = landGeom.attributes.uv.clone();
+            const uvArray = uvGpgpuAttribute.array;
+            // ** THE FIX IS HERE: Invert the Y-coordinate of the cloned UVs **
+            for (let i = 1; i < uvArray.length; i += 2) {
+                uvArray[i] = 1.0 - uvArray[i];
+            }
+            landGeom.setAttribute('uv_gpgpu', uvGpgpuAttribute);
+
         } else {
             console.log("Creating continuous (standard) geometry.");
+            const uvCount = this.planeResolution.x * this.planeResolution.y;
+            const uv_gpgpu = new Float32Array(uvCount * 2);
+            for (let i = 0; i < this.planeResolution.y; i++) {
+                for (let j = 0; j < this.planeResolution.x; j++) {
+                    const idx = (i * this.planeResolution.x + j);
+                    uv_gpgpu[idx * 2] = j / (this.planeResolution.x - 1); 
+                    uv_gpgpu[idx * 2 + 1] = i / (this.planeResolution.y - 1); 
+                }
+            }
+            landGeom.setAttribute('uv_gpgpu', new THREE.BufferAttribute(uv_gpgpu, 2));
         }
 
         const vertexCount = landGeom.attributes.position.count;
@@ -248,18 +266,6 @@ export const ImagePlaneManager = {
             triangleIds[i] = Math.floor(i / 3);
         }
         landGeom.setAttribute('triangleId', new THREE.BufferAttribute(triangleIds, 1));
-
-
-        const uvCount = this.planeResolution.x * this.planeResolution.y;
-        const uv_gpgpu = new Float32Array(uvCount * 2);
-        for (let i = 0; i < this.planeResolution.y; i++) {
-            for (let j = 0; j < this.planeResolution.x; j++) {
-                const idx = (i * this.planeResolution.x + j);
-                uv_gpgpu[idx * 2] = j / (this.planeResolution.x - 1); 
-                uv_gpgpu[idx * 2 + 1] = i / (this.planeResolution.y - 1); 
-            }
-        }
-        landGeom.setAttribute('uv_gpgpu', new THREE.BufferAttribute(uv_gpgpu, 2));
         
         this.createMaterials();
         this.landscape = new THREE.Mesh(landGeom, this.landscapeMaterial);
@@ -319,7 +325,6 @@ export const ImagePlaneManager = {
                 u_imageEffect_strength: { value: S.imageEffect_strength },
                 u_imageEffect_radius: { value: S.imageEffect_radius },
                 u_imageEffect_audioInfluence: { value: S.imageEffect_audioInfluence },
-                // ** THE FIX IS HERE: Add new Jolt uniforms **
                 u_imageEffect_enableJolt: { value: S.imageEffect_enableJolt },
                 u_imageEffect_joltStrength: { value: S.imageEffect_joltStrength },
                 u_imageEffect_joltSpeed: { value: S.imageEffect_joltSpeed },
@@ -405,7 +410,6 @@ export const ImagePlaneManager = {
             U.u_imageEffect_audioInfluence.value = S.imageEffect_audioInfluence;
         }
 
-        // ** THE FIX IS HERE: Update Jolt uniforms every frame **
         U.u_imageEffect_enableJolt.value = S.imageEffect_enableJolt;
         if (S.imageEffect_enableJolt) {
             U.u_imageEffect_joltStrength.value = S.imageEffect_joltStrength;

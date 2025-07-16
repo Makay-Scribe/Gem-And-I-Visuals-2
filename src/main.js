@@ -29,18 +29,18 @@ const App = {
     },
 
     modelPresets: {
-        'modelPreset1': { name: 'Dancing Planet', path: '/3dmodel/converted/Dancing planet.glb' },
-        'modelPreset2': { name: 'Swimming Shark', path: '/3dmodel/converted/Swimming shark.glb' },
-        'modelPreset3': { name: 'Flying Pterodactyl', path: '/3dmodel/converted/Flying pterodactyl.glb' },
-        'modelPreset4': { name: 'School of Fish', path: '/3dmodel/converted/School of fish.glb' },
-        'modelPreset5': { name: 'Walking Astronaut', path: '/3dmodel/converted/Walking astronaut.glb' },
-        'modelPreset6': { name: 'Banana Gun', path: '/3dmodel/converted/Banana Gun with Scope.glb' },
-        'modelPreset7': { name: 'Dancing Planet', path: '/3dmodel/converted/Dancing planet.glb' },
-        'modelPreset8': { name: 'Swimming Shark', path: '/3dmodel/converted/Swimming shark.glb' },
-        'modelPreset9': { name: 'Flying Pterodactyl', path: '/3dmodel/converted/Flying pterodactyl.glb' },
-        'modelPreset10': { name: 'School of Fish', path: '/3dmodel/converted/School of fish.glb' },
-        'modelPreset11': { name: 'Walking Astronaut', path: '/3dmodel/converted/Walking astronaut.glb' },
-        'modelPreset12': { name: 'Banana Gun', path: '/3dmodel/converted/Banana Gun with Scope.glb' },
+        'modelPreset1': { id: 'modelPreset1', name: 'Banana Gun', path: '/3dmodel/converted/Banana Gun with Scope.glb', homeOffset: new THREE.Vector3(0, -5, 0) },
+        'modelPreset2': { id: 'modelPreset2', name: 'Bee', path: '/3dmodel/converted/Bee.glb', homeOffset: new THREE.Vector3(0, 0, 0) },
+        'modelPreset3': { id: 'modelPreset3', name: 'Dancing Planet', path: '/3dmodel/converted/Dancing planet.glb', homeOffset: new THREE.Vector3(0, 0, 0) },
+        'modelPreset4': { id: 'modelPreset4', name: 'Flying Bee', path: '/3dmodel/converted/Flying bee.glb', homeOffset: new THREE.Vector3(0, 5, 0) },
+        'modelPreset5': { id: 'modelPreset5', name: 'Flying Pterodactyl', path: '/3dmodel/converted/Flying pterodactyl.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
+        'modelPreset6': { id: 'modelPreset6', name: 'Martial Arts Character', path: '/3dmodel/converted/Martial arts character.glb', homeOffset: new THREE.Vector3(0, -10, 0) },
+        'modelPreset7': { id: 'modelPreset7', name: 'Retro UFO', path: '/3dmodel/converted/Retro UFO.glb', homeOffset: new THREE.Vector3(0, 0, 0) },
+        'modelPreset8': { id: 'modelPreset8', name: 'Rose', path: '/3dmodel/converted/Rose.glb', homeOffset: new THREE.Vector3(0, -5, 0) },
+        'modelPreset9': { id: 'modelPreset9', name: 'School of Fish', path: '/3dmodel/converted/School of fish.glb', homeOffset: new THREE.Vector3(0, 0, 0) },
+        'modelPreset10': { id: 'modelPreset10', name: 'Steampunk Dirigible', path: '/3dmodel/converted/Steampunk Dirigible with Ship.glb', homeOffset: new THREE.Vector3(0, 0, 0) },
+        'modelPreset11': { id: 'modelPreset11', name: 'Swimming Shark', path: '/3dmodel/converted/Swimming shark.glb', homeOffset: new THREE.Vector3(0, -5, 0) },
+        'modelPreset12': { id: 'modelPreset12', name: 'Walking Astronaut', path: '/3dmodel/converted/Walking astronaut.glb', homeOffset: new THREE.Vector3(0, -12, 0) },
     },
     shaderAudioValue: 0.0,
     hdrTexture: null, audioTexture: null,
@@ -192,15 +192,15 @@ const App = {
         butterchurnEnableCycle: false, butterchurnCycleTime: 15,
         audioSmoothing: 0.8,
         testToneMode: 'dynamicPulse',
-        metalness: 1.0,
-        roughness: 0.10,
+        metalness: 0.0,
+        roughness: 1.0,
         enablePBRColor: true,
-        toneMappingMode: 'Reinhard',
+        toneMappingMode: 'ACESFilmic',
         toneMappingExposure: 1.0,
         enableReflections: true,
         reflectionStrength: 1.0,
-        lightColor: "#ffffff",
-        ambientLightColor: "#ffffff",
+        lightColor: "#FF80C0",
+        ambientLightColor: "#DBDBDB",
         lightDirectionX: 0.5, lightDirectionY: 0.8, lightDirectionZ: 0.5,
         enableLightOrbit: true, lightOrbitSpeed: 0.2, enableGuideLaser: false,
         enableGPGPUDebugger: true, 
@@ -262,6 +262,27 @@ const App = {
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
 
         this.SceneManager.init(this);
+
+        this.ambientLight = new THREE.AmbientLight(this.vizSettings.ambientLightColor, 1.0);
+        this.scene.add(this.ambientLight);
+
+        this.directionalLight = new THREE.DirectionalLight(this.vizSettings.lightColor, 1.0);
+        this.directionalLight.position.set(
+            this.vizSettings.lightDirectionX,
+            this.vizSettings.lightDirectionY,
+            this.vizSettings.lightDirectionZ
+        ).normalize();
+        this.scene.add(this.directionalLight);
+
+        const laserMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
+        const laserPoints = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)];
+        const laserGeometry = new THREE.BufferGeometry().setFromPoints(laserPoints);
+        this.guideLaser = new THREE.Line(laserGeometry, laserMaterial);
+        this.guideLaser.frustumCulled = false;
+        this.guideLaser.visible = this.vizSettings.enableGuideLaser;
+        this.scene.add(this.guideLaser);
+
+
         this.CameraManager.init(this);
         this.AudioProcessor.init(this);
         this.ImagePlaneManager.init(this);
@@ -275,24 +296,24 @@ const App = {
         setTimeout(() => {
             this.preloadDevAssets();
             
-            const defaultShaderCode = this.shaderPresets['presetBg1'];
+            const defaultShaderId = 'presetBg1';
+            const defaultShaderCode = this.shaderPresets[defaultShaderId];
             if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
                 console.log("Loading default background shader preset...");
                 const shaderToyGLSLEl = document.getElementById('shaderToyGLSL');
                 if (shaderToyGLSLEl) {
                     shaderToyGLSLEl.value = defaultShaderCode;
                     this.vizSettings.shaderToyGLSL = defaultShaderCode;
-                    // ** THE FIX IS HERE: Call the load function on UIManager **
                     if (this.UIManager) {
-                        setTimeout(() => this.UIManager.loadUserShader(), 100); 
+                        setTimeout(() => this.UIManager.loadUserShader(defaultShaderId), 100); 
                     }
                 }
             }
 
             console.log("Loading default 3D model preset...");
-            const modelPreset = this.modelPresets['modelPreset3'];
+            const modelPreset = this.modelPresets['modelPreset5'];
             if (modelPreset && this.ModelManager) {
-                this.ModelManager.loadGLTFModel(modelPreset.path);
+                this.ModelManager.loadGLTFModel(modelPreset);
                 if (this.UIManager) this.UIManager.updateFileNameDisplay('gltf', modelPreset.name);
             }
         }, 100);
@@ -443,6 +464,43 @@ const App = {
         const cappedDelta = Math.min(delta, 1 / 30); 
         this.currentTime = this.clock.getElapsedTime(); 
         this.frame++;
+
+        const S = this.vizSettings;
+        if (S.enableLightOrbit) {
+            const orbitTime = this.currentTime * S.lightOrbitSpeed;
+            const newX = Math.cos(orbitTime);
+            const newZ = Math.sin(orbitTime);
+
+            this.directionalLight.position.x = newX;
+            this.directionalLight.position.z = newZ;
+            
+            S.lightDirectionX = newX;
+            S.lightDirectionZ = newZ;
+            
+            const sliderX = document.getElementById('lightDirectionX');
+            const sliderZ = document.getElementById('lightDirectionZ');
+            if (sliderX && sliderZ) {
+                sliderX.value = newX;
+                sliderZ.value = newZ;
+                this.UIManager.updateRangeDisplay('lightDirectionX', newX);
+                this.UIManager.updateRangeDisplay('lightDirectionZ', newZ);
+            }
+        }
+        
+        this.guideLaser.visible = S.enableGuideLaser;
+        if (S.enableGuideLaser) {
+            const laserStart = new THREE.Vector3().copy(this.directionalLight.position).multiplyScalar(100);
+            const laserEnd = new THREE.Vector3(0,0,0);
+            const positions = this.guideLaser.geometry.attributes.position.array;
+            positions[0] = laserStart.x;
+            positions[1] = laserStart.y;
+            positions[2] = laserStart.z;
+            positions[3] = laserEnd.x;
+            positions[4] = laserEnd.y;
+            positions[5] = laserEnd.z;
+            this.guideLaser.geometry.attributes.position.needsUpdate = true;
+        }
+
         
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
