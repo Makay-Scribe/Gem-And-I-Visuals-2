@@ -288,8 +288,8 @@
                 <p class="sub-group-title">FUNDAMENTALS</p>
                 <label for="gpgpuGeometryMode">Geometry Mode</label>
                 <select id="gpgpuGeometryMode">
-                    <option value="continuous" selected>Continuous</option>
-                    <option value="faceted">Faceted (Non-Indexed)</option>
+                    <option value="continuous">Continuous</option>
+                    <option value="faceted" selected>Faceted (Non-Indexed)</option>
                 </select>
 
                 <div class="accordion-item">
@@ -520,6 +520,14 @@
                 <div class="checkbox-label-container">
                     <label for="enableModel">Enable</label>
                     <input type="checkbox" id="enableModel" checked>
+                </div>
+
+                <hr style="border-color: #444; margin: 6px 0;">
+
+                <p class="sub-group-title">AUTOPILOT BEHAVIOR</p>
+                <div class="checkbox-label-container">
+                    <label for="enableCollisionAvoidance" title="Prevents the model from flying through the landscape during autopilot.">Collision Avoidance</label>
+                    <input type="checkbox" id="enableCollisionAvoidance">
                 </div>
             </div>
         </div>

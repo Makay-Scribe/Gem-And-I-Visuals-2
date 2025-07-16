@@ -117,6 +117,7 @@ export const UIManager = {
             sliderZ: document.getElementById('actorDepth'),
             masterSpinCheckbox: document.getElementById('masterEnableSpin'),
             masterSpinSpeedInput: document.getElementById('masterSpinSpeed'),
+            masterSpinControl: document.getElementById('masterSpinControl'), // ** THE FIX IS HERE **
         };
         this.controlDOMElements = UIElements;
 
@@ -175,24 +176,30 @@ export const UIManager = {
     handleMasterControlInput(control) {
         const S = this.app.vizSettings;
         const activeControl = S.activeControl;
-        const value = control.type === 'checkbox' ? control.checked : parseFloat(control.value);
-        
-        let targetProp;
-        if (control.id === 'masterScale') {
-            targetProp = (activeControl === 'landscape') ? 'landscapeScale' : 'modelScale';
-        } else if (control.id === 'masterSpeed') {
-            targetProp = (activeControl === 'landscape') ? 'landscapeAutopilotSpeed' : 'modelAutopilotSpeed';
-        } else if (control.id === 'masterEnableSpin') {
-            targetProp = (activeControl === 'landscape') ? 'enableLandscapeSpin' : 'enableModelSpin';
-        } else if (control.id === 'masterSpinSpeed') {
-            targetProp = (activeControl === 'landscape') ? 'landscapeSpinSpeed' : 'modelSpinSpeed';
-        }
-
-        if (targetProp) {
-            S[targetProp] = value;
-            if (control.type !== 'checkbox') {
-                 this.updateRangeDisplay(control.id, value);
+        const value = (control.type === 'checkbox') ? control.checked : parseFloat(control.value);
+    
+        if (control.id === 'masterEnableSpin') {
+            if (activeControl === 'landscape') {
+                S.enableLandscapeSpin = value;
+            } else {
+                S.enableModelSpin = value; 
             }
+        } else if (control.id === 'masterSpinSpeed') {
+            if (activeControl === 'landscape') {
+                S.landscapeSpinSpeed = value;
+            } else {
+                S.modelSpinSpeed = value;
+            }
+        } else if (control.id === 'masterScale') {
+            if (activeControl === 'landscape') S.landscapeScale = value;
+            else S.modelScale = value;
+        } else if (control.id === 'masterSpeed') {
+            if (activeControl === 'landscape') S.landscapeAutopilotSpeed = value;
+            else S.modelAutopilotSpeed = value;
+        }
+    
+        if (control.type === 'range') {
+            this.updateRangeDisplay(control.id, value);
         }
     },
 
@@ -228,13 +235,22 @@ export const UIManager = {
             spinEnableProp = 'enableLandscapeSpin';
             spinSpeedProp = 'landscapeSpinSpeed';
             UIElements.autopilotHeader.textContent = "LANDSCAPE AUTOPILOT";
-        } else {
+            // ** THE FIX IS HERE **
+            UIElements.masterSpinControl.style.opacity = '1';
+            UIElements.masterSpinCheckbox.disabled = false;
+            UIElements.masterSpinSpeedInput.disabled = false;
+
+        } else { // 3D Model
             isAutopilotOn = S.modelAutopilotOn;
             scaleProp = 'modelScale';
             speedProp = 'modelAutopilotSpeed';
             spinEnableProp = 'enableModelSpin';
             spinSpeedProp = 'modelSpinSpeed';
             UIElements.autopilotHeader.textContent = "3D MODEL AUTOPILOT";
+            // ** THE FIX IS HERE **
+            UIElements.masterSpinControl.style.opacity = '0.4';
+            UIElements.masterSpinCheckbox.disabled = true;
+            UIElements.masterSpinSpeedInput.disabled = true;
         }
 
         UIElements.actorToggleContainer.querySelectorAll('button').forEach(btn => {
@@ -303,7 +319,6 @@ export const UIManager = {
         }
     },
 
-    // ** NEW: Highlight the active background shader preset **
     updateBackgroundPresetGlow() {
         const activePresetId = this.app.BackgroundManager.activePresetId;
         for (let i = 1; i <= 8; i++) {
@@ -741,7 +756,7 @@ export const UIManager = {
                     document.getElementById('shaderToyGLSL').value = shaderCode; 
                     this.app.vizSettings.shaderToyGLSL = shaderCode; 
                     this.logSuccess(`Preset '${presetId}' loaded.`); 
-                    this.loadUserShader(presetId); // Pass the ID
+                    this.loadUserShader(presetId);
                 }
             });
         }

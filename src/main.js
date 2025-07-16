@@ -138,7 +138,7 @@ const App = {
         imageEffect_joltSpeed: 10.0,
         imageEffect_joltAudioInfluence: 1.0,
         // --- GPGPU SETTINGS ---
-        gpgpuGeometryMode: 'continuous',
+        gpgpuGeometryMode: 'faceted',
         gpgpu_enableWaterRipple: false,
         gpgpu_rippleSpeed: 0.5,
         gpgpu_rippleStrength: 1.0,
