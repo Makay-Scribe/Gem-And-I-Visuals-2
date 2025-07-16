@@ -31,11 +31,12 @@ export const ImagePlaneManager = {
     planeDimensions: new THREE.Vector2(40, 40),
     planeResolution: new THREE.Vector2(128, 128),
     currentTexture: null, 
+    spinAccumulator: new THREE.Quaternion(), // ** NEW: Tracks total spin **
 
     state: {
         isUnderManualControl: false,
         manualControlReleaseTime: -1, 
-        manualControlTimeoutId: null, // To manage scroll wheel end detection
+        manualControlTimeoutId: null, 
         targetPosition: new THREE.Vector3(),
         targetQuaternion: new THREE.Quaternion(),
         homePosition: new THREE.Vector3(),
@@ -46,11 +47,11 @@ export const ImagePlaneManager = {
         active: false,
         preset: null,
         waypointProgress: 1.0, 
-        waypointTransitionDuration: 20.0, // Default duration
+        waypointTransitionDuration: 20.0, 
         startPos: new THREE.Vector3(),
         endPos: new THREE.Vector3(),
-        startQuat: new THREE.Quaternion(),
-        endQuat: new THREE.Quaternion(),
+        startQuat: new THREE.Quaternion(), // Represents the non-spun base rotation
+        endQuat: new THREE.Quaternion(),   // Represents the non-spun base rotation
     },
 
     init(appInstance) {
@@ -65,14 +66,10 @@ export const ImagePlaneManager = {
     startAutopilot(presetId) {
         if (!this.landscape) return;
         const ap = this.autopilot;
-
         ap.active = true;
         ap.preset = presetId;
-        
         if (this.app.UIManager) this.app.UIManager.updateMasterControls();
-
         ap.waypointProgress = 1.0; 
-        
         console.log(`ImagePlane Autopilot STARTED with preset: ${presetId}`);
     },
 
@@ -85,91 +82,32 @@ export const ImagePlaneManager = {
     
     generateNewRandomWaypoint() {
         const ap = this.autopilot;
-        
         ap.startPos.copy(this.state.targetPosition);
-        ap.startQuat.copy(this.state.targetQuaternion);
+        
+        // ** THE FIX IS HERE: Start quaternion is the TARGET minus the CURRENT spin. **
+        // This calculates the true underlying tilt/yaw to ensure a smooth transition.
+        ap.startQuat.copy(this.state.targetQuaternion).multiply(this.spinAccumulator.clone().invert());
 
         let endPosX, endPosY, endPosZ;
-        let eulerX, eulerY, eulerZ;
+        let eulerX, eulerY; // Z-axis (roll) is now handled exclusively by the spinAccumulator.
         
-        const orbitalTiltDistribution = [
-            { range: [-5, 5], weight: 0.50 },      // 50% little/no tilt
-            { range: [5, 15], weight: 0.20 },      // 40% marginal tilt
-            { range: [-15, -5], weight: 0.20 },
-            { range: [15, 30], weight: 0.05 },     // 10% medium tilt
-            { range: [-30, -15], weight: 0.05 }
-        ];
+        const orbitalTiltDistribution = [ { range: [-5, 5], weight: 0.50 }, { range: [5, 15], weight: 0.20 }, { range: [-15, -5], weight: 0.20 }, { range: [15, 30], weight: 0.05 }, { range: [-30, -15], weight: 0.05 }];
 
-        if (ap.preset === 'autopilotPreset1') { // CALM DRIFT
-            endPosX = THREE.MathUtils.randFloat(-15, 15);
-            endPosY = THREE.MathUtils.randFloat(-10, 10);
-            endPosZ = THREE.MathUtils.randFloat(-5, 5);
-            eulerX = THREE.MathUtils.randFloat(-2, 2); // very little tilt
-            eulerY = THREE.MathUtils.randFloat(-5, 5); // very little turn
-            eulerZ = THREE.MathUtils.randFloat(-1, 1); // very little roll
-
-        } else if (ap.preset === 'autopilotPreset2') { // BREATHING ZOOM
-            endPosX = THREE.MathUtils.randFloat(-5, 5);
-            endPosY = THREE.MathUtils.randFloat(-5, 5);
-            endPosZ = THREE.MathUtils.randFloat(-30, 10); // focus on z-axis
-            eulerX = THREE.MathUtils.randFloat(-4, 4);
-            eulerY = THREE.MathUtils.randFloat(-8, 8);
-            eulerZ = THREE.MathUtils.randFloat(-2, 2);
-            
-        } else if (ap.preset === 'autopilotPreset3') { // TIGHT LEASH
-            endPosX = THREE.MathUtils.randFloat(-30, 30);
-            endPosY = THREE.MathUtils.randFloat(-20, 20);
-            endPosZ = THREE.MathUtils.randFloat(-40, 10);
-            eulerX = getWeightedRandom(orbitalTiltDistribution);
-            eulerY = getWeightedRandom([ { range: [-15, 15], weight: 0.8 }, { range: [-30, 30], weight: 0.2 } ]);
-            eulerZ = THREE.MathUtils.randFloat(-5, 5);
-
-        } else if (ap.preset === 'autopilotPreset4') { // MEDIUM LEASH
-            endPosX = THREE.MathUtils.randFloat(-50, 50);
-            endPosY = THREE.MathUtils.randFloat(-35, 35);
-            endPosZ = THREE.MathUtils.randFloat(-45, 10);
-            eulerX = getWeightedRandom(orbitalTiltDistribution);
-            eulerY = getWeightedRandom([ { range: [-20, 20], weight: 0.4 }, { range: [20, 30], weight: 0.25 }, { range: [-30, -20], weight: 0.25 }, { range: [35, 45], weight: 0.05 }, { range: [-45, -35], weight: 0.05 } ]);
-            eulerZ = THREE.MathUtils.randFloat(-10, 10);
-
-        } else if (ap.preset === 'autopilotPreset5') { // LOOSE LEASH
-            endPosX = THREE.MathUtils.randFloat(-70, 70);
-            endPosY = THREE.MathUtils.randFloat(-50, 50);
-            endPosZ = THREE.MathUtils.randFloat(-50, 10);
-            eulerX = getWeightedRandom(orbitalTiltDistribution);
-            eulerY = getWeightedRandom([ { range: [-15, 15], weight: 0.35 }, { range: [-35, 35], weight: 0.4 }, { range: [35, 50], weight: 0.125 }, { range: [-50, -35], weight: 0.125 } ]);
-            eulerZ = THREE.MathUtils.randFloat(-15, 15);
+        if (ap.preset === 'autopilotPreset1') { endPosX = THREE.MathUtils.randFloat(-15, 15); endPosY = THREE.MathUtils.randFloat(-10, 10); endPosZ = THREE.MathUtils.randFloat(-5, 5); eulerX = THREE.MathUtils.randFloat(-2, 2); eulerY = THREE.MathUtils.randFloat(-5, 5);
+        } else if (ap.preset === 'autopilotPreset2') { endPosX = THREE.MathUtils.randFloat(-5, 5); endPosY = THREE.MathUtils.randFloat(-5, 5); endPosZ = THREE.MathUtils.randFloat(-30, 10); eulerX = THREE.MathUtils.randFloat(-4, 4); eulerY = THREE.MathUtils.randFloat(-8, 8);
+        } else if (ap.preset === 'autopilotPreset3') { endPosX = THREE.MathUtils.randFloat(-30, 30); endPosY = THREE.MathUtils.randFloat(-20, 20); endPosZ = THREE.MathUtils.randFloat(-40, 10); eulerX = getWeightedRandom(orbitalTiltDistribution); eulerY = getWeightedRandom([ { range: [-15, 15], weight: 0.8 }, { range: [-30, 30], weight: 0.2 } ]);
+        } else if (ap.preset === 'autopilotPreset4') { endPosX = THREE.MathUtils.randFloat(-50, 50); endPosY = THREE.MathUtils.randFloat(-35, 35); endPosZ = THREE.MathUtils.randFloat(-45, 10); eulerX = getWeightedRandom(orbitalTiltDistribution); eulerY = getWeightedRandom([ { range: [-20, 20], weight: 0.4 }, { range: [20, 30], weight: 0.25 }, { range: [-30, -20], weight: 0.25 }, { range: [35, 45], weight: 0.05 }, { range: [-45, -35], weight: 0.05 } ]);
+        } else { endPosX = THREE.MathUtils.randFloat(-70, 70); endPosY = THREE.MathUtils.randFloat(-50, 50); endPosZ = THREE.MathUtils.randFloat(-50, 10); eulerX = getWeightedRandom(orbitalTiltDistribution); eulerY = getWeightedRandom([ { range: [-15, 15], weight: 0.35 }, { range: [-35, 35], weight: 0.4 }, { range: [35, 50], weight: 0.125 }, { range: [-50, -35], weight: 0.125 } ]);
         }
 
         ap.endPos.set(endPosX, endPosY, endPosZ);
-
-        const endRot = new THREE.Euler(
-            THREE.MathUtils.degToRad(eulerX),
-            THREE.MathUtils.degToRad(eulerY),
-            THREE.MathUtils.degToRad(eulerZ),
-            'YXZ' 
-        );
-        ap.endQuat.setFromEuler(endRot);
-        
+        const randomRotationEuler = new THREE.Euler(THREE.MathUtils.degToRad(eulerX), THREE.MathUtils.degToRad(eulerY), 0, 'YXZ' );
+        const randomRotationQuat = new THREE.Quaternion().setFromEuler(randomRotationEuler);
+        ap.endQuat.copy(this.state.homeQuaternion).multiply(randomRotationQuat);
         ap.waypointTransitionDuration = THREE.MathUtils.randFloat(18.0, 22.0);
         ap.waypointProgress = 0;
     },
     
-    updateAutopilot(delta) {
-        const ap = this.autopilot;
-        if (!ap.active) return;
-
-        if (ap.waypointProgress >= 1.0) {
-            this.generateNewRandomWaypoint();
-        }
-
-        ap.waypointProgress = Math.min(1.0, ap.waypointProgress + delta / ap.waypointTransitionDuration);
-        const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
-        
-        this.state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
-        this.state.targetQuaternion.slerp(ap.startQuat, ap.endQuat, ease);
-    },
-
     update(cappedDelta) {
         if (!this.landscapeContainer || !this.landscape) return;
         const S = this.app.vizSettings;
@@ -181,32 +119,52 @@ export const ImagePlaneManager = {
         this.landscapeContainer.visible = true;
 
         const state = this.state;
-        const now = this.app.currentTime;
-        const manualReturnDelay = 0.5;
+        const ap = this.autopilot;
+        
+        // --- Step 1: Update Autopilot state ---
+        if (ap.active && ap.waypointProgress >= 1.0) {
+            this.generateNewRandomWaypoint();
+        }
+        if (ap.active) {
+            ap.waypointProgress = Math.min(1.0, ap.waypointProgress + cappedDelta / ap.waypointTransitionDuration);
+        }
 
-        // Determine base target rotation from autopilot or manual controls
-        if (this.autopilot.active) {
-            this.updateAutopilot(cappedDelta);
-        } else if (state.isUnderManualControl) {
-            state.manualControlReleaseTime = -1;
-        } else if (state.manualControlReleaseTime > 0 && (now - state.manualControlReleaseTime < manualReturnDelay)) {
-            // Do nothing, leave landscape where user placed it.
-        } else {
+        // --- Step 2: Determine Position ---
+        if (ap.active) {
+            const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
+            state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
+        } else if (!state.isUnderManualControl) {
             state.targetPosition.lerp(state.homePosition, 0.02);
-            state.targetQuaternion.slerp(state.homeQuaternion, 0.02);
         }
 
-        // ** THE FIX IS HERE: Apply spin to the target quaternion **
+        // --- Step 3: Determine Base Rotation (Tilt/Yaw without spin) ---
+        let baseRotation = new THREE.Quaternion();
+        if (ap.active) {
+            const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
+            baseRotation.copy(ap.startQuat).slerp(ap.endQuat, ease);
+        } else if (state.isUnderManualControl) {
+            baseRotation.copy(state.targetQuaternion); 
+        } else {
+            baseRotation.slerp(state.homeQuaternion, 0.05);
+        }
+        
+        // --- Step 4: Update the Spin Accumulator ---
         if (S.enableLandscapeSpin) {
-            const spinQuaternion = new THREE.Quaternion();
-            const spinAxis = new THREE.Vector3(0, 0, 1); // Z-axis for roll
-            spinQuaternion.setFromAxisAngle(spinAxis, S.landscapeSpinSpeed * cappedDelta);
-            this.state.targetQuaternion.multiply(spinQuaternion);
+            const incrementalSpin = new THREE.Quaternion();
+            const spinAxis = new THREE.Vector3(0, 0, 1);
+            incrementalSpin.setFromAxisAngle(spinAxis, S.landscapeSpinSpeed * cappedDelta);
+            this.spinAccumulator.multiply(incrementalSpin);
+        } else {
+            // Gracefully return to no spin
+            this.spinAccumulator.slerp(new THREE.Quaternion(), 0.05);
         }
+        
+        // --- Step 5: Combine Base Rotation and Spin for the final target ---
+        state.targetQuaternion.copy(baseRotation).multiply(this.spinAccumulator);
 
-        // Slerp to the (potentially spinning) target
-        this.landscapeContainer.position.lerp(this.state.targetPosition, 0.05);
-        this.landscapeContainer.quaternion.slerp(this.state.targetQuaternion, 0.05);
+        // --- Step 6: Apply final interpolated transformations to the visual object ---
+        this.landscapeContainer.position.lerp(state.targetPosition, 0.05);
+        this.landscapeContainer.quaternion.slerp(state.targetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
         if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
