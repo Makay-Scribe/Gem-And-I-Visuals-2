@@ -102,7 +102,6 @@ export const ImagePlaneManager = {
         const randomRotationQuat = new THREE.Quaternion().setFromEuler(randomRotationEuler);
         ap.endQuat.copy(this.state.homeQuaternion).multiply(randomRotationQuat);
         
-        // ** THE FIX IS HERE **
         ap.waypointTransitionDuration = THREE.MathUtils.randFloat(18.0, 30.0);
         
         ap.waypointProgress = 0;
@@ -120,6 +119,7 @@ export const ImagePlaneManager = {
 
         const state = this.state;
         const ap = this.autopilot;
+        const now = this.app.currentTime;
         
         if (ap.active && ap.waypointProgress >= 1.0) {
             this.generateNewRandomWaypoint();
@@ -127,22 +127,25 @@ export const ImagePlaneManager = {
         if (ap.active) {
             ap.waypointProgress = Math.min(1.0, ap.waypointProgress + cappedDelta / ap.waypointTransitionDuration);
         }
+        
+        let baseRotationTarget = new THREE.Quaternion();
+        const manualHoldTime = 0.5;
+        const inGracePeriod = state.manualControlReleaseTime > 0 && (now - state.manualControlReleaseTime < manualHoldTime);
 
-        if (ap.active) {
+        if (state.isUnderManualControl || inGracePeriod) {
+            // Do nothing to the targets. Let the manual values persist.
+            baseRotationTarget.copy(state.targetQuaternion); // Keep the manually set rotation as the base
+        } else if (ap.active) {
+            // Autopilot is active
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
-        } else if (!state.isUnderManualControl) {
-            state.targetPosition.lerp(state.homePosition, 0.02);
-        }
-
-        let baseRotation = new THREE.Quaternion();
-        if (ap.active) {
-            const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
-            baseRotation.copy(ap.startQuat).slerp(ap.endQuat, ease);
-        } else if (state.isUnderManualControl) {
-            baseRotation.copy(state.targetQuaternion);
+            baseRotationTarget.copy(ap.startQuat).slerp(ap.endQuat, ease);
         } else {
-            baseRotation.slerp(this.state.homeQuaternion, 0.05);
+            // Idle: return to home
+            state.targetPosition.lerp(state.homePosition, 0.02);
+            // ** THE FIX IS HERE: Smoothly interpolate the base rotation back to home **
+            state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
+            baseRotationTarget.copy(state.targetQuaternion);
         }
         
         if (S.enableLandscapeSpin) {
@@ -154,10 +157,17 @@ export const ImagePlaneManager = {
             this.spinAccumulator.slerp(new THREE.Quaternion(), 0.05);
         }
         
-        state.targetQuaternion.copy(baseRotation).multiply(this.spinAccumulator);
+        if (state.isUnderManualControl || inGracePeriod) {
+            // If manual control, the target is just the manually set quaternion.
+            // The spin accumulator will be applied on top later.
+            baseRotationTarget.copy(state.targetQuaternion);
+        }
+
+        // Final combination
+        const finalTargetQuaternion = new THREE.Quaternion().copy(baseRotationTarget).multiply(this.spinAccumulator);
 
         this.landscapeContainer.position.lerp(state.targetPosition, 0.05);
-        this.landscapeContainer.quaternion.slerp(state.targetQuaternion, 0.1);
+        this.landscapeContainer.quaternion.slerp(finalTargetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
         if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 

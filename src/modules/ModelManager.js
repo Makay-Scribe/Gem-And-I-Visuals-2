@@ -20,6 +20,8 @@ export const ModelManager = {
     
     state: {
         isUnderManualControl: false,
+        manualControlReleaseTime: -1, 
+        manualControlTimeoutId: null,
         targetPosition: new THREE.Vector3(),
         targetQuaternion: new THREE.Quaternion(),
         homePosition: new THREE.Vector3(),
@@ -237,8 +239,6 @@ export const ModelManager = {
             if (this.app.UIManager) this.app.UIManager.logError("Cannot load model: Invalid preset.");
             return;
         }
-
-        // ** THE FIX IS HERE: Stop any active autopilot before loading a new model. **
         this.stopAutopilot();
 
         this.activePresetId = preset.id;
@@ -308,27 +308,35 @@ export const ModelManager = {
         }
         this.gltfModel.visible = true;
         
-        if (this.autopilot.active) {
+        const state = this.state;
+        const now = this.app.currentTime;
+        const manualHoldTime = 0.5;
+        const inGracePeriod = state.manualControlReleaseTime > 0 && (now - state.manualControlReleaseTime < manualHoldTime);
+
+        // ** THE FIX IS HERE: The same logic from ImagePlaneManager is now applied **
+        if (state.isUnderManualControl || inGracePeriod) {
+            // Do nothing, let manual inputs persist for the grace period.
+        } else if (this.autopilot.active) {
             this.updateAutopilot(delta);
-        } else if (this.state.isUnderManualControl) {
-            // Do nothing. The mouse/sliders are controlling the target state directly.
         } else {
+            // Idle state: return to home.
             const finalHomePos = new THREE.Vector3().copy(this.state.homePosition);
             if (this.activePresetId && this.app.modelPresets[this.activePresetId]?.homeOffset) {
                 finalHomePos.add(this.app.modelPresets[this.activePresetId].homeOffset);
             }
-            this.state.targetPosition.lerp(finalHomePos, 0.02);
-            this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
+            // ** This now smoothly interpolates rotation back to home **
+            state.targetPosition.lerp(finalHomePos, 0.02);
+            state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
         }
         
         if (S.enableModelSpin) {
             const spinQuaternion = new THREE.Quaternion();
-            const spinAxis = new THREE.Vector3(0, 1, 0); // Y-axis for yaw
+            const spinAxis = new THREE.Vector3(0, 1, 0); 
             spinQuaternion.setFromAxisAngle(spinAxis, S.modelSpinSpeed * delta);
-            this.state.targetQuaternion.multiply(spinQuaternion);
+            state.targetQuaternion.multiply(spinQuaternion);
         }
 
-        this.gltfModel.position.lerp(this.state.targetPosition, 0.05);
-        this.gltfModel.quaternion.slerp(this.state.targetQuaternion, 0.05);
+        this.gltfModel.position.lerp(state.targetPosition, 0.05);
+        this.gltfModel.quaternion.slerp(state.targetQuaternion, 0.05);
     },
 };

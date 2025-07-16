@@ -255,7 +255,6 @@ const App = {
         this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('glCanvas'), antialias: true, powerPreference: "high-performance" });
         this.renderer.setPixelRatio(window.devicePixelRatio); 
         
-        // ** THE FIX IS HERE: Initial size is set from canvas client dimensions **
         const canvas = this.renderer.domElement;
         this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
         
@@ -364,6 +363,20 @@ const App = {
         return null;
     },
     
+    // ** THE FIX IS HERE: The timeout logic is now encapsulated to avoid repetition. **
+    _startManualControlTimeout(activeManager) {
+        if (activeManager.state.manualControlTimeoutId) {
+            clearTimeout(activeManager.state.manualControlTimeoutId);
+        }
+        activeManager.state.manualControlTimeoutId = setTimeout(() => {
+            if (activeManager.state) {
+                activeManager.state.isUnderManualControl = false;
+                activeManager.state.manualControlReleaseTime = this.currentTime;
+                activeManager.state.manualControlTimeoutId = null;
+            }
+        }, 250); // This delay can be adjusted if needed
+    },
+
     onMouseWheel(event) {
         event.preventDefault();
         const activeManager = this._getActiveManager();
@@ -372,18 +385,8 @@ const App = {
         activeManager.state.isUnderManualControl = true;
         const delta = -Math.sign(event.deltaY);
         activeManager.state.targetPosition.z += delta * this.mouseInteraction.zoomSpeed;
-
-        if (activeManager.state.manualControlTimeoutId) {
-            clearTimeout(activeManager.state.manualControlTimeoutId);
-        }
-
-        activeManager.state.manualControlTimeoutId = setTimeout(() => {
-            if (activeManager.state) {
-                activeManager.state.isUnderManualControl = false;
-                activeManager.state.manualControlReleaseTime = this.currentTime;
-                activeManager.state.manualControlTimeoutId = null;
-            }
-        }, 250);
+        
+        this._startManualControlTimeout(activeManager);
     },
 
     onPointerDown(event) {
@@ -440,11 +443,11 @@ const App = {
 
     onPointerUp(event) {
         const MI = this.mouseInteraction;
-        
         const activeManager = this._getActiveManager();
-        if (activeManager && activeManager.state && activeManager.state.isUnderManualControl) {
-            activeManager.state.manualControlReleaseTime = this.currentTime;
-            activeManager.state.isUnderManualControl = false;
+        
+        // ** THE FIX IS HERE: The hold logic is now triggered on pointer up. **
+        if (activeManager && activeManager.state.isUnderManualControl) {
+            this._startManualControlTimeout(activeManager);
         }
 
         MI.isRotating = false;
@@ -454,25 +457,18 @@ const App = {
     onWindowResize() {
         if (!this.camera || !this.renderer) return;
 
-        // ** THE FIX IS HERE: All dimensions are now derived from the canvas's on-screen size **
         const canvas = this.renderer.domElement;
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
         
-        // Check if the canvas's drawing buffer size is different from its on-screen size.
-        // This is the core of the fix.
         const needResize = canvas.width !== width || canvas.height !== height;
         if (needResize) {
-            // Tell the renderer to resize its drawing buffer to match the on-screen size.
-            // The `false` argument prevents three.js from touching the canvas's CSS style.
             this.renderer.setSize(width, height, false);
         }
         
-        // Update the camera's aspect ratio to match the new dimensions to prevent distortion.
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
 
-        // Notify other managers that a resize has occurred.
         this.BackgroundManager.onWindowResize(); 
         if (this.GPGPUDebugger && this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
         if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
