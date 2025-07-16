@@ -135,12 +135,11 @@ export const ModelManager = {
     },
 
     stopAutopilot() {
-        if (this.app.vizSettings.modelAutopilotOn) {
-            this.app.vizSettings.modelAutopilotOn = false;
-            this.initiateReturnToHome(null);
-            if (this.app.UIManager) this.app.UIManager.updateMasterControls();
-            console.log("Model Autopilot STOP triggered. Starting transition to home.");
-        }
+        // ** THE FIX IS HERE: Removed the faulty `if` condition **
+        this.app.vizSettings.modelAutopilotOn = false;
+        this.initiateReturnToHome(null);
+        if (this.app.UIManager) this.app.UIManager.updateMasterControls();
+        console.log("Model Autopilot STOP triggered. Starting transition to home.");
     },
 
     generateNewRandomWaypoint() {
@@ -156,19 +155,17 @@ export const ModelManager = {
             THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
         );
 
-        // ** THE FIX IS HERE **
         const direction = new THREE.Vector3().subVectors(ap.endPos, ap.startPos);
         const distance = direction.length();
 
-        // Sanity check to prevent NaN from normalize() on a zero-length vector.
         if (distance < 0.001) {
             console.warn("Model Autopilot: Generated a zero-movement waypoint. Holding position for this cycle.");
-            ap.waypointProgress = 1.0; // Force completion of this "hold" waypoint.
-            return; // Exit. A new waypoint will be generated on the next full cycle.
+            ap.waypointProgress = 1.0; 
+            return; 
         }
 
         if (this.app.vizSettings.enableCollisionAvoidance && this.app.ImagePlaneManager.landscape) {
-            direction.normalize(); // This is now safe.
+            direction.normalize(); 
 
             this.app.raycaster.set(ap.startPos, direction);
             const intersects = this.app.raycaster.intersectObject(this.app.ImagePlaneManager.landscape, false);

@@ -82,7 +82,7 @@ const App = {
         enableModel: true,
         enableModelSpin: false,
         modelSpinSpeed: 0.0,
-        enableCollisionAvoidance: false, 
+        enableCollisionAvoidance: true, 
         enableLandscape: true,
         enableLandscapeSpin: false,
         landscapeSpinSpeed: 0.0,
@@ -299,7 +299,7 @@ const App = {
         setTimeout(() => {
             this.preloadDevAssets();
             
-            const defaultShaderId = 'presetBg1';
+            const defaultShaderId = 'presetBg6';
             const defaultShaderCode = this.shaderPresets[defaultShaderId];
             if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
                 console.log("Loading default background shader preset...");
