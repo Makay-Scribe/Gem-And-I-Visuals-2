@@ -57,7 +57,8 @@ export const ModelManager = {
         ap.preset = presetId;
         ap.isTransitioningToHome = false;
 
-        S.modelAutopilotSpeed = PRESET_DEFAULT_SPEEDS[presetId] || 1.0;
+        S.modelAutopilotOn = true;
+        S.activeModelPreset = presetId;
         
         if (this.app.UIManager) {
             this.app.UIManager.updateMasterControls();
@@ -131,8 +132,12 @@ export const ModelManager = {
     },
 
     stopAutopilot() {
-        this.initiateReturnToHome(null);
-        console.log("Model Autopilot STOP triggered. Starting transition to home.");
+        if (this.app.vizSettings.modelAutopilotOn) {
+            this.app.vizSettings.modelAutopilotOn = false;
+            this.initiateReturnToHome(null);
+            if (this.app.UIManager) this.app.UIManager.updateMasterControls();
+            console.log("Model Autopilot STOP triggered. Starting transition to home.");
+        }
     },
 
     generateNewRandomWaypoint() {
@@ -197,6 +202,7 @@ export const ModelManager = {
                 } else {
                     ap.active = false;
                     ap.preset = null;
+                    if (this.app.UIManager) this.app.UIManager.updateMasterControls();
                 }
             } else {
                  ap.holdTimer = Math.random() * 5.0 + 2.0;
@@ -231,6 +237,9 @@ export const ModelManager = {
             if (this.app.UIManager) this.app.UIManager.logError("Cannot load model: Invalid preset.");
             return;
         }
+
+        // ** THE FIX IS HERE: Stop any active autopilot before loading a new model. **
+        this.stopAutopilot();
 
         this.activePresetId = preset.id;
         if (this.app.UIManager) this.app.UIManager.updateModelPresetGlow();
@@ -312,13 +321,12 @@ export const ModelManager = {
             this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
         }
         
-        // ** THE FIX IS HERE: Logic is commented out to disable it temporarily **
-        // if (S.enableModelSpin) {
-        //     const spinQuaternion = new THREE.Quaternion();
-        //     const spinAxis = new THREE.Vector3(0, 1, 0); // Y-axis for yaw
-        //     spinQuaternion.setFromAxisAngle(spinAxis, S.modelSpinSpeed * delta);
-        //     this.state.targetQuaternion.multiply(spinQuaternion);
-        // }
+        if (S.enableModelSpin) {
+            const spinQuaternion = new THREE.Quaternion();
+            const spinAxis = new THREE.Vector3(0, 1, 0); // Y-axis for yaw
+            spinQuaternion.setFromAxisAngle(spinAxis, S.modelSpinSpeed * delta);
+            this.state.targetQuaternion.multiply(spinQuaternion);
+        }
 
         this.gltfModel.position.lerp(this.state.targetPosition, 0.05);
         this.gltfModel.quaternion.slerp(this.state.targetQuaternion, 0.05);
