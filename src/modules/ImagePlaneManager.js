@@ -31,7 +31,7 @@ export const ImagePlaneManager = {
     planeDimensions: new THREE.Vector2(40, 40),
     planeResolution: new THREE.Vector2(128, 128),
     currentTexture: null, 
-    spinAccumulator: new THREE.Quaternion(), // ** NEW: Tracks total spin **
+    spinAccumulator: new THREE.Quaternion(), 
 
     state: {
         isUnderManualControl: false,
@@ -50,8 +50,8 @@ export const ImagePlaneManager = {
         waypointTransitionDuration: 20.0, 
         startPos: new THREE.Vector3(),
         endPos: new THREE.Vector3(),
-        startQuat: new THREE.Quaternion(), // Represents the non-spun base rotation
-        endQuat: new THREE.Quaternion(),   // Represents the non-spun base rotation
+        startQuat: new THREE.Quaternion(), 
+        endQuat: new THREE.Quaternion(),   
     },
 
     init(appInstance) {
@@ -83,13 +83,10 @@ export const ImagePlaneManager = {
     generateNewRandomWaypoint() {
         const ap = this.autopilot;
         ap.startPos.copy(this.state.targetPosition);
-        
-        // ** THE FIX IS HERE: Start quaternion is the TARGET minus the CURRENT spin. **
-        // This calculates the true underlying tilt/yaw to ensure a smooth transition.
         ap.startQuat.copy(this.state.targetQuaternion).multiply(this.spinAccumulator.clone().invert());
 
         let endPosX, endPosY, endPosZ;
-        let eulerX, eulerY; // Z-axis (roll) is now handled exclusively by the spinAccumulator.
+        let eulerX, eulerY; 
         
         const orbitalTiltDistribution = [ { range: [-5, 5], weight: 0.50 }, { range: [5, 15], weight: 0.20 }, { range: [-15, -5], weight: 0.20 }, { range: [15, 30], weight: 0.05 }, { range: [-30, -15], weight: 0.05 }];
 
@@ -104,7 +101,10 @@ export const ImagePlaneManager = {
         const randomRotationEuler = new THREE.Euler(THREE.MathUtils.degToRad(eulerX), THREE.MathUtils.degToRad(eulerY), 0, 'YXZ' );
         const randomRotationQuat = new THREE.Quaternion().setFromEuler(randomRotationEuler);
         ap.endQuat.copy(this.state.homeQuaternion).multiply(randomRotationQuat);
-        ap.waypointTransitionDuration = THREE.MathUtils.randFloat(18.0, 22.0);
+        
+        // ** THE FIX IS HERE **
+        ap.waypointTransitionDuration = THREE.MathUtils.randFloat(18.0, 30.0);
+        
         ap.waypointProgress = 0;
     },
     
@@ -121,7 +121,6 @@ export const ImagePlaneManager = {
         const state = this.state;
         const ap = this.autopilot;
         
-        // --- Step 1: Update Autopilot state ---
         if (ap.active && ap.waypointProgress >= 1.0) {
             this.generateNewRandomWaypoint();
         }
@@ -129,7 +128,6 @@ export const ImagePlaneManager = {
             ap.waypointProgress = Math.min(1.0, ap.waypointProgress + cappedDelta / ap.waypointTransitionDuration);
         }
 
-        // --- Step 2: Determine Position ---
         if (ap.active) {
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
@@ -137,32 +135,27 @@ export const ImagePlaneManager = {
             state.targetPosition.lerp(state.homePosition, 0.02);
         }
 
-        // --- Step 3: Determine Base Rotation (Tilt/Yaw without spin) ---
         let baseRotation = new THREE.Quaternion();
         if (ap.active) {
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             baseRotation.copy(ap.startQuat).slerp(ap.endQuat, ease);
         } else if (state.isUnderManualControl) {
-            baseRotation.copy(state.targetQuaternion); 
+            baseRotation.copy(state.targetQuaternion);
         } else {
-            baseRotation.slerp(state.homeQuaternion, 0.05);
+            baseRotation.slerp(this.state.homeQuaternion, 0.05);
         }
         
-        // --- Step 4: Update the Spin Accumulator ---
         if (S.enableLandscapeSpin) {
             const incrementalSpin = new THREE.Quaternion();
             const spinAxis = new THREE.Vector3(0, 0, 1);
             incrementalSpin.setFromAxisAngle(spinAxis, S.landscapeSpinSpeed * cappedDelta);
-            this.spinAccumulator.multiply(incrementalSpin);
+            this.spinAccumulator.premultiply(incrementalSpin);
         } else {
-            // Gracefully return to no spin
             this.spinAccumulator.slerp(new THREE.Quaternion(), 0.05);
         }
         
-        // --- Step 5: Combine Base Rotation and Spin for the final target ---
         state.targetQuaternion.copy(baseRotation).multiply(this.spinAccumulator);
 
-        // --- Step 6: Apply final interpolated transformations to the visual object ---
         this.landscapeContainer.position.lerp(state.targetPosition, 0.05);
         this.landscapeContainer.quaternion.slerp(state.targetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
@@ -212,15 +205,15 @@ export const ImagePlaneManager = {
         } else {
             console.log("Creating continuous (standard) geometry.");
             const uvCount = this.planeResolution.x * this.planeResolution.y;
-            const uv_gpgpu = new Float32Array(uvCount * 2);
+            const uv_gpu = new Float32Array(uvCount * 2);
             for (let i = 0; i < this.planeResolution.y; i++) {
                 for (let j = 0; j < this.planeResolution.x; j++) {
                     const idx = (i * this.planeResolution.x + j);
-                    uv_gpgpu[idx * 2] = j / (this.planeResolution.x - 1); 
-                    uv_gpgpu[idx * 2 + 1] = i / (this.planeResolution.y - 1); 
+                    uv_gpu[idx * 2] = j / (this.planeResolution.x - 1); 
+                    uv_gpu[idx * 2 + 1] = i / (this.planeResolution.y - 1); 
                 }
             }
-            landGeom.setAttribute('uv_gpgpu', new THREE.BufferAttribute(uv_gpgpu, 2));
+            landGeom.setAttribute('uv_gpgpu', new THREE.BufferAttribute(uv_gpu, 2));
         }
 
         const vertexCount = landGeom.attributes.position.count;
