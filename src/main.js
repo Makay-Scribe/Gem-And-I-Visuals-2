@@ -253,7 +253,11 @@ const App = {
         };
 
         this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('glCanvas'), antialias: true, powerPreference: "high-performance" });
-        this.renderer.setPixelRatio(window.devicePixelRatio); this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(window.devicePixelRatio); 
+        
+        // ** THE FIX IS HERE: Initial size is set from canvas client dimensions **
+        const canvas = this.renderer.domElement;
+        this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
         
         this.renderer.autoClear = false;
 
@@ -318,7 +322,6 @@ const App = {
             }
         }, 100);
 
-        const canvas = document.getElementById('glCanvas');
         window.addEventListener('resize', this.onWindowResize.bind(this));
         
         window.addEventListener('mousemove', (event) => {
@@ -450,9 +453,26 @@ const App = {
     
     onWindowResize() {
         if (!this.camera || !this.renderer) return;
-        this.camera.aspect = window.innerWidth / window.innerHeight;
+
+        // ** THE FIX IS HERE: All dimensions are now derived from the canvas's on-screen size **
+        const canvas = this.renderer.domElement;
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        
+        // Check if the canvas's drawing buffer size is different from its on-screen size.
+        // This is the core of the fix.
+        const needResize = canvas.width !== width || canvas.height !== height;
+        if (needResize) {
+            // Tell the renderer to resize its drawing buffer to match the on-screen size.
+            // The `false` argument prevents three.js from touching the canvas's CSS style.
+            this.renderer.setSize(width, height, false);
+        }
+        
+        // Update the camera's aspect ratio to match the new dimensions to prevent distortion.
+        this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // Notify other managers that a resize has occurred.
         this.BackgroundManager.onWindowResize(); 
         if (this.GPGPUDebugger && this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
         if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();

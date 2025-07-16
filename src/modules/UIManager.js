@@ -117,7 +117,7 @@ export const UIManager = {
             sliderZ: document.getElementById('actorDepth'),
             masterSpinCheckbox: document.getElementById('masterEnableSpin'),
             masterSpinSpeedInput: document.getElementById('masterSpinSpeed'),
-            masterSpinControl: document.getElementById('masterSpinControl'), // ** THE FIX IS HERE **
+            masterSpinControl: document.getElementById('masterSpinControl'),
         };
         this.controlDOMElements = UIElements;
 
@@ -235,7 +235,6 @@ export const UIManager = {
             spinEnableProp = 'enableLandscapeSpin';
             spinSpeedProp = 'landscapeSpinSpeed';
             UIElements.autopilotHeader.textContent = "LANDSCAPE AUTOPILOT";
-            // ** THE FIX IS HERE **
             UIElements.masterSpinControl.style.opacity = '1';
             UIElements.masterSpinCheckbox.disabled = false;
             UIElements.masterSpinSpeedInput.disabled = false;
@@ -247,14 +246,16 @@ export const UIManager = {
             spinEnableProp = 'enableModelSpin';
             spinSpeedProp = 'modelSpinSpeed';
             UIElements.autopilotHeader.textContent = "3D MODEL AUTOPILOT";
-            // ** THE FIX IS HERE **
             UIElements.masterSpinControl.style.opacity = '0.4';
             UIElements.masterSpinCheckbox.disabled = true;
             UIElements.masterSpinSpeedInput.disabled = true;
         }
 
         UIElements.actorToggleContainer.querySelectorAll('button').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.actor === activeControl);
+            const isActive = btn.dataset.actor === activeControl;
+            btn.classList.toggle('active', isActive);
+            // ** THE FIX IS HERE: Add glow to the active actor toggle button **
+            btn.classList.toggle('button-glow-effect', isActive);
         });
         
         UIElements.manualContainer.style.display = isAutopilotOn ? 'none' : 'block';
@@ -456,6 +457,8 @@ export const UIManager = {
             if (light) {
                 light.classList.toggle('active', isActive);
             }
+            // ** THE FIX IS HERE: Add glow to the active engine toggle button **
+            btn.classList.toggle('button-glow-effect', isActive);
         });
     
         gpgpuStatusLight.classList.toggle('active', isGpuMode);
@@ -756,7 +759,7 @@ export const UIManager = {
                     document.getElementById('shaderToyGLSL').value = shaderCode; 
                     this.app.vizSettings.shaderToyGLSL = shaderCode; 
                     this.logSuccess(`Preset '${presetId}' loaded.`); 
-                    this.loadUserShader(presetId);
+                    this.loadUserShader(presetId); 
                 }
             });
         }
