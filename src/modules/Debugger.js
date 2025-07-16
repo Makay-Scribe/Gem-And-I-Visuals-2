@@ -1,7 +1,7 @@
 export const Debugger = {
     app: null,
     panelElement: null,
-    enabled: true,
+    enabled: true, // Legacy property, now superseded by vizSettings for visibility
 
     init(appInstance) {
         this.app = appInstance;
@@ -13,17 +13,32 @@ export const Debugger = {
             return;
         }
 
-        this.enabled = checkbox.checked;
+        // Set initial state from vizSettings
+        this.enabled = this.app.vizSettings.enableOnScreenDebugger;
+        checkbox.checked = this.enabled;
         this.panelElement.style.display = this.enabled ? 'block' : 'none';
 
         checkbox.addEventListener('change', (e) => {
-            this.enabled = e.target.checked;
-            this.panelElement.style.display = this.enabled ? 'block' : 'none';
+            // The checkbox now only updates the central setting
+            this.app.vizSettings.enableOnScreenDebugger = e.target.checked;
         });
     },
 
     update() {
-        if (!this.enabled || !this.panelElement) return;
+        if (!this.panelElement) return;
+
+        // ** THE FIX IS HERE: Control visibility every frame based on the global setting **
+        const shouldBeVisible = this.app.vizSettings.enableOnScreenDebugger;
+        const currentDisplay = this.panelElement.style.display;
+        const newDisplay = shouldBeVisible ? 'block' : 'none';
+
+        if (currentDisplay !== newDisplay) {
+            this.panelElement.style.display = newDisplay;
+        }
+        
+        // If it's not supposed to be visible, exit early.
+        if (!shouldBeVisible) return;
+
 
         const landscapeManager = this.app.ImagePlaneManager;
         const modelManager = this.app.ModelManager;
@@ -32,7 +47,7 @@ export const Debugger = {
         // Helper for formatting vectors
         const formatV3 = (v) => v ? `${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}` : 'N/A';
         
-        // **NEW HELPER** for formatting rotations from quaternions into degrees
+        // Helper for formatting rotations from quaternions into degrees
         const formatQuat = (q) => {
             if (!q) return 'N/A';
             const euler = new THREE.Euler().setFromQuaternion(q, 'YXZ');

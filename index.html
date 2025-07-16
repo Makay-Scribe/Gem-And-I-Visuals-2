@@ -527,7 +527,7 @@
                 <p class="sub-group-title">AUTOPILOT BEHAVIOR</p>
                 <div class="checkbox-label-container">
                     <label for="enableCollisionAvoidance" title="Prevents the model from flying through the landscape during autopilot.">Collision Avoidance</label>
-                    <input type="checkbox" id="enableCollisionAvoidance">
+                    <input type="checkbox" id="enableCollisionAvoidance" checked>
                 </div>
             </div>
         </div>
@@ -750,6 +750,11 @@
             </div>
         </div>
         
+        <!-- ** THE FIX IS HERE: Added Demo Mode button container ** -->
+        <div id="demoModeContainer">
+            <button id="demoModeButton" class="button-glow-effect">START DEMO</button>
+        </div>
+
     </div>
     <canvas id="glCanvas"></canvas>
     <video id="videoSourceElement" loop muted playsinline style="display:none;"></video>

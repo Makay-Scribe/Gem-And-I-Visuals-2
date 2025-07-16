@@ -53,6 +53,7 @@ const App = {
     jolt_targetOffset: 0.0,
     shaderPresets: shaderPresets,
     vizSettings: {},
+    isDemoModeActive: false, // ** NEW: Global flag for demo mode **
 
     // --- MANAGERS ---
     UIManager: UIManager,
@@ -204,6 +205,7 @@ const App = {
         lightDirectionX: 0.5, lightDirectionY: 0.8, lightDirectionZ: 0.5,
         enableLightOrbit: true, lightOrbitSpeed: 0.2, enableGuideLaser: false,
         enableGPGPUDebugger: true, 
+        enableOnScreenDebugger: true,
     },
 
     async preloadDevAssets() {
@@ -363,7 +365,6 @@ const App = {
         return null;
     },
     
-    // ** THE FIX IS HERE: The timeout logic is now encapsulated to avoid repetition. **
     _startManualControlTimeout(activeManager) {
         if (activeManager.state.manualControlTimeoutId) {
             clearTimeout(activeManager.state.manualControlTimeoutId);
@@ -445,7 +446,6 @@ const App = {
         const MI = this.mouseInteraction;
         const activeManager = this._getActiveManager();
         
-        // ** THE FIX IS HERE: The hold logic is now triggered on pointer up. **
         if (activeManager && activeManager.state.isUnderManualControl) {
             this._startManualControlTimeout(activeManager);
         }

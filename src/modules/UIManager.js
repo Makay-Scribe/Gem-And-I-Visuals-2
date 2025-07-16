@@ -10,6 +10,11 @@ export const UIManager = {
     debugDisplay: null,
     controlDOMElements: {},
 
+    // --- Demo Mode Properties ---
+    demoShaderInterval: null,
+    demoShaderOrder: ['presetBg6', 'presetBg7', 'presetBg8', 'presetBg1', 'presetBg2', 'presetBg3', 'presetBg4', 'presetBg5'],
+    demoShaderIndex: 0,
+
     // --- NEW GPGPU DEBUG PROPERTIES ---
     gpgpuPixelValueDisplay: null,
     isDisplayingPixelValue: false,
@@ -26,9 +31,24 @@ export const UIManager = {
             toggleButton.classList.add('button-glow-effect');
         }
 
+        this.syncAllControlsToSettings(); // Use the new sync function
+
+        this.initImageEffectsControls();
+        this.setupMasterControls();
+        this.setupEQCanvas(); 
+        this.setupEventListeners();
+        this.updateBackgroundControlsVisibility(true);
+        this.updateWarpControlsVisibility(true);
+        this.updateDeformationEngineControls(true);
+        this.updateImageEffectsVisibility(true);
+
+        this.updateMasterControls();
+    },
+
+    syncAllControlsToSettings() {
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
-            if (el && !el.closest('#cameraOptions') && !el.closest('.accordion-header-with-toggle') && !el.closest('#imageEffectsAccordion')) { 
+            if (el) { 
                 if (el.type === 'checkbox') {
                     el.checked = this.app.vizSettings[key];
                 } else if (el.type === 'range') {
@@ -45,18 +65,6 @@ export const UIManager = {
                 checkbox.checked = this.app.vizSettings[checkbox.id];
             }
         });
-
-
-        this.initImageEffectsControls();
-        this.setupMasterControls();
-        this.setupEQCanvas(); 
-        this.setupEventListeners();
-        this.updateBackgroundControlsVisibility(true);
-        this.updateWarpControlsVisibility(true);
-        this.updateDeformationEngineControls(true);
-        this.updateImageEffectsVisibility(true);
-
-        this.updateMasterControls();
     },
     
     initImageEffectsControls() {
@@ -254,7 +262,6 @@ export const UIManager = {
         UIElements.actorToggleContainer.querySelectorAll('button').forEach(btn => {
             const isActive = btn.dataset.actor === activeControl;
             btn.classList.toggle('active', isActive);
-            // ** THE FIX IS HERE: Add glow to the active actor toggle button **
             btn.classList.toggle('button-glow-effect', isActive);
         });
         
@@ -457,7 +464,6 @@ export const UIManager = {
             if (light) {
                 light.classList.toggle('active', isActive);
             }
-            // ** THE FIX IS HERE: Add glow to the active engine toggle button **
             btn.classList.toggle('button-glow-effect', isActive);
         });
     
@@ -773,6 +779,111 @@ export const UIManager = {
                 });
             }
         });
+
+        // ** THE FIX IS HERE: Add listener for the new Demo Mode button **
+        const demoButton = document.getElementById('demoModeButton');
+        if (demoButton) {
+            demoButton.addEventListener('click', () => this.toggleDemoMode());
+        }
+    },
+
+    // --- **NEW** DEMO MODE FUNCTIONS ---
+    toggleDemoMode() {
+        if (this.app.isDemoModeActive) {
+            this.stopDemoMode();
+        } else {
+            this.startDemoMode();
+        }
+    },
+
+    startDemoMode() {
+        console.log("Starting Demo Mode...");
+        this.app.isDemoModeActive = true;
+        document.getElementById('demoModeButton').textContent = 'STOP DEMO';
+        
+        // 1. Start Landscape Autopilot
+        this.app.ImagePlaneManager.startAutopilot('autopilotPreset3');
+
+        // 2. Start Model Autopilot
+        this.app.ModelManager.startAutopilot('autopilotPreset2');
+        
+        // 3. Start Audio
+        const audioEl = this.app.AudioProcessor.audioElement;
+        if (audioEl && audioEl.src && audioEl.paused) {
+            this.app.AudioProcessor.toggleFilePlayback();
+        }
+
+        // 4. Turn on Cloth Physics
+        this.app.vizSettings.deformationEngine = 'gpgpu';
+        this.app.vizSettings.gpgpu_enableCloth = true;
+
+        // 5. Start Shader Cycling
+        this.demoShaderIndex = 0;
+        this.cycleDemoShader(); // Start immediately
+        if(this.demoShaderInterval) clearInterval(this.demoShaderInterval);
+        this.demoShaderInterval = setInterval(() => this.cycleDemoShader(), 120 * 1000); // 2 minutes
+
+        // 6. Turn off debug panes
+        this.app.vizSettings.enableGPGPUDebugger = false;
+        this.app.vizSettings.enableOnScreenDebugger = false;
+
+        // Sync UI to reflect changes
+        this.syncAllControlsToSettings();
+        this.updateMasterControls();
+        this.updateDeformationEngineControls();
+    },
+
+    stopDemoMode() {
+        console.log("Stopping Demo Mode...");
+        this.app.isDemoModeActive = false;
+        document.getElementById('demoModeButton').textContent = 'START DEMO';
+
+        // Stop autopilots
+        this.app.ImagePlaneManager.stopAutopilot();
+        this.app.ModelManager.stopAutopilot();
+        
+        // Stop audio
+        const audioEl = this.app.AudioProcessor.audioElement;
+        if (audioEl && !audioEl.paused) {
+            this.app.AudioProcessor.toggleFilePlayback();
+        }
+
+        // Stop shader cycling
+        if (this.demoShaderInterval) {
+            clearInterval(this.demoShaderInterval);
+            this.demoShaderInterval = null;
+        }
+
+        // Reset all settings to default
+        this.app.vizSettings = JSON.parse(JSON.stringify(this.app.defaultVisualizerSettings));
+        
+        // Load default assets and states
+        const defaultShaderId = 'presetBg6';
+        this.app.vizSettings.shaderToyGLSL = this.app.shaderPresets[defaultShaderId];
+        this.loadUserShader(defaultShaderId);
+        
+        // Sync entire UI to defaults
+        this.syncAllControlsToSettings();
+        this.updateMasterControls();
+        this.updateDeformationEngineControls();
+        this.updateWarpControlsVisibility(true);
+        this.updateBackgroundControlsVisibility(true);
+    },
+    
+    cycleDemoShader() {
+        if (!this.app.isDemoModeActive) return;
+
+        const presetId = this.demoShaderOrder[this.demoShaderIndex];
+        const shaderCode = this.app.shaderPresets[presetId];
+        
+        if (shaderCode) {
+            document.getElementById('shaderToyGLSL').value = shaderCode;
+            this.app.vizSettings.shaderToyGLSL = shaderCode;
+            this.loadUserShader(presetId);
+            console.log(`Demo Mode: Cycled to shader ${presetId}`);
+        }
+
+        this.demoShaderIndex = (this.demoShaderIndex + 1) % this.demoShaderOrder.length;
     },
 
     setupButterchurnEventListeners() {

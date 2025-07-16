@@ -669,3 +669,33 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     white-space: pre; /* Preserve formatting */
     line-height: 1.4;
 }
+
+/* --- **NEW** DEMO MODE BUTTON STYLES --- */
+#demoModeContainer {
+    margin-top: 8px;
+    padding: 4px;
+    border-top: 2px solid var(--header-bg);
+}
+
+#demoModeButton {
+    width: 100%;
+    padding: 10px 5px;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background-color: var(--sub-header-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+#demoModeButton:hover {
+    background-color: var(--sub-header-hover-bg);
+}
+
+#demoModeButton:active {
+    transform: scale(0.98);
+}
