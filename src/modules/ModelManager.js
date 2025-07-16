@@ -33,6 +33,8 @@ export const ModelManager = {
         active: false,
         preset: null,
         isTransitioningToHome: false, 
+        isHoldingAtHome: false, // ** NEW: Flag for home hold state **
+        homeHoldTimer: 0, // ** NEW: Timer for the hold **
         nextPresetId: null, 
         waypointProgress: 1.0, 
         waypointTransitionDuration: 10.0,
@@ -59,6 +61,7 @@ export const ModelManager = {
         ap.active = true;
         ap.preset = presetId;
         ap.isTransitioningToHome = false;
+        ap.isHoldingAtHome = false; // Ensure hold is off when starting fresh
 
         S.modelAutopilotOn = true;
         S.activeModelPreset = presetId;
@@ -114,6 +117,7 @@ export const ModelManager = {
         const ap = this.autopilot;
         
         ap.isTransitioningToHome = true;
+        ap.isHoldingAtHome = false; // Ensure hold is off
         ap.nextPresetId = nextPreset;
         ap.active = true; 
         ap.preset = null; 
@@ -145,12 +149,11 @@ export const ModelManager = {
         const ap = this.autopilot;
         if (!this.gltfModel || !ap.randomBounds) return;
 
-        // ** THE FIX IS HERE: Add a chance to visit home **
-        const visitHomeChance = 0.2; // 20% chance
+        const visitHomeChance = 0.2; 
         if (Math.random() < visitHomeChance) {
             console.log("Model Autopilot: Decided to visit home.");
-            this.initiateReturnToHome(ap.preset); // Go home, then resume current preset.
-            return; // Stop here, the return-to-home logic will take over.
+            this.initiateReturnToHome(ap.preset); 
+            return; 
         }
 
         ap.startPos.copy(this.state.targetPosition);
@@ -212,14 +215,11 @@ export const ModelManager = {
 
         if (ap.waypointProgress >= 1.0) {
             if (ap.isTransitioningToHome) {
+                // ** THE FIX IS HERE: Start the hold timer upon arrival **
+                console.log("Model has arrived home. Starting hold timer.");
                 ap.isTransitioningToHome = false;
-                if (ap.nextPresetId) {
-                    this.startAutopilot(ap.nextPresetId);
-                } else {
-                    ap.active = false;
-                    ap.preset = null;
-                    if (this.app.UIManager) this.app.UIManager.updateMasterControls();
-                }
+                ap.isHoldingAtHome = true;
+                ap.homeHoldTimer = THREE.MathUtils.randFloat(5.0, 7.0); // Set 5-7 second hold
             } else {
                  ap.holdTimer = Math.random() * 5.0 + 2.0;
             }
@@ -228,6 +228,26 @@ export const ModelManager = {
     
     updateAutopilot(delta) {
         const ap = this.autopilot;
+        
+        // ** THE FIX IS HERE: New state check for holding at home **
+        if (ap.isHoldingAtHome) {
+            ap.homeHoldTimer -= delta;
+            if (ap.homeHoldTimer <= 0) {
+                console.log("Home hold finished.");
+                ap.isHoldingAtHome = false;
+                // Decide what to do next
+                if (ap.nextPresetId) {
+                    console.log(`Resuming autopilot on preset: ${ap.nextPresetId}`);
+                    this.startAutopilot(ap.nextPresetId);
+                } else {
+                    console.log("No next preset. Autopilot stopping fully.");
+                    ap.active = false;
+                    ap.preset = null;
+                    if (this.app.UIManager) this.app.UIManager.updateMasterControls();
+                }
+            }
+            return; // Important: Do nothing else while holding.
+        }
         
         if (ap.isTransitioningToHome) {
             this.runMovementLogic(delta);

@@ -155,7 +155,7 @@ const App = {
         gpgpu_enableCloth: false,
         gpgpu_clothDamping: 1.0,
         gpgpu_clothStiffness: 0.8,
-        gpgpu_clothAudioForce: 500.0,
+        gpgpu_clothAudioForce: 900.0, // ** THE FIX IS HERE **
         gpgpu_clothForceRadius: 0.3,
         gpgpu_clothIterations: 1.0,
         gpgpu_clothPinMode: "corners",
