@@ -446,12 +446,68 @@ export const UIManager = {
         }
     },
     
+    // ** THE FIX IS HERE: New function to load user shader **
+    loadUserShader() {
+        const userFragmentShader = this.app.vizSettings.shaderToyGLSL;
+        if (!userFragmentShader) {
+            console.warn("No ShaderToy GLSL provided.");
+            return;
+        }
+        
+        if (this.app.BackgroundManager) {
+            this.app.BackgroundManager.updateShader(userFragmentShader);
+            this.logSuccess("Shader loaded successfully.");
+        } else {
+            this.logError("BackgroundManager not found to update shader.");
+        }
+    },
+    
+    // ** THE FIX IS HERE: New function to load channel textures **
+    loadChannelTexture(channelIndex, file) {
+        if (!this.app.BackgroundManager) {
+            this.logError("BackgroundManager not found for texture loading.");
+            return;
+        }
+        
+        const objectURL = URL.createObjectURL(file);
+        new this.app.THREE.TextureLoader().load(objectURL, (texture) => {
+            const uniformName = `iChannel${channelIndex}`;
+            
+            if (this.app.shaderMaterial.uniforms[uniformName]) {
+                // Dispose of the old texture to free up GPU memory
+                const oldTexture = this.app.shaderMaterial.uniforms[uniformName].value;
+                if(oldTexture && typeof oldTexture.dispose === 'function') {
+                    oldTexture.dispose();
+                }
+
+                this.app.shaderMaterial.uniforms[uniformName].value = texture;
+                
+                // Also update the resolution uniform for that channel
+                const resUniformName = `iChannelResolution`;
+                if(this.app.shaderMaterial.uniforms[resUniformName]) {
+                    this.app.shaderMaterial.uniforms[resUniformName].value[channelIndex].set(texture.image.width, texture.image.height, 1);
+                }
+
+                this.logSuccess(`Texture loaded into ${uniformName}.`);
+            } else {
+                this.logError(`Uniform ${uniformName} not found in shader material.`);
+            }
+            URL.revokeObjectURL(objectURL);
+        }, undefined, (error) => {
+            this.logError(`Error loading texture for ${uniformName}: ${error}`);
+            URL.revokeObjectURL(objectURL);
+        });
+    },
+
     setupEventListeners() {
         document.getElementById('toggleMicInput').addEventListener('click', () => this.app.AudioProcessor.startMic());
         document.getElementById('playPauseAudioButton').addEventListener('click', () => this.app.AudioProcessor.toggleFilePlayback());
         document.getElementById('playTestToneButton').addEventListener('click', () => this.app.AudioProcessor.toggleTestTone());
         document.querySelectorAll('.browse-btn').forEach(btn => btn.addEventListener('click', () => document.getElementById(btn.dataset.target).click()));
-        document.getElementById('loadShaderCode').addEventListener('click', () => this.app.ShaderManager.loadUserShader());
+        
+        // ** THE FIX IS HERE: "Load" button now calls the function in this manager **
+        document.getElementById('loadShaderCode').addEventListener('click', () => this.loadUserShader());
+
         document.getElementById('clearShaderCode').addEventListener('click', () => { document.getElementById('shaderToyGLSL').value = ''; this.app.vizSettings.shaderToyGLSL = ''; this.logSuccess('Shader cleared.'); });
         document.getElementById('pasteShaderCode').addEventListener('click', async () => { try { const text = await navigator.clipboard.readText(); document.getElementById('shaderToyGLSL').value = text; this.app.vizSettings.shaderToyGLSL = text; this.logSuccess('Pasted from clipboard.'); } catch (err) { this.logError('Failed to read from clipboard.'); } });
         document.getElementById('landscapeResetButton').addEventListener('click', () => this.resetLandscapeSettings());
@@ -462,24 +518,25 @@ export const UIManager = {
             if (el) el.addEventListener('change', (e) => this.handleFileSelect(e, id));
         });
 
-        // ** THE FIX IS HERE: Add listener for the new enableWarp checkbox **
         const enableWarpCheckbox = document.getElementById('enableWarp');
         if (enableWarpCheckbox) {
             enableWarpCheckbox.addEventListener('change', (e) => {
-                this.app.vizSettings.enableWarp = e.target.checked;
-                if (e.target.checked) {
-                    // If turning on, and it was previously 'none', default to 'fold'
+                const isChecked = e.target.checked;
+                this.app.vizSettings.enableWarp = isChecked;
+                const warpModeSelect = document.getElementById('warpMode');
+                
+                if (isChecked) {
                     if (this.app.vizSettings.warpMode === 'none') {
                         this.app.vizSettings.warpMode = 'fold';
-                        document.getElementById('warpMode').value = 'fold';
+                        warpModeSelect.value = 'fold';
                     }
                 } else {
                     this.app.vizSettings.warpMode = 'none';
+                    warpModeSelect.value = 'none';
                 }
                 this.updateWarpControlsVisibility();
             });
         }
-
 
         const gpgpuDebugCheckbox = document.getElementById('enableGPGPUDebugger');
         if (gpgpuDebugCheckbox) {
@@ -526,7 +583,15 @@ export const UIManager = {
                 if (e.target.type === 'range') this.updateRangeDisplay(id, value);
                 
                 if (id === 'backgroundMode') this.updateBackgroundControlsVisibility();
-                if (id === 'warpMode') this.updateWarpControlsVisibility();
+                
+                if (id === 'warpMode') {
+                    this.app.vizSettings.warpMode = value; // Directly update the settings
+                    const isEnabled = value !== 'none';
+                    this.app.vizSettings.enableWarp = isEnabled;
+                    document.getElementById('enableWarp').checked = isEnabled;
+                    this.updateWarpControlsVisibility();
+                }
+
                 if (id === 'enableLightOrbit') this.toggleLightSliders();
                 if (id === 'planeAspectRatio' || id === 'planeOrientation') {
                     this.app.ImagePlaneManager.createDefaultLandscape();
@@ -711,7 +776,8 @@ export const UIManager = {
 
         if (id.startsWith('iChannel')) {
             const channelIndex = parseInt(id.charAt(id.length - 1));
-            this.app.ShaderManager.loadChannelTexture(channelIndex, file);
+            // ** THE FIX IS HERE: Call the function in this manager **
+            this.loadChannelTexture(channelIndex, file);
             return;
         }
 

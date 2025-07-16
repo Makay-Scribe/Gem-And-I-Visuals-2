@@ -6,7 +6,6 @@ import { Debugger } from './modules/Debugger.js';
 import { shaderPresets } from './modules/shaderPresets.js';
 import { AudioProcessor } from './modules/AudioProcessor.js';
 import { CameraManager } from './modules/CameraManager.js';
-import { ShaderManager } from './modules/ShaderManager.js';
 import { SceneManager } from './modules/SceneManager.js';
 import { BackgroundManager } from './modules/BackgroundManager.js';
 import { ImagePlaneManager } from './modules/ImagePlaneManager.js';
@@ -60,7 +59,6 @@ const App = {
     ButterchurnManager: ButterchurnManager,
     AudioProcessor: AudioProcessor,
     CameraManager: CameraManager,
-    ShaderManager: ShaderManager,
     SceneManager: SceneManager,
     BackgroundManager: BackgroundManager,
     ImagePlaneManager: ImagePlaneManager,
@@ -135,7 +133,6 @@ const App = {
         imageEffect_strength: 0.5,
         imageEffect_radius: 0.3,
         imageEffect_audioInfluence: 0.5,
-        // ** THE FIX IS HERE: Add new Texture Jolt settings **
         imageEffect_enableJolt: false,
         imageEffect_joltStrength: 0.1,
         imageEffect_joltSpeed: 10.0,
@@ -271,7 +268,6 @@ const App = {
         this.BackgroundManager.init(this);
         this.ModelManager.init(this);
         this.ButterchurnManager.init(this);
-        this.ShaderManager.init(this);
         this.UIManager.init(this);
         this.GPGPUDebugger.init(this);
         this.Debugger.init(this);
@@ -286,8 +282,9 @@ const App = {
                 if (shaderToyGLSLEl) {
                     shaderToyGLSLEl.value = defaultShaderCode;
                     this.vizSettings.shaderToyGLSL = defaultShaderCode;
-                    if (this.ShaderManager) {
-                        setTimeout(() => this.ShaderManager.loadUserShader(), 100); 
+                    // ** THE FIX IS HERE: Call the load function on UIManager **
+                    if (this.UIManager) {
+                        setTimeout(() => this.UIManager.loadUserShader(), 100); 
                     }
                 }
             }
