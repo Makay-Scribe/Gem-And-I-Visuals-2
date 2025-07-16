@@ -498,25 +498,23 @@ export const UIManager = {
 
         document.getElementById('controlsToggleButton').addEventListener('click', (e) => { 
             const panel = document.getElementById('controlsPanel'); 
-            const mediaHeader = document.querySelector('[data-header-id="media"]');
-            const masterControlsHeader = document.querySelector('[data-header-id="master-controls"]');
-            
             panel.classList.toggle('visible'); 
             e.target.textContent = panel.classList.contains('visible') ? "Hide" : "Show"; 
             
             // ** THE FIX IS HERE **
+            // Find all headers that should glow and apply the class if they are closed
+            const headersToGlow = document.querySelectorAll('[data-header-id]');
             if (panel.classList.contains('visible')) {
-                // If panel is opening, set the glows based on accordion states
-                if (mediaHeader && !mediaHeader.nextElementSibling.classList.contains('open')) {
-                    mediaHeader.classList.add('button-glow-effect');
-                }
-                if (masterControlsHeader && !masterControlsHeader.nextElementSibling.classList.contains('open')) {
-                    masterControlsHeader.classList.add('button-glow-effect');
-                }
+                headersToGlow.forEach(header => {
+                    if (!header.nextElementSibling.classList.contains('open')) {
+                        header.classList.add('button-glow-effect');
+                    }
+                });
             } else {
                 // If panel is closing, remove all glows
-                if (mediaHeader) mediaHeader.classList.remove('button-glow-effect');
-                if (masterControlsHeader) masterControlsHeader.classList.remove('button-glow-effect');
+                headersToGlow.forEach(header => {
+                    header.classList.remove('button-glow-effect');
+                });
             }
         });
 
@@ -527,8 +525,10 @@ export const UIManager = {
                 const parentAccordion = header.closest('.accordion-item');
                 if (parentAccordion && parentAccordion.classList.contains('container-disabled')) return;
                 
-                // This is simpler: just toggle the glow based on its future state.
-                header.classList.toggle('button-glow-effect');
+                // If the header is one of our special ones, toggle its glow.
+                if (header.dataset.headerId) {
+                    header.classList.toggle('button-glow-effect');
+                }
                 
                 content.classList.toggle('open');
                 if (content.classList.contains('open')) {

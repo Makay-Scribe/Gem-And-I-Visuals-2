@@ -70,10 +70,9 @@
             </div>
         </div>
 
-        <!-- Camera Section (The NEW Master Control Panel) -->
+        <!-- Camera Section -->
         <div class="accordion-item" id="cameraOptions">
-            <!-- ** THE FIX IS HERE ** -->
-            <button class="accordion-header" data-header-id="master-controls">Master Controls</button>
+            <button class="accordion-header" data-header-id="camera">Camera</button>
             <div class="accordion-content">
                 
                 <div class="segmented-control" id="actorControlToggle">
@@ -115,9 +114,9 @@
             </div>
         </div>
         
-        <!-- Landscape Section -->
+        <!-- Landscape Options Section -->
         <div class="accordion-item">
-            <button class="accordion-header">Landscape</button>
+            <button class="accordion-header" data-header-id="landscape-options">Landscape Options</button>
             <div class="accordion-content">
                 <div class="checkbox-label-container">
                     <label for="enableLandscape">Enable Mesh</label>
@@ -126,7 +125,7 @@
                 <div class="single-line-control">
                     <input type="checkbox" id="enableLandscapeSpin">
                     <label for="enableLandscapeSpin">Spin</label>
-                    <input type="number" id="modelSpinSpeed" min="-1.0" max="1.0" step="0.05" value="0.0">
+                    <input type="number" id="landscapeSpinSpeed" min="-1.0" max="1.0" step="0.05" value="0.0">
                 </div>
 
                 <p class="sub-group-title">DEFORMATION ENGINE</p>
@@ -295,33 +294,9 @@
             </div>
         </div>
         
-        <div class="accordion-item" id="imageEffectsAccordion">
-            <button class="accordion-header">Image Effects</button>
-            <div class="accordion-content">
-                <div class="checkbox-label-container">
-                    <label for="imageEffect_enableBalloon">Enable Balloon Effect</label>
-                    <input type="checkbox" id="imageEffect_enableBalloon">
-                </div>
-                
-                <p class="sub-group-title">EFFECT POSITION (UV COORDS)</p>
-                <label>Position X: <span id="imageEffect_pointXValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_pointX" min="0.0" max="1.0" step="0.01" value="0.5">
-                <label>Position Y: <span id="imageEffect_pointYValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_pointY" min="0.0" max="1.0" step="0.01" value="0.5">
-
-                <p class="sub-group-title">EFFECT PARAMETERS</p>
-                <label>Strength/Amount: <span id="imageEffect_strengthValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_strength" min="0.0" max="1.0" step="0.01" value="0.5">
-                <label>Radius: <span id="imageEffect_radiusValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_radius" min="0.0" max="1.0" step="0.01" value="0.3">
-                <label>Audio Influence: <span id="imageEffect_audioInfluenceValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_audioInfluence" min="0.0" max="1.0" step="0.01" value="0.5">
-            </div>
-        </div>
-        
         <div class="accordion-item" id="gpgpuEffectsAccordion">
-            <button class="accordion-header">
-                <span class="header-title">GPGPU Effects</span>
+            <button class="accordion-header" data-header-id="gpgpu-options">
+                <span class="header-title">GPGPU Options</span>
                 <span class="status-light" id="gpgpuStatusLight"></span>
             </button>
             <div class="accordion-content">
@@ -488,9 +463,33 @@
             </div>
         </div>
 
+        <div class="accordion-item" id="imageEffectsAccordion">
+            <button class="accordion-header" data-header-id="image-effects">Image Effects</button>
+            <div class="accordion-content">
+                <div class="checkbox-label-container">
+                    <label for="imageEffect_enableBalloon">Enable Balloon Effect</label>
+                    <input type="checkbox" id="imageEffect_enableBalloon">
+                </div>
+                
+                <p class="sub-group-title">EFFECT POSITION (UV COORDS)</p>
+                <label>Position X: <span id="imageEffect_pointXValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_pointX" min="0.0" max="1.0" step="0.01" value="0.5">
+                <label>Position Y: <span id="imageEffect_pointYValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_pointY" min="0.0" max="1.0" step="0.01" value="0.5">
+
+                <p class="sub-group-title">EFFECT PARAMETERS</p>
+                <label>Strength/Amount: <span id="imageEffect_strengthValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_strength" min="0.0" max="1.0" step="0.01" value="0.5">
+                <label>Radius: <span id="imageEffect_radiusValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_radius" min="0.0" max="1.0" step="0.01" value="0.3">
+                <label>Audio Influence: <span id="imageEffect_audioInfluenceValue" class="range-value-display"></span></label>
+                <input type="range" id="imageEffect_audioInfluence" min="0.0" max="1.0" step="0.01" value="0.5">
+            </div>
+        </div>
+
         <!-- 3D Model Section -->
         <div class="accordion-item">
-            <button class="accordion-header">3D Model</button>
+            <button class="accordion-header" data-header-id="model">3D Model</button>
             <div class="accordion-content">
                 <div class="checkbox-label-container">
                     <label for="enableModel">Enable</label>
@@ -536,7 +535,7 @@
 
         <!-- Material Section -->
         <div class="accordion-item">
-            <button class="accordion-header">Material</button>
+            <button class="accordion-header" data-header-id="material">Material</button>
             <div class="accordion-content">
                 <p class="sub-group-title">PBR SURFACE</p>
                 <label for="metalness">Metalness: <span id="metalnessValue" class="range-value-display"></span></label>
@@ -580,13 +579,13 @@
 
         <!-- Lighting Section -->
         <div class="accordion-item">
-            <button class="accordion-header">Lighting</button>
+            <button class="accordion-header" data-header-id="lighting">Lighting</button>
             <div class="accordion-content"><label for="lightColor">Directional Color:</label><input type="color" id="lightColor" value="#FFF5E1"><label for="ambientLightColor">Ambient Color:</label><input type="color" id="ambientLightColor" value="#663300"><p class="sub-group-title">DIRECTION</p><div class="checkbox-label-container"><label for="enableLightOrbit">Enable Orbit</label><input type="checkbox" id="enableLightOrbit" checked></div><label>Orbit Speed: <span id="lightOrbitSpeedValue" class="range-value-display"></span></label><input type="range" id="lightOrbitSpeed" min="0.0" max="1.0" step="0.01" value="0.2"><hr style="border-color: #444; margin: 10px 0;"><label>Direction X: <span id="lightDirectionXValue" class="range-value-display"></span></label><input type="range" id="lightDirectionX" min="-1.0" max="1.0" step="0.05" value="0.5"><label>Direction Y: <span id="lightDirectionYValue" class="range-value-display"></span></label><input type="range" id="lightDirectionY" min="-1.0" max="1.0" step="0.05" value="0.8"><label>Direction Z: <span id="lightDirectionZValue" class="range-value-display"></span></label><input type="range" id="lightDirectionZ" min="-1.0" max="1.0" step="0.05" value="0.5"><p class="sub-group-title">VISUALS</p><div class="checkbox-label-container"><label for="enableGuideLaser">Enable Guide Laser</label><input type="checkbox" id="enableGuideLaser"></div></div>
         </div>
 
         <!-- Background FX Section -->
         <div class="accordion-item">
-            <button class="accordion-header">Background FX</button>
+            <button class="accordion-header" data-header-id="background-fx">Background FX</button>
             <div class="accordion-content">
                 <label for="backgroundMode">Mode</label>
                 <select id="backgroundMode">

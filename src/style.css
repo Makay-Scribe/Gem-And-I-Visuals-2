@@ -17,42 +17,47 @@
     --success-border: #34C759;
     --button-secondary-bg: #3A3D3F; /* Grey for presets */
     --button-secondary-hover-bg: #4A4D4F; /* Lighter grey for preset hover */
-    --highlight-color: #ffc107;  /* Added for Butterchurn preset name */
-    --reset-button-bg: #3A5943;  /* Pale yellow-green for reset */
-    --reset-button-hover-bg: #4A6953; /* Lighter version for hover */
-    --special-control-bg: #3A5943; /* Greenish-yellow for special dropdowns/buttons */
-    --special-control-hover-bg: #4A6953; /* Lighter version for hover */
-    --glow-color-yellow: rgba(255, 255, 150, 0.7); /* Color for the new glow effect */
-    --debug-header-bg: #6e5300; /* New color for debug panels */
-    --debug-header-hover-bg: #8c6a00; /* New hover color for debug */
-    --status-light-off: #444; /* Color for the status light when off */
-    --status-light-on: #34C759; /* Green for status light on */
+    --highlight-color: #ffc107;
+    --reset-button-bg: #3A5943;
+    --reset-button-hover-bg: #4A6953;
+    --special-control-bg: #3A5943;
+    --special-control-hover-bg: #4A6953;
+    /* ** THE FIX IS HERE: Changed to a more subtle, whiter yellow ** */
+    --glow-color-yellow: rgba(255, 255, 224, 0.7); 
+    --glow-color-subtle-white: #FFFFE0; 
+    --debug-header-bg: #6e5300;
+    --debug-header-hover-bg: #8c6a00;
+    --status-light-off: #444;
+    --status-light-on: #34C759;
     --status-light-on-glow: rgba(52, 199, 89, 0.6);
 }
 
 /* --- GLOW ANIMATION --- */
 @keyframes slow-yellow-glow {
     0%, 100% {
-        box-shadow: 0 2px 6px -2px rgba(255, 255, 150, 0);
+        /* ** THE FIX IS HERE: Use the whiter transparent color ** */
+        box-shadow: 2px 2px 6px -2px rgba(255, 255, 224, 0);
     }
     50% {
-        /* Pushed down by 2px to create the "U" effect */
-        box-shadow: 0 2px 10px 0px var(--glow-color-yellow);
+        /* This now uses the corrected --glow-color-yellow variable */
+        box-shadow: 2px 2px 10px 0px var(--glow-color-yellow);
     }
 }
 
 /* This is now the universal class for any glowing button or header */
 .button-glow-effect {
     animation: slow-yellow-glow 3s ease-in-out infinite;
-    /* Use transparent top border to create the "U" shape */
+    /* This will now use the corrected --glow-color-yellow variable */
     border: 1px solid var(--glow-color-yellow) !important;
     border-top-color: transparent !important;
+    border-left-color: transparent !important;
 }
 
 /* This is now the universal class for a solid-state glowing button */
 .button-solid-glow {
     background-color: var(--debug-header-bg) !important; 
-    border: 1px solid var(--glow-color-yellow) !important;
+    border: 1px solid var(--glow-color-subtle-white) !important;
+    color: var(--glow-color-subtle-white) !important;
 }
 
 
