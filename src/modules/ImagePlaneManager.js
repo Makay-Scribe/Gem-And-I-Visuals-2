@@ -184,6 +184,7 @@ export const ImagePlaneManager = {
         const now = this.app.currentTime;
         const manualReturnDelay = 0.5;
 
+        // Determine base target rotation from autopilot or manual controls
         if (this.autopilot.active) {
             this.updateAutopilot(cappedDelta);
         } else if (state.isUnderManualControl) {
@@ -195,13 +196,18 @@ export const ImagePlaneManager = {
             state.targetQuaternion.slerp(state.homeQuaternion, 0.02);
         }
 
+        // ** THE FIX IS HERE: Apply spin to the target quaternion **
+        if (S.enableLandscapeSpin) {
+            const spinQuaternion = new THREE.Quaternion();
+            const spinAxis = new THREE.Vector3(0, 0, 1); // Z-axis for roll
+            spinQuaternion.setFromAxisAngle(spinAxis, S.landscapeSpinSpeed * cappedDelta);
+            this.state.targetQuaternion.multiply(spinQuaternion);
+        }
+
+        // Slerp to the (potentially spinning) target
         this.landscapeContainer.position.lerp(this.state.targetPosition, 0.05);
         this.landscapeContainer.quaternion.slerp(this.state.targetQuaternion, 0.05);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
-        
-        if (S.enableLandscapeSpin) {
-            this.landscapeContainer.rotateOnAxis(new THREE.Vector3(0, 0, 1), S.landscapeSpinSpeed * cappedDelta);
-        }
         
         if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
         this.updateDeformationUniforms();
@@ -240,7 +246,6 @@ export const ImagePlaneManager = {
 
             const uvGpgpuAttribute = landGeom.attributes.uv.clone();
             const uvArray = uvGpgpuAttribute.array;
-            // ** THE FIX IS HERE: Invert the Y-coordinate of the cloned UVs **
             for (let i = 1; i < uvArray.length; i += 2) {
                 uvArray[i] = 1.0 - uvArray[i];
             }

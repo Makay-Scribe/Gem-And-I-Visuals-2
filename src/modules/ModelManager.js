@@ -299,6 +299,7 @@ export const ModelManager = {
         }
         this.gltfModel.visible = true;
         
+        // Determine base target rotation from autopilot or manual controls
         if (this.autopilot.active) {
             this.updateAutopilot(delta);
         } else if (this.state.isUnderManualControl) {
@@ -312,11 +313,16 @@ export const ModelManager = {
             this.state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
         }
         
+        // ** THE FIX IS HERE: Apply spin to the target quaternion **
+        if (S.enableModelSpin) {
+            const spinQuaternion = new THREE.Quaternion();
+            const spinAxis = new THREE.Vector3(0, 1, 0); // Y-axis for yaw
+            spinQuaternion.setFromAxisAngle(spinAxis, S.modelSpinSpeed * delta);
+            this.state.targetQuaternion.multiply(spinQuaternion);
+        }
+
+        // Slerp to the (potentially spinning) target
         this.gltfModel.position.lerp(this.state.targetPosition, 0.05);
         this.gltfModel.quaternion.slerp(this.state.targetQuaternion, 0.05);
-        
-        if (S.enableModelSpin) {
-            this.gltfModel.rotation.y += S.modelSpinSpeed * delta;
-        }
     },
 };
