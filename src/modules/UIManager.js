@@ -28,7 +28,7 @@ export const UIManager = {
 
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
-            if (el && !el.closest('#cameraOptions') && !el.closest('#imageEffectsAccordion')) { 
+            if (el && !el.closest('#cameraOptions') && !el.closest('.accordion-header-with-toggle') && !el.closest('#imageEffectsAccordion')) { 
                 if (el.type === 'checkbox') {
                     el.checked = this.app.vizSettings[key];
                 } else if (el.type === 'range') {
@@ -39,6 +39,13 @@ export const UIManager = {
                 }
             }
         });
+
+        document.querySelectorAll('.header-toggle-checkbox').forEach(checkbox => {
+            if (this.app.vizSettings[checkbox.id] !== undefined) {
+                checkbox.checked = this.app.vizSettings[checkbox.id];
+            }
+        });
+
 
         this.initImageEffectsControls();
         this.setupMasterControls();
@@ -108,6 +115,8 @@ export const UIManager = {
             sliderX: document.getElementById('actorX'),
             sliderY: document.getElementById('actorY'),
             sliderZ: document.getElementById('actorDepth'),
+            masterSpinCheckbox: document.getElementById('masterEnableSpin'),
+            masterSpinSpeedInput: document.getElementById('masterSpinSpeed'),
         };
         this.controlDOMElements = UIElements;
 
@@ -158,21 +167,33 @@ export const UIManager = {
 
         UIElements.masterScaleSlider.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
         UIElements.masterSpeedSlider.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
+        
+        UIElements.masterSpinCheckbox.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
+        UIElements.masterSpinSpeedInput.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
     },
 
-    handleMasterControlInput(slider) {
+    handleMasterControlInput(control) {
         const S = this.app.vizSettings;
         const activeControl = S.activeControl;
-        const value = parseFloat(slider.value);
+        const value = control.type === 'checkbox' ? control.checked : parseFloat(control.value);
         
         let targetProp;
-        if (slider.id === 'masterScale') {
+        if (control.id === 'masterScale') {
             targetProp = (activeControl === 'landscape') ? 'landscapeScale' : 'modelScale';
-        } else {
+        } else if (control.id === 'masterSpeed') {
             targetProp = (activeControl === 'landscape') ? 'landscapeAutopilotSpeed' : 'modelAutopilotSpeed';
+        } else if (control.id === 'masterEnableSpin') {
+            targetProp = (activeControl === 'landscape') ? 'enableLandscapeSpin' : 'enableModelSpin';
+        } else if (control.id === 'masterSpinSpeed') {
+            targetProp = (activeControl === 'landscape') ? 'landscapeSpinSpeed' : 'modelSpinSpeed';
         }
-        S[targetProp] = value;
-        this.updateRangeDisplay(slider.id, value);
+
+        if (targetProp) {
+            S[targetProp] = value;
+            if (control.type !== 'checkbox') {
+                 this.updateRangeDisplay(control.id, value);
+            }
+        }
     },
 
     handleActorSliderInput(slider) {
@@ -198,17 +219,21 @@ export const UIManager = {
         const activeControl = S.activeControl;
         const UIElements = this.controlDOMElements;
         
-        let isAutopilotOn, scaleProp, speedProp;
+        let isAutopilotOn, scaleProp, speedProp, spinEnableProp, spinSpeedProp;
         
         if (activeControl === 'landscape') {
             isAutopilotOn = S.landscapeAutopilotOn;
             scaleProp = 'landscapeScale';
             speedProp = 'landscapeAutopilotSpeed';
+            spinEnableProp = 'enableLandscapeSpin';
+            spinSpeedProp = 'landscapeSpinSpeed';
             UIElements.autopilotHeader.textContent = "LANDSCAPE AUTOPILOT";
         } else {
             isAutopilotOn = S.modelAutopilotOn;
             scaleProp = 'modelScale';
             speedProp = 'modelAutopilotSpeed';
+            spinEnableProp = 'enableModelSpin';
+            spinSpeedProp = 'modelSpinSpeed';
             UIElements.autopilotHeader.textContent = "3D MODEL AUTOPILOT";
         }
 
@@ -226,6 +251,13 @@ export const UIManager = {
         if(UIElements.masterSpeedSlider) {
             UIElements.masterSpeedSlider.value = S[speedProp];
             this.updateRangeDisplay('masterSpeed', S[speedProp]);
+        }
+
+        if(UIElements.masterSpinCheckbox) {
+            UIElements.masterSpinCheckbox.checked = S[spinEnableProp];
+        }
+        if(UIElements.masterSpinSpeedInput) {
+            UIElements.masterSpinSpeedInput.value = S[spinSpeedProp];
         }
         
         this.syncManualSlidersFromState();
@@ -297,7 +329,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'modelSpinSpeed', 'landscapeSpinSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed'].includes(id)) {
                 precision = 2;
@@ -321,7 +353,9 @@ export const UIManager = {
     },
     
     updateWarpControlsVisibility(isInitial = false) {
-        const mode = this.app.vizSettings.warpMode;
+        const S = this.app.vizSettings;
+        const mode = S.enableWarp ? S.warpMode : 'none';
+
         const sagControls = document.getElementById('warpSagControls');
         const droopControls = document.getElementById('warpDroopControls');
         const cylinderControls = document.getElementById('warpCylinderControls');
@@ -334,7 +368,10 @@ export const UIManager = {
         if (bendControls) bendControls.style.display = (mode === 'bend') ? 'block' : 'none';
         if (foldControls) foldControls.style.display = (mode === 'fold') ? 'block' : 'none';
 
-        if (!isInitial) this.refreshAccordion(document.getElementById('warpMode'));
+        if (!isInitial) {
+            const warpAccordionContent = document.getElementById('warpMode')?.closest('.accordion-content');
+            if(warpAccordionContent) this.refreshAccordion(warpAccordionContent);
+        }
     },
 
     updateImageEffectsVisibility(isInitial = false) {
@@ -363,6 +400,7 @@ export const UIManager = {
         const gpgpuAccordion = document.getElementById('gpgpuEffectsAccordion');
         const gpgpuStatusLight = document.getElementById('gpgpuStatusLight');
         const toggleContainer = document.getElementById('deformationEngineToggle');
+        const resetButton = document.getElementById('landscapeResetButton');
     
         if (!legacyContainer || !gpgpuAccordion || !gpgpuStatusLight || !toggleContainer) return;
     
@@ -370,6 +408,10 @@ export const UIManager = {
     
         legacyContainer.classList.toggle('container-disabled', isGpuMode);
         gpgpuAccordion.classList.toggle('container-disabled', !isGpuMode);
+        
+        if (resetButton) {
+            resetButton.disabled = isGpuMode;
+        }
     
         toggleContainer.querySelectorAll('.segmented-control-button').forEach(btn => {
             const light = btn.querySelector('.status-light');
@@ -420,6 +462,25 @@ export const UIManager = {
             if (el) el.addEventListener('change', (e) => this.handleFileSelect(e, id));
         });
 
+        // ** THE FIX IS HERE: Add listener for the new enableWarp checkbox **
+        const enableWarpCheckbox = document.getElementById('enableWarp');
+        if (enableWarpCheckbox) {
+            enableWarpCheckbox.addEventListener('change', (e) => {
+                this.app.vizSettings.enableWarp = e.target.checked;
+                if (e.target.checked) {
+                    // If turning on, and it was previously 'none', default to 'fold'
+                    if (this.app.vizSettings.warpMode === 'none') {
+                        this.app.vizSettings.warpMode = 'fold';
+                        document.getElementById('warpMode').value = 'fold';
+                    }
+                } else {
+                    this.app.vizSettings.warpMode = 'none';
+                }
+                this.updateWarpControlsVisibility();
+            });
+        }
+
+
         const gpgpuDebugCheckbox = document.getElementById('enableGPGPUDebugger');
         if (gpgpuDebugCheckbox) {
             gpgpuDebugCheckbox.addEventListener('change', (e) => {
@@ -445,8 +506,8 @@ export const UIManager = {
             });
         });
 
-        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select:not(#gpgpuGeometryMode)').forEach(control => {
-            if (control.closest('#cameraOptions') || control.closest('#deformationEngineToggle') || control.closest('#imageEffectsAccordion')) return;
+        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger):not(#enableWarp), select:not(#gpgpuGeometryMode)').forEach(control => {
+            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#deformationEngineToggle') || control.closest('#imageEffectsAccordion')) return;
             
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -454,15 +515,15 @@ export const UIManager = {
                 const S = this.app.vizSettings;
                 let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
 
-                if (e.target.type === 'checkbox') {
-                    S[id] = value;
-                } else if (e.target.type === 'range' || e.target.type === 'number') {
-                    S[id] = parseFloat(value);
-                } else {
-                    S[id] = value;
+                if (S[id] !== undefined) {
+                     if (e.target.type === 'range' || e.target.type === 'number') {
+                        S[id] = parseFloat(value);
+                    } else {
+                        S[id] = value;
+                    }
                 }
                 
-                if (e.target.type !== 'checkbox' || id === 'butterchurnEnableCycle') this.updateRangeDisplay(id, value);
+                if (e.target.type === 'range') this.updateRangeDisplay(id, value);
                 
                 if (id === 'backgroundMode') this.updateBackgroundControlsVisibility();
                 if (id === 'warpMode') this.updateWarpControlsVisibility();
@@ -474,6 +535,15 @@ export const UIManager = {
                     }
                 }
             });
+        });
+
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.id === 'enableWarp') return; 
+             checkbox.addEventListener('input', (e) => {
+                 if (this.app.vizSettings[e.target.id] !== undefined) {
+                     this.app.vizSettings[e.target.id] = e.target.checked;
+                 }
+             });
         });
 
         document.querySelectorAll('#imageEffectsAccordion input, #imageEffectsAccordion select').forEach(control => {
@@ -501,8 +571,6 @@ export const UIManager = {
             panel.classList.toggle('visible'); 
             e.target.textContent = panel.classList.contains('visible') ? "Hide" : "Show"; 
             
-            // ** THE FIX IS HERE **
-            // Find all headers that should glow and apply the class if they are closed
             const headersToGlow = document.querySelectorAll('[data-header-id]');
             if (panel.classList.contains('visible')) {
                 headersToGlow.forEach(header => {
@@ -511,23 +579,24 @@ export const UIManager = {
                     }
                 });
             } else {
-                // If panel is closing, remove all glows
                 headersToGlow.forEach(header => {
                     header.classList.remove('button-glow-effect');
                 });
             }
         });
 
-        document.querySelectorAll('.accordion-header').forEach(header => {
-            header.addEventListener('click', () => {
-                const content = header.nextElementSibling;
-                if (!content || !content.classList.contains('accordion-content')) return;
-                const parentAccordion = header.closest('.accordion-item');
-                if (parentAccordion && parentAccordion.classList.contains('container-disabled')) return;
+        document.querySelectorAll('.accordion-header, .accordion-header-with-toggle').forEach(headerContainer => {
+            let button = headerContainer.matches('.accordion-header') ? headerContainer : headerContainer.querySelector('.accordion-header');
+            
+            button.addEventListener('click', () => {
+                const content = headerContainer.parentElement.querySelector('.accordion-content');
+                if (!content) return;
+
+                const parentAccordion = headerContainer.closest('.accordion-item');
+                if (parentAccordion.classList.contains('container-disabled')) return;
                 
-                // If the header is one of our special ones, toggle its glow.
-                if (header.dataset.headerId) {
-                    header.classList.toggle('button-glow-effect');
+                if (headerContainer.dataset.headerId) {
+                    headerContainer.classList.toggle('button-glow-effect');
                 }
                 
                 content.classList.toggle('open');

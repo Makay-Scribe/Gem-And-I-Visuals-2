@@ -15,18 +15,25 @@ uniform vec3 u_cameraPosition;
 uniform float u_time;
 uniform float u_audioLow;
 
-// SIMPLIFIED IMAGE EFFECT UNIFORMS
+// Balloon Effect Uniforms
 uniform bool u_imageEffect_enableBalloon;
 uniform vec2 u_imageEffect_point;
 uniform float u_imageEffect_strength;
 uniform float u_imageEffect_radius;
 uniform float u_imageEffect_audioInfluence;
 
+// ** THE FIX IS HERE: Add new Jolt uniforms **
+uniform bool u_imageEffect_enableJolt;
+uniform float u_imageEffect_joltStrength;
+uniform float u_imageEffect_joltSpeed;
+uniform float u_imageEffect_joltAudioInfluence;
+
+
 // TENDRIL GLOW UNIFORMS
 uniform bool u_gpgpu_enableTendrils;
 uniform float u_gpgpu_tendrilGlowFalloff;
 
-// ** THE FIX IS HERE: TRIANGLE WAVE RENDER UNIFORMS **
+// TRIANGLE WAVE RENDER UNIFORMS
 uniform bool u_gpgpu_enableTriangleWave;
 uniform vec3 u_gpgpu_triWaveColor1;
 uniform vec3 u_gpgpu_triWaveColor2;
@@ -40,7 +47,7 @@ varying float vTriangleId;
 
 #define PI 3.14159265359
 
-// Simplified balloon effect function (pinch logic removed)
+// Simplified balloon effect function
 vec2 balloonLensEffect(vec2 uv, vec2 effectCenter, float audio, float amount, float radius) {
     vec2 diff = uv - effectCenter;
     float dist = length(diff);
@@ -48,7 +55,6 @@ vec2 balloonLensEffect(vec2 uv, vec2 effectCenter, float audio, float amount, fl
     float outerRadius = radius * (0.3 + audio * 1.0);
     float innerRadius = outerRadius * (0.2 + (1.0 - amount) * 0.6);
     
-    // We want the effect to be 1.0 inside the innerRadius and 0.0 outside the outerRadius.
     float falloff = 1.0 - smoothstep(innerRadius, outerRadius, dist);
 
     if (falloff > 0.001) {
@@ -63,6 +69,14 @@ vec2 balloonLensEffect(vec2 uv, vec2 effectCenter, float audio, float amount, fl
         uv = effectCenter + diff;
     }
     return uv;
+}
+
+// ** THE FIX IS HERE: Add new Jolt effect function **
+vec2 textureJoltEffect(vec2 uv, float time, float audio, float strength, float speed, float audioInfluence) {
+    float audioMod = 1.0 + audio * audioInfluence;
+    float offsetX = sin(time * speed) * strength * audioMod;
+    float offsetY = cos(time * speed * 0.8) * strength * audioMod; // Use a different multiplier for a less circular motion
+    return uv + vec2(offsetX, offsetY);
 }
 
 // Basic PBR lighting functions
@@ -105,27 +119,30 @@ void main() {
         workingUV = balloonLensEffect(workingUV, u_imageEffect_point, audioMod, u_imageEffect_strength, u_imageEffect_radius);
     }
 
+    // ** THE FIX IS HERE: Apply Jolt effect **
+    if (u_imageEffect_enableJolt) {
+        workingUV = textureJoltEffect(workingUV, u_time, u_audioLow, u_imageEffect_joltStrength, u_imageEffect_joltSpeed, u_imageEffect_joltAudioInfluence);
+    }
+
+
     vec3 albedo = texture2D(u_map, workingUV).rgb;
     
-    // ** THE FIX IS HERE: TRIANGLE WAVE LOGIC **
     if (u_gpgpu_enableTriangleWave) {
         vec3 faceNormal = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
         float lighting = dot(faceNormal, u_lightDirection) * 0.5 + 0.5;
         
-        // Alternate colors based on the triangle's ID
         float isEven = mod(vTriangleId, 2.0);
         vec3 baseColor = mix(u_gpgpu_triWaveColor1, u_gpgpu_triWaveColor2, isEven);
 
         vec3 color = baseColor * lighting;
         gl_FragColor = vec4(color, 1.0);
-        return; // Exit here, bypassing PBR for this effect
+        return;
     }
 
 
     float metalness = u_metalness;
     float roughness = u_roughness;
     
-    // --- Original PBR Lighting Calculations ---
     vec3 N = normalize(vWorldNormal);
     vec3 V = normalize(u_cameraPosition - vWorldPosition);
     vec3 L = normalize(u_lightDirection);

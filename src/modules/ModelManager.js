@@ -182,7 +182,7 @@ export const ModelManager = {
         const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
         
         this.state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
-        this.state.targetQuaternion.copy(ap.startQuat).slerp(ap.endQuat, ease);
+        this.state.targetQuaternion.slerp(ap.startQuat, ap.endQuat, ease);
 
         if (ap.waypointProgress >= 1.0) {
             if (ap.isTransitioningToHome) {
@@ -287,8 +287,6 @@ export const ModelManager = {
         }
         this.gltfModel.visible = true;
         
-        // ** THE FIX IS HERE **
-        // This check now uses the manager's internal `active` flag.
         if (this.autopilot.active) {
             this.updateAutopilot(delta);
         } else if (this.state.isUnderManualControl) {
@@ -301,7 +299,8 @@ export const ModelManager = {
         this.gltfModel.position.lerp(this.state.targetPosition, 0.05);
         this.gltfModel.quaternion.slerp(this.state.targetQuaternion, 0.05);
         
-        if (!this.autopilot.active && !this.state.isUnderManualControl && S.enableModelSpin) {
+        // ** THE FIX IS HERE: The spin logic is now driven by the new model-specific settings **
+        if (S.enableModelSpin) {
             this.gltfModel.rotation.y += S.modelSpinSpeed * delta;
         }
     },

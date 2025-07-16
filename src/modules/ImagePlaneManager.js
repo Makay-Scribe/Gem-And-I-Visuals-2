@@ -199,8 +199,8 @@ export const ImagePlaneManager = {
         this.landscapeContainer.quaternion.slerp(this.state.targetQuaternion, 0.05);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
-        if (S.enableLandscapeSpin && S.landscapeSpinSpeed !== 0) {
-            this.landscape.rotateOnAxis(new THREE.Vector3(0, 0, 1), -S.landscapeSpinSpeed * cappedDelta);
+        if (S.enableLandscapeSpin) {
+            this.landscapeContainer.rotateOnAxis(new THREE.Vector3(0, 0, 1), S.landscapeSpinSpeed * cappedDelta);
         }
         
         if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
@@ -216,9 +216,6 @@ export const ImagePlaneManager = {
             if (this.landscapeMaterial) this.landscapeMaterial.dispose();
         }
 
-        // ** THE FIX IS HERE **
-        // Unconditionally re-initialize the ComputeManager whenever the landscape is created.
-        // This ensures the GPGPU simulation always matches the visual plane's dimensions.
         this.app.ComputeManager.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
         
         let landGeom = new THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
@@ -310,7 +307,7 @@ export const ImagePlaneManager = {
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
                 u_time: { value: 0.0 },
-                u_audioLow: { value: S.audioLow },
+                u_audioLow: { value: 0.0 },
                 u_planeResolution: { value: this.planeResolution },
                 u_lightColor: { value: new THREE.Color(S.lightColor) },
                 u_ambientLightColor: { value: new THREE.Color(S.ambientLightColor) },
@@ -322,6 +319,11 @@ export const ImagePlaneManager = {
                 u_imageEffect_strength: { value: S.imageEffect_strength },
                 u_imageEffect_radius: { value: S.imageEffect_radius },
                 u_imageEffect_audioInfluence: { value: S.imageEffect_audioInfluence },
+                // ** THE FIX IS HERE: Add new Jolt uniforms **
+                u_imageEffect_enableJolt: { value: S.imageEffect_enableJolt },
+                u_imageEffect_joltStrength: { value: S.imageEffect_joltStrength },
+                u_imageEffect_joltSpeed: { value: S.imageEffect_joltSpeed },
+                u_imageEffect_joltAudioInfluence: { value: S.imageEffect_joltAudioInfluence },
                 u_gpgpu_enableTendrils: { value: S.gpgpu_enableTendrils },
                 u_gpgpu_tendrilGlowFalloff: { value: S.gpgpu_tendrilGlowFalloff },
                 u_gpgpu_enableTriangleWave: { value: S.gpgpu_enableTriangleWave },
@@ -402,6 +404,15 @@ export const ImagePlaneManager = {
             U.u_imageEffect_radius.value = S.imageEffect_radius;
             U.u_imageEffect_audioInfluence.value = S.imageEffect_audioInfluence;
         }
+
+        // ** THE FIX IS HERE: Update Jolt uniforms every frame **
+        U.u_imageEffect_enableJolt.value = S.imageEffect_enableJolt;
+        if (S.imageEffect_enableJolt) {
+            U.u_imageEffect_joltStrength.value = S.imageEffect_joltStrength;
+            U.u_imageEffect_joltSpeed.value = S.imageEffect_joltSpeed;
+            U.u_imageEffect_joltAudioInfluence.value = S.imageEffect_joltAudioInfluence;
+        }
+
 
         U.u_gpgpu_enableTendrils.value = S.gpgpu_enableTendrils;
         if (S.gpgpu_enableTendrils) {

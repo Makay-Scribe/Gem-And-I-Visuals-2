@@ -17,12 +17,11 @@
     --success-border: #34C759;
     --button-secondary-bg: #3A3D3F; /* Grey for presets */
     --button-secondary-hover-bg: #4A4D4F; /* Lighter grey for preset hover */
-    --highlight-color: #ffc107;
-    --reset-button-bg: #3A5943;
+    --highlight-color: #ffc107;  
+    --reset-button-bg: #3A5943;  
     --reset-button-hover-bg: #4A6953;
     --special-control-bg: #3A5943;
     --special-control-hover-bg: #4A6953;
-    /* ** THE FIX IS HERE: Changed to a more subtle, whiter yellow ** */
     --glow-color-yellow: rgba(255, 255, 224, 0.7); 
     --glow-color-subtle-white: #FFFFE0; 
     --debug-header-bg: #6e5300;
@@ -35,25 +34,20 @@
 /* --- GLOW ANIMATION --- */
 @keyframes slow-yellow-glow {
     0%, 100% {
-        /* ** THE FIX IS HERE: Use the whiter transparent color ** */
         box-shadow: 2px 2px 6px -2px rgba(255, 255, 224, 0);
     }
     50% {
-        /* This now uses the corrected --glow-color-yellow variable */
         box-shadow: 2px 2px 10px 0px var(--glow-color-yellow);
     }
 }
 
-/* This is now the universal class for any glowing button or header */
 .button-glow-effect {
     animation: slow-yellow-glow 3s ease-in-out infinite;
-    /* This will now use the corrected --glow-color-yellow variable */
     border: 1px solid var(--glow-color-yellow) !important;
     border-top-color: transparent !important;
     border-left-color: transparent !important;
 }
 
-/* This is now the universal class for a solid-state glowing button */
 .button-solid-glow {
     background-color: var(--debug-header-bg) !important; 
     border: 1px solid var(--glow-color-subtle-white) !important;
@@ -137,7 +131,45 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
 }
 .accordion-header:hover { background-color: var(--header-hover-bg); }
 
-/* NEW STYLE FOR DEBUG HEADERS */
+/* ** THE FIX IS HERE: Enforcing tight padding and height ** */
+.accordion-header-with-toggle {
+    display: flex;
+    align-items: center;
+    background-color: var(--sub-header-bg);
+    transition: background-color 0.2s ease;
+    padding: 0 0 0 5px; /* Remove vertical padding */
+    box-sizing: border-box;
+    min-height: 18px; /* Match the slim legacy headers */
+}
+
+.accordion-header-with-toggle:hover {
+    background-color: var(--sub-header-hover-bg);
+}
+
+.accordion-header-with-toggle .accordion-header {
+    flex-grow: 1;
+    background: none;
+    border: none;
+    padding: 1px 0; /* Minimal vertical padding */
+    font-weight: normal;
+    font-size: 9px;
+    min-height: unset; /* Let the container dictate the height */
+}
+
+.accordion-header-with-toggle .accordion-header:hover {
+    background: none;
+}
+
+.accordion-header-with-toggle .header-toggle-checkbox {
+    flex-shrink: 0;
+    margin-left: 5px;
+    margin-right: 8px;
+    width: auto;
+    /* Vertically align the checkbox with the text */
+    vertical-align: middle; 
+}
+
+
 .accordion-header.debug-header {
     background-color: var(--debug-header-bg);
 }
@@ -165,7 +197,7 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.2s ease-out, padding 0.2s ease-out;
-    position: relative; /* Needed for the ::after overlay */
+    position: relative;
 }
 .accordion-content.open { padding: 4px; }
 
@@ -176,13 +208,13 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     opacity: 0.4;
 }
 
-/* Specific styling to make it look visually "off" */
-.container-disabled .accordion-header {
-    background-color: #333;
-    color: #888;
+.container-disabled .accordion-header,
+.container-disabled .accordion-header-with-toggle {
+    background-color: #333 !important;
+    color: #888 !important;
 }
 .container-disabled .accordion-item .accordion-header {
-    background-color: #2a2a2a;
+    background-color: #2a2a2a !important;
 }
 .container-disabled .accordion-content {
     background-color: #222;
@@ -196,7 +228,7 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--status-light-off);
     margin-left: 5px;
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
-    flex-shrink: 0; /* Prevents light from shrinking */
+    flex-shrink: 0;
 }
 .status-light.active {
     background-color: var(--status-light-on);
@@ -211,7 +243,7 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(27, 29, 30, 0.85); /* Semi-transparent panel background */
+    background: rgba(27, 29, 30, 0.85);
     color: var(--label-color);
     font-size: 14px;
     font-weight: bold;
@@ -219,14 +251,14 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     align-items: center;
     justify-content: center;
     text-align: center;
-    pointer-events: none; /* Allows clicks to go through if needed, though content is disabled */
+    pointer-events: none;
     z-index: 2;
     text-transform: uppercase;
     letter-spacing: 1px;
 }
 .disabled-feature > * {
     filter: blur(2px);
-    pointer-events: none; /* Disable all interactions with children */
+    pointer-events: none;
 }
 
 
@@ -551,6 +583,13 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
 }
 #landscapeResetButton:hover {
     background-color: var(--reset-button-hover-bg);
+}
+
+#landscapeResetButton:disabled {
+    background-color: var(--button-secondary-bg); /* Use the standard grey */
+    color: #666;
+    cursor: not-allowed;
+    opacity: 0.7; /* Make it slightly more faded */
 }
 
 

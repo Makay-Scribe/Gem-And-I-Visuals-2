@@ -61,7 +61,7 @@
                     <option value="warble">Warble</option>
                 </select>
 
-                <p class="sub-group-title">PLANE SETUP</p>
+                <!-- ** THE FIX IS HERE: Header is removed ** -->
                 <label for="planeAspectRatio">Aspect Ratio</label>
                 <select id="planeAspectRatio">
                     <option value="1.0" selected>1:1 (Square)</option>
@@ -111,6 +111,13 @@
                     <label>Horizontal (X): <span id="actorXValue" class="range-value-display"></span></label>
                     <input type="range" id="actorX" min="-50" max="50" step="0.5" value="0">
                 </div>
+
+                <div class="single-line-control" id="masterSpinControl">
+                    <input type="checkbox" id="masterEnableSpin">
+                    <label for="masterEnableSpin">Spin</label>
+                    <input type="number" id="masterSpinSpeed" min="-1.0" max="1.0" step="0.01" value="0.0">
+                </div>
+
             </div>
         </div>
         
@@ -121,11 +128,6 @@
                 <div class="checkbox-label-container">
                     <label for="enableLandscape">Enable Mesh</label>
                     <input type="checkbox" id="enableLandscape" checked>
-                </div>
-                <div class="single-line-control">
-                    <input type="checkbox" id="enableLandscapeSpin">
-                    <label for="enableLandscapeSpin">Spin</label>
-                    <input type="number" id="landscapeSpinSpeed" min="-1.0" max="1.0" step="0.05" value="0.0">
                 </div>
 
                 <p class="sub-group-title">DEFORMATION ENGINE</p>
@@ -142,17 +144,16 @@
                 
                 <div id="legacyDeformersContainer">
                     <div class="accordion-item">
-                        <button class="accordion-header">Peel Deformer</button>
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">Peel Deformer</button>
+                            <input type="checkbox" id="enablePeel" class="header-toggle-checkbox">
+                        </div>
                         <div class="accordion-content">
-                            <div class="checkbox-label-container">
-                                <label for="enablePeel">Enable Peel</label>
-                                <input type="checkbox" id="enablePeel">
-                            </div>
                             <p class="sub-group-title">MAIN CONTROLS</p>
                             <label>Peel Amount: <span id="peelAmountValue" class="range-value-display"></span></label>
-                            <input type="range" id="peelAmount" min="0.0" max="1.0" step="0.01" value="0.2">
+                            <input type="range" id="peelAmount" min="0.0" max="1.0" step="0.01" value="0.59">
                             <label>Peel Curl: <span id="peelCurlValue" class="range-value-display"></span></label>
-                            <input type="range" id="peelCurl" min="0.0" max="1.0" step="0.01" value="0.4">
+                            <input type="range" id="peelCurl" min="0.0" max="1.0" step="0.01" value="0.83">
                             
                             <p class="sub-group-title">ANIMATION & AUDIO</p>
                             <div class="checkbox-label-container">
@@ -160,23 +161,25 @@
                                 <input type="checkbox" id="peelEnableAudio" checked>
                             </div>
                             <label>Peel Drift: <span id="peelDriftValue" class="range-value-display"></span></label>
-                            <input type="range" id="peelDrift" min="0.0" max="0.2" step="0.005" value="0.05">
+                            <input type="range" id="peelDrift" min="0.0" max="0.2" step="0.005" value="0.09">
                             <label>Peel Texture: <span id="peelTextureAmountValue" class="range-value-display"></span></label>
-                            <input type="range" id="peelTextureAmount" min="0.0" max="0.2" step="0.005" value="0.0">
+                            <input type="range" id="peelTextureAmount" min="0.0" max="0.2" step="0.005" value="0.14">
                         </div>
                     </div>
                     
                     <div class="accordion-item">
-                        <button class="accordion-header">Base Warp</button>
+                        <div class="accordion-header-with-toggle">
+                             <button class="accordion-header">Base Warp</button>
+                             <input type="checkbox" id="enableWarp" class="header-toggle-checkbox">
+                        </div>
                         <div class="accordion-content">
                             <label for="warpMode">Mode</label>
                             <select id="warpMode">
-                                <option value="none" selected>None</option>
+                                <option value="fold">Fold</option>
                                 <option value="sag">Sag</option>
                                 <option value="droop">Droop</option>
                                 <option value="cylinder">Cylinder</option>
                                 <option value="bend">Bend</option>
-                                <option value="fold">Fold</option>
                             </select>
                             <!-- SAG CONTROLS -->
                             <div id="warpSagControls" style="display: none;">
@@ -234,36 +237,35 @@
                             <!-- FOLD CONTROLS -->
                             <div id="warpFoldControls" style="display: none;">
                                 <label>Angle: <span id="foldAngleValue" class="range-value-display"></span></label>
-                                <input type="range" id="foldAngle" min="-90" max="90" step="1" value="0">
+                                <input type="range" id="foldAngle" min="0" max="90" step="1" value="20">
                                 <label>Depth: <span id="foldDepthValue" class="range-value-display"></span></label>
-                                <input type="range" id="foldDepth" min="0.01" max="0.49" step="0.01" value="0.2">
+                                <input type="range" id="foldDepth" min="0.01" max="0.49" step="0.01" value="0.38">
                                 <label>Fold Roundness: <span id="foldRoundnessValue" class="range-value-display"></span></label>
-                                <input type="range" id="foldRoundness" min="0.0" max="0.1" step="0.001" value="0.0">
+                                <input type="range" id="foldRoundness" min="0.0" max="0.1" step="0.001" value="0.05">
                                 <label>Audio Strength: <span id="foldAudioModValue" class="range-value-display"></span></label>
-                                <input type="range" id="foldAudioMod" min="0.0" max="45.0" step="1" value="0">
+                                <input type="range" id="foldAudioMod" min="0.0" max="45.0" step="1" value="31">
                                 <label>Nudge (Arch): <span id="foldNudgeValue" class="range-value-display"></span></label>
-                                <input type="range" id="foldNudge" min="-0.6" max="0.6" step="0.01" value="0.0">
-                                <div class="checkbox-label-container"><label for="enableFoldCrease">Crease</label><input type="checkbox" id="enableFoldCrease"></div>
+                                <input type="range" id="foldNudge" min="-0.6" max="0.6" step="0.01" value="0.60">
+                                <div class="checkbox-label-container"><label for="enableFoldCrease">Crease</label><input type="checkbox" id="enableFoldCrease" checked></div>
                                 <label>Crease Depth: <span id="foldCreaseDepthValue" class="range-value-display"></span></label>
-                                <input type="range" id="foldCreaseDepth" min="-1.6" max="1.6" step="0.05" value="0.0">
+                                <input type="range" id="foldCreaseDepth" min="-1.6" max="1.6" step="0.05" value="1.60">
                                 <label>Crease Sharpness: <span id="foldCreaseSharpnessValue" class="range-value-display"></span></label>
-                                <input type="range" id="foldCreaseSharpness" min="1.0" max="10.0" step="0.1" value="3.0">
-                                <div class="checkbox-label-container"><label for="enableFoldTuck">Tuck (Stretch)</label><input type="checkbox" id="enableFoldTuck"></div>
+                                <input type="range" id="foldCreaseSharpness" min="1.0" max="10.0" step="0.1" value="1.0">
+                                <div class="checkbox-label-container"><label for="enableFoldTuck">Tuck (Stretch)</label><input type="checkbox" id="enableFoldTuck" checked></div>
                                 <label>Tuck Amount: <span id="foldTuckAmountValue" class="range-value-display"></span></label>
-                                <input type="range" id="foldTuckAmount" min="-1.0" max="1.0" step="0.05" value="0.0">
+                                <input type="range" id="foldTuckAmount" min="-1.0" max="1.0" step="0.05" value="-1.00">
                                 <label>Tuck Reach: <span id="foldTuckReachValue" class="range-value-display"></span></label>
-                                <input type="range" id="foldTuckReach" min="0.01" max="0.4" step="0.005" value="0.15">
+                                <input type="range" id="foldTuckReach" min="0.01" max="0.4" step="0.005" value="0.40">
                             </div>
                         </div>
                     </div>
 
                     <div class="accordion-item">
-                        <button class="accordion-header">Audio Deformation</button>
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">Audio Deformation</button>
+                            <input type="checkbox" id="enableAudioDeform" class="header-toggle-checkbox" checked>
+                        </div>
                         <div class="accordion-content">
-                            <div class="checkbox-label-container">
-                                <label for="enableAudioDeform">Enable</label>
-                                <input type="checkbox" id="enableAudioDeform" checked>
-                            </div>
                             <label>Strength: <span id="deformationStrengthValue" class="range-value-display"></span></label>
                             <input type="range" id="deformationStrength" min="0.0" max="10.0" step="0.1" value="1.5">
                             <label>Smoothing: <span id="audioSmoothingValue" class="range-value-display"></span></label>
@@ -279,15 +281,6 @@
                             </div>
                         </div>
                     </div>
-                    <div class="accordion-item">
-                        <button class="accordion-header">Balloon (Point-based)</button>
-                        <div class="accordion-content disabled-feature">
-                            <div class="checkbox-label-container">
-                                <label for="enableBalloon">Enable</label>
-                                <input type="checkbox" id="enableBalloon">
-                            </div>
-                        </div>
-                    </div>
                 </div> <!-- End legacyDeformersContainer -->
 
                 <button id="landscapeResetButton">Reset Landscape</button>
@@ -300,30 +293,12 @@
                 <span class="status-light" id="gpgpuStatusLight"></span>
             </button>
             <div class="accordion-content">
-                <p class="sub-group-title">ACTIVE EFFECTS</p>
-                <div class="checkbox-label-container">
-                    <label for="gpgpu_enableWaterRipple">Water Ripple</label>
-                    <input type="checkbox" id="gpgpu_enableWaterRipple">
-                </div>
-                <div class="checkbox-label-container">
-                    <label for="gpgpu_enableEqRipple">EQ Ripple</label>
-                    <input type="checkbox" id="gpgpu_enableEqRipple">
-                </div>
-                <div class="checkbox-label-container">
-                    <label for="gpgpu_enableCloth">Cloth Physics</label>
-                    <input type="checkbox" id="gpgpu_enableCloth">
-                </div>
-                <div class="checkbox-label-container">
-                    <label for="gpgpu_enableTendrils">Tendrils</label>
-                    <input type="checkbox" id="gpgpu_enableTendrils">
-                </div>
-                <div class="checkbox-label-container">
-                    <label for="gpgpu_enableTriangleWave">Triangle Wave</label>
-                    <input type="checkbox" id="gpgpu_enableTriangleWave">
-                </div>
 
                 <div class="accordion-item">
-                    <button class="accordion-header">Water Ripple</button>
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">Water Ripple</button>
+                        <input type="checkbox" id="gpgpu_enableWaterRipple" class="header-toggle-checkbox">
+                    </div>
                     <div class="accordion-content">
                         <label>Speed: <span id="gpgpu_rippleSpeedValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_rippleSpeed" min="0.0" max="2.0" step="0.05" value="0.5">
@@ -335,7 +310,10 @@
                 </div>
 
                 <div class="accordion-item">
-                    <button class="accordion-header">EQ Ripple</button>
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">EQ Ripple</button>
+                        <input type="checkbox" id="gpgpu_enableEqRipple" class="header-toggle-checkbox">
+                    </div>
                     <div class="accordion-content">
                         <p class="sub-group-title">MAIN CONTROLS</p>
                         <label>Strength: <span id="gpgpu_eqRippleStrengthValue" class="range-value-display"></span></label>
@@ -368,7 +346,10 @@
                 </div>
 
                 <div class="accordion-item">
-                    <button class="accordion-header">Cloth Physics</button>
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">Cloth Physics</button>
+                        <input type="checkbox" id="gpgpu_enableCloth" class="header-toggle-checkbox">
+                    </div>
                     <div class="accordion-content">
                         <p class="sub-group-title">BASE PHYSICS</p>
                         <label>Damping: <span id="gpgpu_clothDampingValue" class="range-value-display"></span></label>
@@ -419,7 +400,10 @@
                 </div>
                 
                 <div class="accordion-item">
-                    <button class="accordion-header">Tendrils</button>
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">Tendrils</button>
+                        <input type="checkbox" id="gpgpu_enableTendrils" class="header-toggle-checkbox">
+                    </div>
                     <div class="accordion-content">
                         <p class="sub-group-title">MOTION</p>
                         <label>Length: <span id="gpgpu_tendrilLengthValue" class="range-value-display"></span></label>
@@ -442,7 +426,10 @@
                 </div>
 
                 <div class="accordion-item">
-                    <button class="accordion-header">Triangle Wave</button>
+                     <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">Triangle Wave</button>
+                        <input type="checkbox" id="gpgpu_enableTriangleWave" class="header-toggle-checkbox">
+                    </div>
                     <div class="accordion-content">
                         <p class="sub-group-title">WAVE</p>
                         <label>Amplitude: <span id="gpgpu_triWaveAmplitudeValue" class="range-value-display"></span></label>
@@ -466,24 +453,42 @@
         <div class="accordion-item" id="imageEffectsAccordion">
             <button class="accordion-header" data-header-id="image-effects">Image Effects</button>
             <div class="accordion-content">
-                <div class="checkbox-label-container">
-                    <label for="imageEffect_enableBalloon">Enable Balloon Effect</label>
-                    <input type="checkbox" id="imageEffect_enableBalloon">
-                </div>
-                
-                <p class="sub-group-title">EFFECT POSITION (UV COORDS)</p>
-                <label>Position X: <span id="imageEffect_pointXValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_pointX" min="0.0" max="1.0" step="0.01" value="0.5">
-                <label>Position Y: <span id="imageEffect_pointYValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_pointY" min="0.0" max="1.0" step="0.01" value="0.5">
+                <div class="accordion-item">
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">Balloon Effect</button>
+                        <input type="checkbox" id="imageEffect_enableBalloon" class="header-toggle-checkbox">
+                    </div>
+                    <div class="accordion-content">
+                        <p class="sub-group-title">EFFECT POSITION (UV COORDS)</p>
+                        <label>Position X: <span id="imageEffect_pointXValue" class="range-value-display"></span></label>
+                        <input type="range" id="imageEffect_pointX" min="0.0" max="1.0" step="0.01" value="0.5">
+                        <label>Position Y: <span id="imageEffect_pointYValue" class="range-value-display"></span></label>
+                        <input type="range" id="imageEffect_pointY" min="0.0" max="1.0" step="0.01" value="0.5">
 
-                <p class="sub-group-title">EFFECT PARAMETERS</p>
-                <label>Strength/Amount: <span id="imageEffect_strengthValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_strength" min="0.0" max="1.0" step="0.01" value="0.5">
-                <label>Radius: <span id="imageEffect_radiusValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_radius" min="0.0" max="1.0" step="0.01" value="0.3">
-                <label>Audio Influence: <span id="imageEffect_audioInfluenceValue" class="range-value-display"></span></label>
-                <input type="range" id="imageEffect_audioInfluence" min="0.0" max="1.0" step="0.01" value="0.5">
+                        <p class="sub-group-title">EFFECT PARAMETERS</p>
+                        <label>Strength/Amount: <span id="imageEffect_strengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="imageEffect_strength" min="0.0" max="1.0" step="0.01" value="0.5">
+                        <label>Radius: <span id="imageEffect_radiusValue" class="range-value-display"></span></label>
+                        <input type="range" id="imageEffect_radius" min="0.0" max="1.0" step="0.01" value="0.3">
+                        <label>Audio Influence: <span id="imageEffect_audioInfluenceValue" class="range-value-display"></span></label>
+                        <input type="range" id="imageEffect_audioInfluence" min="0.0" max="1.0" step="0.01" value="0.5">
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">Texture Jolt</button>
+                        <input type="checkbox" id="imageEffect_enableJolt" class="header-toggle-checkbox">
+                    </div>
+                    <div class="accordion-content">
+                         <label>Strength: <span id="imageEffect_joltStrengthValue" class="range-value-display"></span></label>
+                        <input type="range" id="imageEffect_joltStrength" min="0.0" max="0.5" step="0.01" value="0.1">
+                        <label>Speed: <span id="imageEffect_joltSpeedValue" class="range-value-display"></span></label>
+                        <input type="range" id="imageEffect_joltSpeed" min="0.0" max="20.0" step="0.1" value="10.0">
+                        <label>Audio Influence: <span id="imageEffect_joltAudioInfluenceValue" class="range-value-display"></span></label>
+                        <input type="range" id="imageEffect_joltAudioInfluence" min="0.0" max="2.0" step="0.05" value="1.0">
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -496,18 +501,6 @@
                     <input type="checkbox" id="enableModel" checked>
                 </div>
                 
-                <p class="sub-group-title">CONTROLS</p>
-                <div class="single-line-control">
-                    <input type="checkbox" id="enableModelSpin">
-                    <label for="enableModelSpin">Spin</label>
-                    <input type="number" id="modelSpinSpeed" min="-1.0" max="1.0" step="0.01" value="0.0">
-                </div>
-                
-                <div class="checkbox-label-container">
-                    <label for="enableCollisionAvoidance">Avoid Landscape</label>
-                    <input type="checkbox" id="enableCollisionAvoidance" checked>
-                </div>
-
                 <p class="sub-group-title">ASSETS</p>
                 <div class="file-input-row">
                     <button class="browse-btn" data-target="gltfModelInput">Load Model...</button>

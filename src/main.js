@@ -94,11 +94,12 @@ const App = {
         enableAudioDeform: true,
         deformationStrength: 1.5,
         enablePeel: false,
-        peelAmount: 0.2,
-        peelCurl: 0.4,
+        peelAmount: 0.59,
+        peelCurl: 0.83,
         peelEnableAudio: true,
-        peelDrift: 0.05,
-        peelTextureAmount: 0.0,
+        peelDrift: 0.09,
+        peelTextureAmount: 0.14,
+        enableWarp: false,
         warpMode: 'none',
         sagAmount: 2.0,
         sagFalloffSharpness: 1.5,
@@ -117,23 +118,28 @@ const App = {
         bendAudioMod: 0.0,
         bendFalloffSharpness: 1.0,
         bendAxis: 'primary',
-        foldAngle: 0.0,
-        foldDepth: 0.2,
-        foldRoundness: 0.0,
-        foldAudioMod: 0.0,
-        foldNudge: 0.0,
-        enableFoldCrease: false,
-        foldCreaseDepth: -0.15,
-        foldCreaseSharpness: 3.0,
-        enableFoldTuck: false,
-        foldTuckAmount: 0.0,
-        foldTuckReach: 0.15,
+        foldAngle: 20,
+        foldDepth: 0.38,
+        foldRoundness: 0.05,
+        foldAudioMod: 31,
+        foldNudge: 0.60,
+        enableFoldCrease: true,
+        foldCreaseDepth: 1.60,
+        foldCreaseSharpness: 1.0,
+        enableFoldTuck: true,
+        foldTuckAmount: -1.0,
+        foldTuckReach: 0.40,
         imageEffect_enableBalloon: false,
         imageEffect_pointX: 0.5,
         imageEffect_pointY: 0.5,
         imageEffect_strength: 0.5,
         imageEffect_radius: 0.3,
         imageEffect_audioInfluence: 0.5,
+        // ** THE FIX IS HERE: Add new Texture Jolt settings **
+        imageEffect_enableJolt: false,
+        imageEffect_joltStrength: 0.1,
+        imageEffect_joltSpeed: 10.0,
+        imageEffect_joltAudioInfluence: 1.0,
         // --- GPGPU SETTINGS ---
         gpgpuGeometryMode: 'continuous',
         gpgpu_enableWaterRipple: false,
@@ -346,20 +352,17 @@ const App = {
         const delta = -Math.sign(event.deltaY);
         activeManager.state.targetPosition.z += delta * this.mouseInteraction.zoomSpeed;
 
-        // ** THE FIX IS HERE **
-        // Clear any previous timer to reset the delay
         if (activeManager.state.manualControlTimeoutId) {
             clearTimeout(activeManager.state.manualControlTimeoutId);
         }
 
-        // Set a new timer. When it completes, it will end manual control.
         activeManager.state.manualControlTimeoutId = setTimeout(() => {
-            if (activeManager.state) { // Check if manager still exists
+            if (activeManager.state) {
                 activeManager.state.isUnderManualControl = false;
-                activeManager.state.manualControlReleaseTime = this.currentTime; // Start the return-to-home countdown
+                activeManager.state.manualControlReleaseTime = this.currentTime;
                 activeManager.state.manualControlTimeoutId = null;
             }
-        }, 250); // A 250ms delay feels responsive for scrolling
+        }, 250);
     },
 
     onPointerDown(event) {
@@ -367,7 +370,6 @@ const App = {
         const activeManager = this._getActiveManager();
         if (!activeManager || !activeManager.state) return;
         
-        // Clear any lingering scroll wheel timeout if the user clicks.
         if (activeManager.state.manualControlTimeoutId) {
             clearTimeout(activeManager.state.manualControlTimeoutId);
             activeManager.state.manualControlTimeoutId = null;
@@ -418,7 +420,6 @@ const App = {
     onPointerUp(event) {
         const MI = this.mouseInteraction;
         
-        // This logic now applies to any manager that supports the state properties
         const activeManager = this._getActiveManager();
         if (activeManager && activeManager.state && activeManager.state.isUnderManualControl) {
             activeManager.state.manualControlReleaseTime = this.currentTime;
