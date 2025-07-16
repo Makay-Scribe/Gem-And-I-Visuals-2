@@ -37,6 +37,7 @@ export const ImagePlaneManager = {
         isUnderManualControl: false,
         manualControlReleaseTime: -1, 
         manualControlTimeoutId: null, 
+        returnEaseFactor: 0.0,
         targetPosition: new THREE.Vector3(),
         targetQuaternion: new THREE.Quaternion(),
         homePosition: new THREE.Vector3(),
@@ -133,18 +134,23 @@ export const ImagePlaneManager = {
         const inGracePeriod = state.manualControlReleaseTime > 0 && (now - state.manualControlReleaseTime < manualHoldTime);
 
         if (state.isUnderManualControl || inGracePeriod) {
-            // Do nothing to the targets. Let the manual values persist.
-            baseRotationTarget.copy(state.targetQuaternion); // Keep the manually set rotation as the base
+            state.returnEaseFactor = 0; 
+            baseRotationTarget.copy(state.targetQuaternion);
         } else if (ap.active) {
-            // Autopilot is active
+            state.returnEaseFactor = 0; 
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
             baseRotationTarget.copy(ap.startQuat).slerp(ap.endQuat, ease);
+            // ** THE FIX IS HERE: Keep the main state quaternion in sync with the autopilot's base rotation **
+            state.targetQuaternion.copy(baseRotationTarget);
         } else {
-            // Idle: return to home
-            state.targetPosition.lerp(state.homePosition, 0.02);
-            // ** THE FIX IS HERE: Smoothly interpolate the base rotation back to home **
-            state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
+            // Idle: return to home with feathering
+            const maxEase = 0.02;
+            const easeIncrement = 0.0005;
+            state.returnEaseFactor = Math.min(state.returnEaseFactor + easeIncrement, maxEase);
+            
+            state.targetPosition.lerp(state.homePosition, state.returnEaseFactor);
+            state.targetQuaternion.slerp(this.state.homeQuaternion, state.returnEaseFactor);
             baseRotationTarget.copy(state.targetQuaternion);
         }
         
@@ -158,12 +164,9 @@ export const ImagePlaneManager = {
         }
         
         if (state.isUnderManualControl || inGracePeriod) {
-            // If manual control, the target is just the manually set quaternion.
-            // The spin accumulator will be applied on top later.
             baseRotationTarget.copy(state.targetQuaternion);
         }
 
-        // Final combination
         const finalTargetQuaternion = new THREE.Quaternion().copy(baseRotationTarget).multiply(this.spinAccumulator);
 
         this.landscapeContainer.position.lerp(state.targetPosition, 0.05);
@@ -315,7 +318,7 @@ export const ImagePlaneManager = {
         const objectURL = URL.createObjectURL(file);
         const applyTextureSettings = (texture) => {
             texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
-            texture.colorSpace = this.app.vizSettings.enablePBRColor ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+            texture.colorSpace = this.app.vizSettings.enablePBRColor ? THREE.SRGBColorSpace : this.app.THREE.NoColorSpace;
             texture.anisotropy = this.app.renderer.capabilities.getMaxAnisotropy();
             texture.flipY = false;
             texture.needsUpdate = true;

@@ -22,6 +22,7 @@ export const ModelManager = {
         isUnderManualControl: false,
         manualControlReleaseTime: -1, 
         manualControlTimeoutId: null,
+        returnEaseFactor: 0.0,
         targetPosition: new THREE.Vector3(),
         targetQuaternion: new THREE.Quaternion(),
         homePosition: new THREE.Vector3(),
@@ -154,11 +155,20 @@ export const ModelManager = {
             THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
             THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
         );
-        
+
+        // ** THE FIX IS HERE **
+        const direction = new THREE.Vector3().subVectors(ap.endPos, ap.startPos);
+        const distance = direction.length();
+
+        // Sanity check to prevent NaN from normalize() on a zero-length vector.
+        if (distance < 0.001) {
+            console.warn("Model Autopilot: Generated a zero-movement waypoint. Holding position for this cycle.");
+            ap.waypointProgress = 1.0; // Force completion of this "hold" waypoint.
+            return; // Exit. A new waypoint will be generated on the next full cycle.
+        }
+
         if (this.app.vizSettings.enableCollisionAvoidance && this.app.ImagePlaneManager.landscape) {
-            const direction = new THREE.Vector3().subVectors(ap.endPos, ap.startPos);
-            const distance = direction.length();
-            direction.normalize();
+            direction.normalize(); // This is now safe.
 
             this.app.raycaster.set(ap.startPos, direction);
             const intersects = this.app.raycaster.intersectObject(this.app.ImagePlaneManager.landscape, false);
@@ -313,20 +323,23 @@ export const ModelManager = {
         const manualHoldTime = 0.5;
         const inGracePeriod = state.manualControlReleaseTime > 0 && (now - state.manualControlReleaseTime < manualHoldTime);
 
-        // ** THE FIX IS HERE: The same logic from ImagePlaneManager is now applied **
         if (state.isUnderManualControl || inGracePeriod) {
-            // Do nothing, let manual inputs persist for the grace period.
+            state.returnEaseFactor = 0;
         } else if (this.autopilot.active) {
+            state.returnEaseFactor = 0;
             this.updateAutopilot(delta);
         } else {
-            // Idle state: return to home.
             const finalHomePos = new THREE.Vector3().copy(this.state.homePosition);
             if (this.activePresetId && this.app.modelPresets[this.activePresetId]?.homeOffset) {
                 finalHomePos.add(this.app.modelPresets[this.activePresetId].homeOffset);
             }
-            // ** This now smoothly interpolates rotation back to home **
-            state.targetPosition.lerp(finalHomePos, 0.02);
-            state.targetQuaternion.slerp(this.state.homeQuaternion, 0.02);
+            
+            const maxEase = 0.02;
+            const easeIncrement = 0.0005;
+            state.returnEaseFactor = Math.min(state.returnEaseFactor + easeIncrement, maxEase);
+            
+            state.targetPosition.lerp(finalHomePos, state.returnEaseFactor);
+            state.targetQuaternion.slerp(this.state.homeQuaternion, state.returnEaseFactor);
         }
         
         if (S.enableModelSpin) {
