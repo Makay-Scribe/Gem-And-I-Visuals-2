@@ -25,7 +25,7 @@
 
         <!-- Media Section -->
         <div class="accordion-item">
-            <button class="accordion-header">Media</button>
+            <button class="accordion-header" data-header-id="media">Media</button>
             <div class="accordion-content">
                 <p class="sub-group-title sub-group-with-status">
                     <span>SOURCES</span>
@@ -72,7 +72,8 @@
 
         <!-- Camera Section (The NEW Master Control Panel) -->
         <div class="accordion-item" id="cameraOptions">
-            <button class="accordion-header">Master Controls</button>
+            <!-- ** THE FIX IS HERE ** -->
+            <button class="accordion-header" data-header-id="master-controls">Master Controls</button>
             <div class="accordion-content">
                 
                 <div class="segmented-control" id="actorControlToggle">
@@ -125,7 +126,7 @@
                 <div class="single-line-control">
                     <input type="checkbox" id="enableLandscapeSpin">
                     <label for="enableLandscapeSpin">Spin</label>
-                    <input type="number" id="landscapeSpinSpeed" min="-1.0" max="1.0" step="0.05" value="0.0">
+                    <input type="number" id="modelSpinSpeed" min="-1.0" max="1.0" step="0.05" value="0.0">
                 </div>
 
                 <p class="sub-group-title">DEFORMATION ENGINE</p>

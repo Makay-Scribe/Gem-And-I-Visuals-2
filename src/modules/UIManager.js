@@ -9,8 +9,6 @@ export const UIManager = {
     audioStatusP: null, 
     debugDisplay: null,
     controlDOMElements: {},
-    glowTargets: {},
-    currentGlowTarget: null,
 
     // --- NEW GPGPU DEBUG PROPERTIES ---
     gpgpuPixelValueDisplay: null,
@@ -21,12 +19,11 @@ export const UIManager = {
 
         this.audioStatusP = document.getElementById('audioStatusP'); 
         this.debugDisplay = document.getElementById('debugDisplay');
-        this.gpgpuPixelValueDisplay = document.getElementById('gpgpuDebugPixelValue'); // Grab the new element
+        this.gpgpuPixelValueDisplay = document.getElementById('gpgpuDebugPixelValue');
         
-        // ** THE FIX IS HERE: Add initial glow to the Show button **
         const toggleButton = document.getElementById('controlsToggleButton');
         if (toggleButton) {
-            toggleButton.classList.add('initial-glow');
+            toggleButton.classList.add('button-glow-effect');
         }
 
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
@@ -43,18 +40,14 @@ export const UIManager = {
             }
         });
 
-        // Initialize Image Effects controls separately
         this.initImageEffectsControls();
-
         this.setupMasterControls();
         this.setupEQCanvas(); 
         this.setupEventListeners();
-        this.setupFollowerGlow();
         this.updateBackgroundControlsVisibility(true);
         this.updateWarpControlsVisibility(true);
-        
         this.updateDeformationEngineControls(true);
-        this.updateImageEffectsVisibility(true); // Initial call for image effects
+        this.updateImageEffectsVisibility(true);
 
         this.updateMasterControls();
     },
@@ -268,28 +261,6 @@ export const UIManager = {
         }
     },
 
-    setupFollowerGlow() {
-        this.glowTargets = {
-            image: document.querySelector('.browse-btn[data-target="mainTextureInput"]'),
-            audio: document.querySelector('.browse-btn[data-target="audioFileInput"]'),
-            play: document.getElementById('playPauseAudioButton')
-        };
-        // By default, no glow target is set until an action is completed.
-        this.currentGlowTarget = null;
-    },
-
-    setGlowTarget(targetKey) {
-        if (this.currentGlowTarget && this.currentGlowTarget.classList) {
-            this.currentGlowTarget.classList.remove('button-glow-effect');
-        }
-        if (targetKey && this.glowTargets[targetKey]) {
-            this.currentGlowTarget = this.glowTargets[targetKey];
-            this.currentGlowTarget.classList.add('button-glow-effect');
-        } else {
-            this.currentGlowTarget = null;
-        }
-    },
-
     updateGPGPUPixelValue(buffer) {
         if (!this.gpgpuPixelValueDisplay) return;
         const r = buffer[0].toFixed(3);
@@ -435,10 +406,7 @@ export const UIManager = {
     
     setupEventListeners() {
         document.getElementById('toggleMicInput').addEventListener('click', () => this.app.AudioProcessor.startMic());
-        document.getElementById('playPauseAudioButton').addEventListener('click', () => {
-            this.app.AudioProcessor.toggleFilePlayback();
-            this.setGlowTarget(null); 
-        });
+        document.getElementById('playPauseAudioButton').addEventListener('click', () => this.app.AudioProcessor.toggleFilePlayback());
         document.getElementById('playTestToneButton').addEventListener('click', () => this.app.AudioProcessor.toggleTestTone());
         document.querySelectorAll('.browse-btn').forEach(btn => btn.addEventListener('click', () => document.getElementById(btn.dataset.target).click()));
         document.getElementById('loadShaderCode').addEventListener('click', () => this.app.ShaderManager.loadUserShader());
@@ -530,12 +498,25 @@ export const UIManager = {
 
         document.getElementById('controlsToggleButton').addEventListener('click', (e) => { 
             const panel = document.getElementById('controlsPanel'); 
+            const mediaHeader = document.querySelector('[data-header-id="media"]');
+            const masterControlsHeader = document.querySelector('[data-header-id="master-controls"]');
+            
             panel.classList.toggle('visible'); 
             e.target.textContent = panel.classList.contains('visible') ? "Hide" : "Show"; 
             
-            // ** THE FIX IS HERE: Remove glow on first click **
-            if (e.target.classList.contains('initial-glow')) {
-                e.target.classList.remove('initial-glow');
+            // ** THE FIX IS HERE **
+            if (panel.classList.contains('visible')) {
+                // If panel is opening, set the glows based on accordion states
+                if (mediaHeader && !mediaHeader.nextElementSibling.classList.contains('open')) {
+                    mediaHeader.classList.add('button-glow-effect');
+                }
+                if (masterControlsHeader && !masterControlsHeader.nextElementSibling.classList.contains('open')) {
+                    masterControlsHeader.classList.add('button-glow-effect');
+                }
+            } else {
+                // If panel is closing, remove all glows
+                if (mediaHeader) mediaHeader.classList.remove('button-glow-effect');
+                if (masterControlsHeader) masterControlsHeader.classList.remove('button-glow-effect');
             }
         });
 
@@ -545,6 +526,9 @@ export const UIManager = {
                 if (!content || !content.classList.contains('accordion-content')) return;
                 const parentAccordion = header.closest('.accordion-item');
                 if (parentAccordion && parentAccordion.classList.contains('container-disabled')) return;
+                
+                // This is simpler: just toggle the glow based on its future state.
+                header.classList.toggle('button-glow-effect');
                 
                 content.classList.toggle('open');
                 if (content.classList.contains('open')) {
@@ -667,12 +651,10 @@ export const UIManager = {
             case 'videoTextureInput':
                 this.updateFileNameDisplay(id === 'videoTextureInput' ? 'video' : 'image', file.name);
                 this.app.ImagePlaneManager.loadTexture(file);
-                this.setGlowTarget('audio');
                 break;
             case 'audioFileInput': 
                 this.updateFileNameDisplay('audio', file.name); 
                 if (this.app.AudioProcessor) this.app.AudioProcessor.loadAudioFile(file);
-                this.setGlowTarget('play');
                 break;
             case 'hdriInput': 
                 this.updateFileNameDisplay('hdri', file.name);
@@ -697,19 +679,32 @@ export const UIManager = {
     },
     updateAudioStatus(sourceType, statusText = '') {
         if (!this.audioStatusP) { return; }
-        const playButton = document.getElementById('playPauseAudioButton'); 
+        const playButton = document.getElementById('playPauseAudioButton');
+        if (!playButton) return;
+
+        // Reset glow state first
+        playButton.classList.remove('button-glow-effect', 'button-solid-glow');
+        
         let message = '';
         switch (sourceType) {
             case 'none': message = "AUDIO: IDLE"; break; 
-            case 'mic': message = "AUDIO: Mic/System"; this.setGlowTarget(null); break; 
+            case 'mic': message = "AUDIO: Mic/System"; break; 
             case 'file_ready': 
                 message = "AUDIO: File Ready"; 
-                if (playButton) playButton.textContent = "Play File"; 
-                this.setGlowTarget('play'); // ** THE FIX IS HERE **
+                playButton.textContent = "Play File"; 
+                playButton.classList.add('button-glow-effect'); // Flashing
                 break; 
-            case 'file_playing': message = "AUDIO: Playing"; if (playButton) playButton.textContent = "Pause File"; break; 
-            case 'file_paused': message = "AUDIO: Paused"; if (playButton) playButton.textContent = "Play File"; break; 
-            case 'testTone': message = "AUDIO: Test Tone"; this.setGlowTarget(null); break;
+            case 'file_playing': 
+                message = "AUDIO: Playing"; 
+                playButton.textContent = "Pause File"; 
+                playButton.classList.add('button-solid-glow'); // Solid
+                break; 
+            case 'file_paused': 
+                message = "AUDIO: Paused"; 
+                playButton.textContent = "Play File"; 
+                playButton.classList.add('button-glow-effect'); // Flashing
+                break; 
+            case 'testTone': message = "AUDIO: Test Tone"; break;
             case 'error': message = `ERROR: ${statusText}`; break;
         }
         this.audioStatusP.textContent = message;

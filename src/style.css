@@ -33,15 +33,25 @@
 /* --- GLOW ANIMATION --- */
 @keyframes slow-yellow-glow {
     0%, 100% {
-        box-shadow: 0 0 0 0 rgba(255, 255, 150, 0);
+        box-shadow: 0 2px 6px -2px rgba(255, 255, 150, 0);
     }
     50% {
-        box-shadow: 0 0 10px 2px var(--glow-color-yellow);
+        /* Pushed down by 2px to create the "U" effect */
+        box-shadow: 0 2px 10px 0px var(--glow-color-yellow);
     }
 }
 
+/* This is now the universal class for any glowing button or header */
 .button-glow-effect {
     animation: slow-yellow-glow 3s ease-in-out infinite;
+    /* Use transparent top border to create the "U" shape */
+    border: 1px solid var(--glow-color-yellow) !important;
+    border-top-color: transparent !important;
+}
+
+/* This is now the universal class for a solid-state glowing button */
+.button-solid-glow {
+    background-color: var(--debug-header-bg) !important; 
     border: 1px solid var(--glow-color-yellow) !important;
 }
 
@@ -65,12 +75,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     font-weight: 500;
 }
 #controlsToggleButton:hover { background-color: var(--sub-header-hover-bg); }
-
-/* ** THE FIX IS HERE ** */
-#controlsToggleButton.initial-glow {
-    animation: slow-yellow-glow 3s ease-in-out infinite;
-    border: 1px solid var(--glow-color-yellow);
-}
 
 
 .controls-panel {
@@ -119,7 +123,7 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     outline: none;
     font-size: 10px;
     font-weight: 500;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
     display: flex;
     justify-content: space-between;
     align-items: center;
