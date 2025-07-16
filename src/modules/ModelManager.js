@@ -135,7 +135,6 @@ export const ModelManager = {
     },
 
     stopAutopilot() {
-        // ** THE FIX IS HERE: Removed the faulty `if` condition **
         this.app.vizSettings.modelAutopilotOn = false;
         this.initiateReturnToHome(null);
         if (this.app.UIManager) this.app.UIManager.updateMasterControls();
@@ -145,6 +144,14 @@ export const ModelManager = {
     generateNewRandomWaypoint() {
         const ap = this.autopilot;
         if (!this.gltfModel || !ap.randomBounds) return;
+
+        // ** THE FIX IS HERE: Add a chance to visit home **
+        const visitHomeChance = 0.2; // 20% chance
+        if (Math.random() < visitHomeChance) {
+            console.log("Model Autopilot: Decided to visit home.");
+            this.initiateReturnToHome(ap.preset); // Go home, then resume current preset.
+            return; // Stop here, the return-to-home logic will take over.
+        }
 
         ap.startPos.copy(this.state.targetPosition);
         ap.startQuat.copy(this.state.targetQuaternion);
