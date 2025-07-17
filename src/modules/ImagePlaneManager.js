@@ -141,7 +141,6 @@ export const ImagePlaneManager = {
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
             baseRotationTarget.copy(ap.startQuat).slerp(ap.endQuat, ease);
-            // ** THE FIX IS HERE: Keep the main state quaternion in sync with the autopilot's base rotation **
             state.targetQuaternion.copy(baseRotationTarget);
         } else {
             // Idle: return to home with feathering

@@ -22,7 +22,7 @@ uniform float u_imageEffect_strength;
 uniform float u_imageEffect_radius;
 uniform float u_imageEffect_audioInfluence;
 
-// ** THE FIX IS HERE: Add new Jolt uniforms **
+// Jolt uniforms
 uniform bool u_imageEffect_enableJolt;
 uniform float u_imageEffect_joltStrength;
 uniform float u_imageEffect_joltSpeed;
@@ -71,7 +71,6 @@ vec2 balloonLensEffect(vec2 uv, vec2 effectCenter, float audio, float amount, fl
     return uv;
 }
 
-// ** THE FIX IS HERE: Add new Jolt effect function **
 vec2 textureJoltEffect(vec2 uv, float time, float audio, float strength, float speed, float audioInfluence) {
     float audioMod = 1.0 + audio * audioInfluence;
     float offsetX = sin(time * speed) * strength * audioMod;
@@ -114,12 +113,15 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 void main() {
     vec2 workingUV = vUv;
     
+    if (u_gpgpu_enableTriangleWave) {
+        workingUV.y = 1.0 - workingUV.y;
+    }
+    
     if (u_imageEffect_enableBalloon) {
         float audioMod = u_audioLow * u_imageEffect_audioInfluence;
         workingUV = balloonLensEffect(workingUV, u_imageEffect_point, audioMod, u_imageEffect_strength, u_imageEffect_radius);
     }
 
-    // ** THE FIX IS HERE: Apply Jolt effect **
     if (u_imageEffect_enableJolt) {
         workingUV = textureJoltEffect(workingUV, u_time, u_audioLow, u_imageEffect_joltStrength, u_imageEffect_joltSpeed, u_imageEffect_joltAudioInfluence);
     }
@@ -127,23 +129,26 @@ void main() {
 
     vec3 albedo = texture2D(u_map, workingUV).rgb;
     
+    // ** THE FIX IS HERE: The PBR lighting logic is now used for ALL cases **
+    // but the normal (N) is calculated differently depending on the mode.
+    
+    vec3 N; // The final normal used for lighting
     if (u_gpgpu_enableTriangleWave) {
-        vec3 faceNormal = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
-        float lighting = dot(faceNormal, u_lightDirection) * 0.5 + 0.5;
+        // For the faceted plane, calculate the flat face normal.
+        N = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
         
+        // Modulate the texture color with the triangle's base color
         float isEven = mod(vTriangleId, 2.0);
         vec3 baseColor = mix(u_gpgpu_triWaveColor1, u_gpgpu_triWaveColor2, isEven);
-
-        vec3 color = baseColor * lighting;
-        gl_FragColor = vec4(color, 1.0);
-        return;
+        albedo *= baseColor;
+    } else {
+        // For the standard plane, use the smooth interpolated normal from the vertex shader.
+        N = normalize(vWorldNormal);
     }
-
 
     float metalness = u_metalness;
     float roughness = u_roughness;
     
-    vec3 N = normalize(vWorldNormal);
     vec3 V = normalize(u_cameraPosition - vWorldPosition);
     vec3 L = normalize(u_lightDirection);
     vec3 H = normalize(V + L);

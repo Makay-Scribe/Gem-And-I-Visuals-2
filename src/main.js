@@ -53,7 +53,7 @@ const App = {
     jolt_targetOffset: 0.0,
     shaderPresets: shaderPresets,
     vizSettings: {},
-    isDemoModeActive: false, // ** NEW: Global flag for demo mode **
+    isDemoModeActive: false,
 
     // --- MANAGERS ---
     UIManager: UIManager,
@@ -155,7 +155,7 @@ const App = {
         gpgpu_enableCloth: false,
         gpgpu_clothDamping: 1.0,
         gpgpu_clothStiffness: 0.8,
-        gpgpu_clothAudioForce: 900.0, // ** THE FIX IS HERE **
+        gpgpu_clothAudioForce: 900.0,
         gpgpu_clothForceRadius: 0.3,
         gpgpu_clothIterations: 1.0,
         gpgpu_clothPinMode: "corners",
@@ -178,8 +178,8 @@ const App = {
         gpgpu_triWaveAmplitude: 5.0,
         gpgpu_triWaveFrequency: 1.0,
         gpgpu_triWaveSpeed: 0.5,
-        gpgpu_triWaveColor1: '#ff0040',
-        gpgpu_triWaveColor2: '#000000',
+        gpgpu_triWaveColor1: '#ffffff',
+        gpgpu_triWaveColor2: '#ffffff',
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
