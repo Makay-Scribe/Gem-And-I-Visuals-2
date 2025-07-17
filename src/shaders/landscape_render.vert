@@ -64,6 +64,7 @@ float snoise(vec3 v) {
 }
 
 
+// ** THE FIX IS HERE: Added a helper function to create a 3x3 rotation matrix **
 mat3 rotationMatrix3(vec3 axis, float angle) {
     axis = normalize(axis);
     float s = sin(angle);
@@ -81,19 +82,24 @@ void main() {
     
     vec3 transformedPosition;
 
-    // ** THE FIX IS HERE: Clean if/else if structure **
+    // ** THE FIX IS HERE: Clean if/else if structure and added rotation logic **
     if (u_gpgpu_enableTriangleWave) {
         transformedPosition = position;
         vec3 center = triangleCenter;
         
+        // Calculate the wave displacement, same as before
         vec3 noiseCoord = vec3(mod(vTriangleId, 128.0) * 0.1, floor(vTriangleId / 128.0) * 0.1, u_time * u_gpgpu_triWaveSpeed);
         float wave = snoise(noiseCoord * u_gpgpu_triWaveFrequency) * u_gpgpu_triWaveAmplitude;
         
         transformedPosition.z += wave;
 
+        // NEW: Calculate and apply rotation
+        // Create a rotation axis that itself rotates over time for more dynamic motion
         vec3 rotAxis = normalize(vec3(cos(u_time * 0.5), sin(u_time * 0.5), 0.0));
+        // Use the same wave value to drive the rotation amount
         mat3 rotMat = rotationMatrix3(rotAxis, wave * 0.1); 
         
+        // Apply the rotation around the triangle's center point
         transformedPosition = rotMat * (transformedPosition - center) + center;
 
     } else {
@@ -105,6 +111,9 @@ void main() {
     vec4 worldPos4 = modelMatrix * vec4(transformedPosition, 1.0);
     vWorldPosition = worldPos4.xyz;
 
+    // We calculate the normal based on the original model normal. 
+    // For the Triangle Wave, lighting is handled in the fragment shader.
+    // For GPGPU, this provides a base normal.
     vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
 
     gl_Position = projectionMatrix * viewMatrix * worldPos4;
