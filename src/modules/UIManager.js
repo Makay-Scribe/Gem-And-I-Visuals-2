@@ -780,14 +780,12 @@ export const UIManager = {
             }
         });
 
-        // ** THE FIX IS HERE: Add listener for the new Demo Mode button **
         const demoButton = document.getElementById('demoModeButton');
         if (demoButton) {
             demoButton.addEventListener('click', () => this.toggleDemoMode());
         }
     },
 
-    // --- **NEW** DEMO MODE FUNCTIONS ---
     toggleDemoMode() {
         if (this.app.isDemoModeActive) {
             this.stopDemoMode();
@@ -801,33 +799,27 @@ export const UIManager = {
         this.app.isDemoModeActive = true;
         document.getElementById('demoModeButton').textContent = 'STOP DEMO';
         
-        // 1. Start Landscape Autopilot
         this.app.ImagePlaneManager.startAutopilot('autopilotPreset3');
 
-        // 2. Start Model Autopilot
         this.app.ModelManager.startAutopilot('autopilotPreset2');
         
-        // 3. Start Audio
         const audioEl = this.app.AudioProcessor.audioElement;
         if (audioEl && audioEl.src && audioEl.paused) {
             this.app.AudioProcessor.toggleFilePlayback();
         }
 
-        // 4. Turn on Cloth Physics
         this.app.vizSettings.deformationEngine = 'gpgpu';
         this.app.vizSettings.gpgpu_enableCloth = true;
+        this.app.vizSettings.enableShaderMouse = true; // ** THE FIX IS HERE **
 
-        // 5. Start Shader Cycling
         this.demoShaderIndex = 0;
-        this.cycleDemoShader(); // Start immediately
+        this.cycleDemoShader(); 
         if(this.demoShaderInterval) clearInterval(this.demoShaderInterval);
-        this.demoShaderInterval = setInterval(() => this.cycleDemoShader(), 120 * 1000); // 2 minutes
+        this.demoShaderInterval = setInterval(() => this.cycleDemoShader(), 120 * 1000); 
 
-        // 6. Turn off debug panes
         this.app.vizSettings.enableGPGPUDebugger = false;
         this.app.vizSettings.enableOnScreenDebugger = false;
 
-        // Sync UI to reflect changes
         this.syncAllControlsToSettings();
         this.updateMasterControls();
         this.updateDeformationEngineControls();
@@ -838,31 +830,25 @@ export const UIManager = {
         this.app.isDemoModeActive = false;
         document.getElementById('demoModeButton').textContent = 'START DEMO';
 
-        // Stop autopilots
         this.app.ImagePlaneManager.stopAutopilot();
         this.app.ModelManager.stopAutopilot();
         
-        // Stop audio
         const audioEl = this.app.AudioProcessor.audioElement;
         if (audioEl && !audioEl.paused) {
             this.app.AudioProcessor.toggleFilePlayback();
         }
 
-        // Stop shader cycling
         if (this.demoShaderInterval) {
             clearInterval(this.demoShaderInterval);
             this.demoShaderInterval = null;
         }
 
-        // Reset all settings to default
         this.app.vizSettings = JSON.parse(JSON.stringify(this.app.defaultVisualizerSettings));
         
-        // Load default assets and states
         const defaultShaderId = 'presetBg6';
         this.app.vizSettings.shaderToyGLSL = this.app.shaderPresets[defaultShaderId];
         this.loadUserShader(defaultShaderId);
         
-        // Sync entire UI to defaults
         this.syncAllControlsToSettings();
         this.updateMasterControls();
         this.updateDeformationEngineControls();
