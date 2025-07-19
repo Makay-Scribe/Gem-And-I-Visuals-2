@@ -1,5 +1,3 @@
-import * as THREE from 'three';
-
 // A simple vertex shader to draw a 2D plane in screen space.
 const gpgpuDebugVertexShader = `
     varying vec2 vUv;
@@ -57,11 +55,14 @@ export const GPGPUDebugger = {
 
     // --- NEW PIXEL INSPECTOR PROPERTIES ---
     isMouseOver: false,
-    mouse: new THREE.Vector2(), // Stores mouse position relative to the debug plane (0-1)
-    pixelBuffer: new Float32Array(4), // Buffer to hold the read pixel data
+    mouse: null, // Initialize as null, will be set in init
+    pixelBuffer: new Float32Array(4), // This can be initialized here as it doesn't depend on Three.js
     
     init(appInstance) {
         this.app = appInstance;
+
+        // Initialize properties that depend on this.app.THREE here
+        this.mouse = new this.app.THREE.Vector2(); 
 
         if (!this.app.ComputeManager || !this.app.ComputeManager.gpuCompute) {
             console.error("GPGPUDebugger: ComputeManager not available on init.");
@@ -71,13 +72,13 @@ export const GPGPUDebugger = {
         this.debugViewSelect = document.getElementById('gpgpuDebugViewSelect');
         this.pixelValueDisplay = document.getElementById('gpgpuDebugPixelValue');
 
-        this.scene = new THREE.Scene();
+        this.scene = new this.app.THREE.Scene();
         const aspect = window.innerWidth / window.innerHeight;
-        this.camera = new THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0, 1);
+        this.camera = new this.app.THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0, 1);
 
-        const geometry = new THREE.PlaneGeometry(0.4, 0.4); 
+        const geometry = new this.app.THREE.PlaneGeometry(0.4, 0.4); 
         
-        const material = new THREE.ShaderMaterial({
+        const material = new this.app.THREE.ShaderMaterial({
             vertexShader: gpgpuDebugVertexShader,
             fragmentShader: gpgpuDebugFragmentShader,
             uniforms: {
@@ -87,7 +88,7 @@ export const GPGPUDebugger = {
             }
         });
 
-        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh = new this.app.THREE.Mesh(geometry, material);
         this.mesh.position.set(aspect - 0.22, -1.0 + 0.22, 0); 
         this.scene.add(this.mesh);
 
@@ -109,7 +110,7 @@ export const GPGPUDebugger = {
         }
 
         // Convert mouse from screen coords to NDC (-1 to 1)
-        const mouseNDC = new THREE.Vector2(
+        const mouseNDC = new this.app.THREE.Vector2(
             (event.clientX / window.innerWidth) * 2 - 1,
             -(event.clientY / window.innerHeight) * 2 + 1
         );
@@ -117,9 +118,9 @@ export const GPGPUDebugger = {
         // Get the debug plane's bounding box in NDC
         const planeSizeNDC = { width: this.mesh.geometry.parameters.width, height: this.mesh.geometry.parameters.height };
         const planePosNDC = { x: this.mesh.position.x, y: this.mesh.position.y };
-        const planeBox = new THREE.Box2(
-            new THREE.Vector2(planePosNDC.x - planeSizeNDC.width / 2, planePosNDC.y - planeSizeNDC.height / 2),
-            new THREE.Vector2(planePosNDC.x + planeSizeNDC.width / 2, planePosNDC.y + planeSizeNDC.height / 2)
+        const planeBox = new this.app.THREE.Box2(
+            new this.app.THREE.Vector2(planePosNDC.x - planeSizeNDC.width / 2, planePosNDC.y - planeSizeNDC.height / 2),
+            new this.app.THREE.Vector2(planePosNDC.x + planeSizeNDC.width / 2, planePosNDC.y + planeSizeNDC.height / 2)
         );
 
         if (planeBox.containsPoint(mouseNDC)) {
@@ -153,7 +154,6 @@ export const GPGPUDebugger = {
                     targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
                     debugModeValue = 0;
                     break;
-                // ** THE FIX IS HERE ** - Removed the 'normal' case that was causing the crash.
                 case 'custom':
                     targetTexture = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
                     debugModeValue = 2; 

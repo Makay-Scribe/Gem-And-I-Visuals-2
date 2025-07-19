@@ -41,6 +41,7 @@ export const UIManager = {
         this.updateWarpControlsVisibility(true);
         this.updateDeformationEngineControls(true);
         this.updateImageEffectsVisibility(true);
+        this.updatePhysicsCubeControls(true); 
 
         this.updateMasterControls();
     },
@@ -206,7 +207,7 @@ export const UIManager = {
             else S.modelAutopilotSpeed = value;
         }
     
-        if (control.type === 'range') {
+        if (control.type === 'range' || control.type === 'number') {
             this.updateRangeDisplay(control.id, value);
         }
     },
@@ -373,11 +374,11 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'physicsCubeSize', 'physicsCubeBounciness', 'physicsCubeFriction'].includes(id)) {
                 precision = 2;
-            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed'].includes(id)) {
+            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'physicsGravityY'].includes(id)) {
                 precision = 2;
-            } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod', 'gpgpu_eqRippleBarCount'].includes(id)) {
+            } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod', 'gpgpu_eqRippleBarCount', 'physicsCubeCount'].includes(id)) {
                 precision = 0;
             }
             display.textContent = parseFloat(value).toFixed(precision);
@@ -472,6 +473,47 @@ export const UIManager = {
         if (!isInitial) {
             this.refreshAccordion(legacyContainer);
             this.refreshAccordion(gpgpuAccordion.querySelector('.accordion-content'));
+            // NEW: Trigger physics ground update when deformation engine mode changes
+            this.triggerPhysicsGroundUpdate(); 
+        }
+    },
+
+    updatePhysicsCubeControls(isInitial = false) {
+        const enableCheckbox = document.getElementById('enablePhysicsCubes');
+        if (!enableCheckbox) return;
+
+        const container = enableCheckbox.closest('.accordion-item');
+        if (!container) return;
+
+        const isEnabled = this.app.vizSettings.enablePhysicsCubes;
+        
+        // Toggle the entire accordion item's content's disabled state
+        const content = container.querySelector('.accordion-content');
+        if (content) {
+            content.classList.toggle('container-disabled', !isEnabled);
+            // Disable/enable individual inputs within the content if needed, though opacity will handle most.
+            content.querySelectorAll('input, button, select').forEach(control => {
+                control.disabled = !isEnabled;
+            });
+        }
+
+        // Apply glow to header toggle if active
+        const headerWithToggle = enableCheckbox.closest('.accordion-header-with-toggle');
+        if (headerWithToggle) {
+            headerWithToggle.classList.toggle('button-glow-effect', isEnabled);
+        }
+
+        if (!isInitial) {
+            // Re-create ground plane if physics cubes are enabled/disabled
+            // This ensures the physics ground is correctly positioned relative to the landscape
+            // and clears cubes if disabled.
+            this.app.PhysicsManager.createGroundPlane(); 
+            if (isEnabled) {
+                this.app.PhysicsManager.spawnCubes();
+            } else {
+                this.app.PhysicsManager.clearCubes();
+            }
+            this.refreshAccordion(content); // Refresh to update max-height
         }
     },
 
@@ -543,6 +585,17 @@ export const UIManager = {
         });
     },
 
+    // NEW: Helper function to trigger physics ground update
+    triggerPhysicsGroundUpdate() {
+        if (this.app.PhysicsManager) {
+            // Give the GPGPU computation a moment to update its texture
+            // before the physics manager tries to read from it.
+            setTimeout(() => {
+                this.app.PhysicsManager.createGroundPlane();
+            }, 50); 
+        }
+    },
+
     setupEventListeners() {
         document.getElementById('toggleMicInput').addEventListener('click', () => this.app.AudioProcessor.startMic());
         document.getElementById('playPauseAudioButton').addEventListener('click', () => this.app.AudioProcessor.toggleFilePlayback());
@@ -610,6 +663,7 @@ export const UIManager = {
             gpgpuGeometryModeSelect.addEventListener('change', (e) => {
                 this.app.vizSettings.gpgpuGeometryMode = e.target.value;
                 this.app.ImagePlaneManager.createDefaultLandscape();
+                this.triggerPhysicsGroundUpdate(); // NEW: Trigger update when geometry mode changes
             });
         }
         
@@ -623,7 +677,21 @@ export const UIManager = {
             });
         });
 
-        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger):not(#enableWarp), select:not(#gpgpuGeometryMode)').forEach(control => {
+        // Physics Cubes event listeners
+        document.getElementById('enablePhysicsCubes')?.addEventListener('change', (e) => {
+            this.app.vizSettings.enablePhysicsCubes = e.target.checked;
+            this.updatePhysicsCubeControls();
+        });
+        document.getElementById('spawnPhysicsCubesButton')?.addEventListener('click', () => {
+            this.app.PhysicsManager.spawnCubes();
+        });
+        document.getElementById('clearPhysicsCubesButton')?.addEventListener('click', () => {
+            this.app.PhysicsManager.clearCubes();
+        });
+
+
+        // General input/select event listeners
+        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger):not(#enableWarp):not(#enablePhysicsCubes), select:not(#gpgpuGeometryMode)').forEach(control => {
             if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#deformationEngineToggle') || control.closest('#imageEffectsAccordion')) return;
             
             control.addEventListener('input', (e) => {
@@ -640,7 +708,7 @@ export const UIManager = {
                     }
                 }
                 
-                if (e.target.type === 'range') this.updateRangeDisplay(id, value);
+                if (e.target.type === 'range' || e.target.type === 'number') this.updateRangeDisplay(id, value);
                 
                 if (id === 'toneMappingMode') {
                     const toneMappingOptions = { 'ACESFilmic': this.app.THREE.ACESFilmicToneMapping, 'Reinhard': this.app.THREE.ReinhardToneMapping, 'Linear': this.app.THREE.LinearToneMapping };
@@ -667,15 +735,18 @@ export const UIManager = {
                     }
                 } else if (id === 'planeAspectRatio' || id === 'planeOrientation') {
                     this.app.ImagePlaneManager.createDefaultLandscape();
-                    if (this.app.vizSettings.landscapeAutopilotOn && this.app.vizSettings.activeLandscapePreset) {
-                        this.app.ImagePlaneManager.startAutopilot(this.app.vizSettings.activeLandscapePreset);
-                    }
+                    this.triggerPhysicsGroundUpdate(); // NEW: Trigger update when plane aspect/orientation changes
+                } else if (id.startsWith('gpgpu_enable') || id.startsWith('gpgpu_triWave') || id.startsWith('gpgpu_qbert') || id.startsWith('gpgpu_ripple') || id.startsWith('gpgpu_eqRipple') || id.startsWith('gpgpu_cloth') || id.startsWith('gpgpu_tendril')) { // NEW: Trigger physics ground update for relevant GPGPU settings
+                    this.triggerPhysicsGroundUpdate();
                 }
             });
         });
 
+        // Checkboxes (header toggles)
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.id === 'enableWarp') return; 
+             // Exclude general checkboxes already handled in the loop above
+             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.id === 'enableWarp' || checkbox.id === 'enablePhysicsCubes') return;
+             
              checkbox.addEventListener('input', (e) => {
                  if (this.app.vizSettings[e.target.id] !== undefined) {
                      this.app.vizSettings[e.target.id] = e.target.checked;
@@ -688,27 +759,10 @@ export const UIManager = {
                         ipm.currentTexture.colorSpace = isChecked ? this.app.THREE.SRGBColorSpace : this.app.THREE.NoColorSpace;
                         ipm.currentTexture.needsUpdate = true;
                     }
+                } else if (e.target.id.startsWith('gpgpu_enable')) { // NEW: Trigger physics ground update for GPGPU enable/disable toggles
+                    this.triggerPhysicsGroundUpdate();
                 }
-
              });
-        });
-
-        document.querySelectorAll('#imageEffectsAccordion input, #imageEffectsAccordion select').forEach(control => {
-            control.addEventListener('input', e => {
-                const id = e.target.id;
-                const S = this.app.vizSettings;
-                if (S[id] !== undefined) {
-                    if (e.target.type === 'range') {
-                        S[id] = parseFloat(e.target.value);
-                        this.updateRangeDisplay(id, S[id]);
-                    } else {
-                        S[id] = e.target.value;
-                    }
-                }
-                if (id === 'imageEffectType') {
-                    this.updateImageEffectsVisibility();
-                }
-            });
         });
 
         this.setupButterchurnEventListeners();
@@ -770,15 +824,21 @@ export const UIManager = {
             });
         }
         
+        // This button setup uses THREE.Vector3 as it refers to defaultVisualizerSettings
         Object.keys(this.app.modelPresets).forEach(presetId => {
             const btn = document.getElementById(presetId);
             if(btn) {
                 btn.addEventListener('click', () => {
                     const preset = this.app.modelPresets[presetId];
+                    // Ensure homeOffset is a THREE.Vector3 if it's not already
+                    if (preset.homeOffset && !(preset.homeOffset instanceof this.app.THREE.Vector3)) {
+                        preset.homeOffset = new this.app.THREE.Vector3(preset.homeOffset.x, preset.homeOffset.y, preset.homeOffset.z);
+                    }
                     if (preset) this.app.ModelManager.loadGLTFModel(preset);
                 });
             }
         });
+
 
         const demoButton = document.getElementById('demoModeButton');
         if (demoButton) {
@@ -810,7 +870,8 @@ export const UIManager = {
 
         this.app.vizSettings.deformationEngine = 'gpgpu';
         this.app.vizSettings.gpgpu_enableCloth = true;
-        this.app.vizSettings.enableShaderMouse = true; // ** THE FIX IS HERE **
+        this.app.vizSettings.enableShaderMouse = true;
+        this.app.vizSettings.enablePhysicsCubes = true; 
 
         this.demoShaderIndex = 0;
         this.cycleDemoShader(); 
@@ -823,6 +884,8 @@ export const UIManager = {
         this.syncAllControlsToSettings();
         this.updateMasterControls();
         this.updateDeformationEngineControls();
+        this.updatePhysicsCubeControls();
+        this.triggerPhysicsGroundUpdate(); // NEW: Trigger update on demo start
     },
 
     stopDemoMode() {
@@ -854,6 +917,8 @@ export const UIManager = {
         this.updateDeformationEngineControls();
         this.updateWarpControlsVisibility(true);
         this.updateBackgroundControlsVisibility(true);
+        this.updatePhysicsCubeControls();
+        this.triggerPhysicsGroundUpdate(); // NEW: Trigger update on demo stop
     },
     
     cycleDemoShader() {
@@ -966,11 +1031,15 @@ export const UIManager = {
                 break;
             case 'hdriInput': 
                 this.updateFileNameDisplay('hdri', file.name);
-                if(this.app.SceneManager) this.app.SceneManager.loadHDRI(file);
+                // SceneManager no longer handles HDRI directly; BackgroundManager does via CubeCamera
+                // This call might need adjustment if you ever want custom HDRI loading again
+                // For now, it will simply update the filename display.
+                // if(this.app.SceneManager) this.app.SceneManager.loadHDRI(file); 
+                console.warn("Custom HDRI loading for main scene environment is currently handled by BackgroundManager based on BG FX mode. Direct HDRI input is not fully implemented in this version.");
                 break;
             case 'gltfModelInput':
                 this.updateFileNameDisplay('gltf', file.name);
-                const preset = { path: URL.createObjectURL(file), name: file.name, id: null, homeOffset: new THREE.Vector3() };
+                const preset = { path: URL.createObjectURL(file), name: file.name, id: null, homeOffset: new this.app.THREE.Vector3() };
                 this.app.ModelManager.loadGLTFModel(preset); 
                 break;
         }
@@ -1090,6 +1159,7 @@ export const UIManager = {
     
         this.updateWarpControlsVisibility();
         this.app.ImagePlaneManager.createDefaultLandscape();
+        this.app.PhysicsManager.createGroundPlane(); 
     
         this.logSuccess("Landscape settings reset.");
     }

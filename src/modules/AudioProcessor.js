@@ -1,5 +1,5 @@
 import { Debugger } from './Debugger.js';
-import * as THREE from 'three';
+import THREE from '../three-singleton.js'; // UPDATED: Import THREE from our new singleton
 
 export const AudioProcessor = {
     app: null, // Will be set on init
@@ -74,6 +74,8 @@ export const AudioProcessor = {
             this.smoothedFrequencyData = new Float32Array(bufferLength); // Use Float32 for precision
             this.textureDataUint8 = new Uint8Array(bufferLength); // Final buffer for texture
             
+            // Reverted to direct THREE import here for DataTexture, assuming Three.js itself is the singleton.
+            // This is safer as DataTexture is a core Three.js class.
             this.audioTexture = new THREE.DataTexture(
                 this.textureDataUint8, // Use the new Uint8 buffer
                 bufferLength,

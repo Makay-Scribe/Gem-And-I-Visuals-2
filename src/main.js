@@ -1,5 +1,5 @@
 import './style.css';
-import * as THREE from 'three';
+import THREE from './three-singleton.js';
 import { UIManager } from './modules/UIManager.js';
 import { ButterchurnManager } from './modules/ButterchurnManager.js';
 import { Debugger } from './modules/Debugger.js';
@@ -12,6 +12,7 @@ import { ImagePlaneManager } from './modules/ImagePlaneManager.js';
 import { ModelManager } from './modules/ModelManager.js';
 import { ComputeManager } from './compute/ComputeManager.js';
 import { GPGPUDebugger } from './modules/GPGPUDebugger.js';
+import { PhysicsManager } from './modules/PhysicsManager.js';
 
 const App = {
     THREE: THREE, 
@@ -67,6 +68,7 @@ const App = {
     ComputeManager: ComputeManager,
     GPGPUDebugger: GPGPUDebugger,
     Debugger: Debugger,
+    PhysicsManager: PhysicsManager,
 
     defaultVisualizerSettings: {
         activeControl: 'landscape',
@@ -180,6 +182,16 @@ const App = {
         gpgpu_triWaveSpeed: 0.5,
         gpgpu_triWaveColor1: '#ffffff',
         gpgpu_triWaveColor2: '#ffffff',
+        gpgpu_enableQbert: false,
+        gpgpu_qbertJumpAmount: 1.5,
+        gpgpu_qbertFlashChance: 5.0,
+        // NEW: Physics Cubes Settings
+        enablePhysicsCubes: false, // Default to false, will enable via UI
+        physicsCubeCount: 10,
+        physicsCubeSize: 1.0,
+        physicsCubeBounciness: 0.6,
+        physicsCubeFriction: 0.8,
+        physicsGravityY: -9.82,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
@@ -237,123 +249,24 @@ const App = {
         }
     },
 
-    init() {
-        this.vizSettings = JSON.parse(JSON.stringify(this.defaultVisualizerSettings));
-        
-        window.onerror = (message, source, lineno, colno, error) => {
-            console.error("Uncaught Error (Global Handler):", message, source, lineno, colno, error);
-            const displayMessage = `Runtime Error: ${message.toString().substring(0, 150)}...`;
-            if (this.UIManager) this.UIManager.logError(displayMessage);
-            return true; 
-        };
+    onWindowResize() {
+        if (!this.camera || !this.renderer) return;
 
-        window.onunhandledrejection = (event) => {
-            console.error("Unhandled Promise Rejection (Global Handler):", event.reason);
-            const displayMessage = `Promise Error: ${event.reason.message || event.reason.toString().substring(0, 150)}...`;
-            if (this.UIManager) this.UIManager.logError(displayMessage);
-            event.preventDefault(); 
-        };
-
-        this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('glCanvas'), antialias: true, powerPreference: "high-performance" });
-        this.renderer.setPixelRatio(window.devicePixelRatio); 
-        
         const canvas = this.renderer.domElement;
-        this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
         
-        this.renderer.autoClear = false;
-
-        const toneMappingOptions = { 'ACESFilmic': THREE.ACESFilmicToneMapping, 'Reinhard': THREE.ReinhardToneMapping, 'Linear': THREE.LinearToneMapping };
-        this.renderer.toneMapping = toneMappingOptions[this.vizSettings.toneMappingMode] || THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
-
-        this.SceneManager.init(this);
-
-        this.ambientLight = new THREE.AmbientLight(this.vizSettings.ambientLightColor, 1.0);
-        this.scene.add(this.ambientLight);
-
-        this.directionalLight = new THREE.DirectionalLight(this.vizSettings.lightColor, 1.0);
-        this.directionalLight.position.set(
-            this.vizSettings.lightDirectionX,
-            this.vizSettings.lightDirectionY,
-            this.vizSettings.lightDirectionZ
-        ).normalize();
-        this.scene.add(this.directionalLight);
-
-        const laserMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
-        const laserPoints = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)];
-        const laserGeometry = new THREE.BufferGeometry().setFromPoints(laserPoints);
-        this.guideLaser = new THREE.Line(laserGeometry, laserMaterial);
-        this.guideLaser.frustumCulled = false;
-        this.guideLaser.visible = this.vizSettings.enableGuideLaser;
-        this.scene.add(this.guideLaser);
-
-
-        this.CameraManager.init(this);
-        this.AudioProcessor.init(this);
-        this.ImagePlaneManager.init(this);
-        this.BackgroundManager.init(this);
-        this.ModelManager.init(this);
-        this.ButterchurnManager.init(this);
-        this.UIManager.init(this);
-        this.GPGPUDebugger.init(this);
-        this.Debugger.init(this);
+        const needResize = canvas.width !== width || canvas.height !== height;
+        if (needResize) {
+            this.renderer.setSize(width, height, false);
+        }
         
-        setTimeout(() => {
-            this.preloadDevAssets();
-            
-            const defaultShaderId = 'presetBg6';
-            const defaultShaderCode = this.shaderPresets[defaultShaderId];
-            if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
-                console.log("Loading default background shader preset...");
-                const shaderToyGLSLEl = document.getElementById('shaderToyGLSL');
-                if (shaderToyGLSLEl) {
-                    shaderToyGLSLEl.value = defaultShaderCode;
-                    this.vizSettings.shaderToyGLSL = defaultShaderCode;
-                    if (this.UIManager) {
-                        setTimeout(() => this.UIManager.loadUserShader(defaultShaderId), 100); 
-                    }
-                }
-            }
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
 
-            console.log("Loading default 3D model preset...");
-            const modelPreset = this.modelPresets['modelPreset5'];
-            if (modelPreset && this.ModelManager) {
-                this.ModelManager.loadGLTFModel(modelPreset);
-                if (this.UIManager) this.UIManager.updateFileNameDisplay('gltf', modelPreset.name);
-            }
-        }, 100);
-
-        window.addEventListener('resize', this.onWindowResize.bind(this));
-        
-        window.addEventListener('mousemove', (event) => {
-            if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
-                this.mouseState.x = event.clientX;
-                this.mouseState.y = event.clientY;
-            }
-            if (this.GPGPUDebugger && this.GPGPUDebugger.handleMouseMove) {
-                this.GPGPUDebugger.handleMouseMove(event);
-            }
-        });
-        
-        canvas.addEventListener('mousedown', (event) => {
-             if (event.target !== canvas) return;
-             if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
-                this.mouseState.z = 1;
-             }
-        });
-        canvas.addEventListener('mouseup', () => {
-            this.mouseState.z = 0;
-        });
-        
-        canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
-        canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
-        canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
-        
-        canvas.addEventListener('wheel', this.onMouseWheel.bind(this), { passive: false });
-
-        canvas.addEventListener('contextmenu', e => e.preventDefault());
-
-        this.animate();
+        this.BackgroundManager.onWindowResize(); 
+        if (this.GPGPUDebugger && this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
+        if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
     },
 
     _getActiveManager() {
@@ -453,25 +366,146 @@ const App = {
         MI.isRotating = false;
         MI.isDragging = false;
     },
-    
-    onWindowResize() {
-        if (!this.camera || !this.renderer) return;
 
+    init() {
+        this.vizSettings = JSON.parse(JSON.stringify(this.defaultVisualizerSettings));
+        
+        window.onerror = (message, source, lineno, colno, error) => {
+            console.error("Uncaught Error (Global Handler):", message, source, lineno, colno, error);
+            const displayMessage = `Runtime Error: ${message.toString().substring(0, 150)}...`;
+            if (this.UIManager) this.UIManager.logError(displayMessage);
+            return true; 
+        };
+
+        window.onunhandledrejection = (event) => {
+            console.error("Unhandled Promise Rejection (Global Handler):", event.reason);
+            const displayMessage = `Promise Error: ${event.reason.message || event.reason.toString().substring(0, 150)}...`;
+            if (this.UIManager) this.UIManager.logError(displayMessage);
+            event.preventDefault(); 
+        };
+
+        this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('glCanvas'), antialias: true, powerPreference: "high-performance" });
+        this.renderer.setPixelRatio(window.devicePixelRatio); 
+        
         const canvas = this.renderer.domElement;
-        const width = canvas.clientWidth;
-        const height = canvas.clientHeight;
+        this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
         
-        const needResize = canvas.width !== width || canvas.height !== height;
-        if (needResize) {
-            this.renderer.setSize(width, height, false);
-        }
-        
-        this.camera.aspect = width / height;
-        this.camera.updateProjectionMatrix();
+        this.renderer.autoClear = false;
 
-        this.BackgroundManager.onWindowResize(); 
-        if (this.GPGPUDebugger && this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
-        if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
+        const toneMappingOptions = { 'ACESFilmic': THREE.ACESFilmicToneMapping, 'Reinhard': THREE.ReinhardToneMapping, 'Linear': THREE.LinearToneMapping };
+        this.renderer.toneMapping = toneMappingOptions[this.vizSettings.toneMappingMode] || THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
+
+        // Phase 1: Initialize all managers (assign this.app)
+        this.SceneManager.init(this);
+        this.BackgroundManager.init(this); // BackgroundManager also uses renderer
+        this.CameraManager.init(this);
+        this.AudioProcessor.init(this);
+        this.ButterchurnManager.init(this);
+        this.ModelManager.init(this);
+        this.Debugger.init(this);
+        this.UIManager.init(this); 
+        this.ImagePlaneManager.init(this); 
+        // Pass the required plane dimensions and resolution to ComputeManager
+        this.ComputeManager.init(this, 
+            this.ImagePlaneManager.planeDimensions.x, 
+            this.ImagePlaneManager.planeDimensions.y, 
+            this.ImagePlaneManager.planeResolution.x, 
+            this.ImagePlaneManager.planeResolution.y
+        );    
+        this.GPGPUDebugger.init(this);   
+        this.PhysicsManager.init(this);  
+        
+        this.ambientLight = new THREE.AmbientLight(this.vizSettings.ambientLightColor, 1.0);
+        this.scene.add(this.ambientLight);
+
+        this.directionalLight = new THREE.DirectionalLight(this.vizSettings.lightColor, 1.0);
+        this.directionalLight.position.set(
+            this.vizSettings.lightDirectionX,
+            this.vizSettings.lightDirectionY,
+            this.vizSettings.lightDirectionZ
+        ).normalize();
+        this.scene.add(this.directionalLight);
+
+        const laserMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
+        const laserPoints = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)];
+        const laserGeometry = new THREE.BufferGeometry().setFromPoints(laserPoints);
+        this.guideLaser = new THREE.Line(laserGeometry, laserMaterial);
+        this.guideLaser.frustumCulled = false;
+        this.guideLaser.visible = this.vizSettings.enableGuideLaser;
+        this.scene.add(this.guideLaser);
+
+
+        // Phase 2: Trigger initial setup methods that depend on ALL managers being initialized.
+        this.ImagePlaneManager.createDefaultLandscape(); 
+        this.BackgroundManager.render(); // Ensure background is rendered once for cubeCamera.update to work
+        this.GPGPUDebugger.update(); // Initial update for debugger (if enabled)
+        
+        // Use a short setTimeout to allow for first frame GPGPU compute/render target update
+        // before physics tries to read from it.
+        setTimeout(() => {
+            this.PhysicsManager.createGroundPlane(); 
+            if (this.vizSettings.enablePhysicsCubes) {
+                this.PhysicsManager.spawnCubes(); 
+            }
+        }, 50); // Small delay to allow initial rendering pass
+
+        setTimeout(() => {
+            this.preloadDevAssets();
+            
+            const defaultShaderId = 'presetBg6';
+            const defaultShaderCode = this.shaderPresets[defaultShaderId];
+            if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
+                console.log("Loading default background shader preset...");
+                const shaderToyGLSLEl = document.getElementById('shaderToyGLSL');
+                if (shaderToyGLSLEl) {
+                    shaderToyGLSLEl.value = defaultShaderCode;
+                    this.vizSettings.shaderToyGLSL = defaultShaderCode;
+                    if (this.UIManager) {
+                        setTimeout(() => this.UIManager.loadUserShader(defaultShaderId), 100); 
+                    }
+                }
+            }
+
+            console.log("Loading default 3D model preset...");
+            const modelPreset = this.modelPresets['modelPreset5'];
+            if (modelPreset && this.ModelManager) {
+                this.ModelManager.loadGLTFModel(modelPreset);
+                if (this.UIManager) this.UIManager.updateFileNameDisplay('gltf', modelPreset.name);
+            }
+        }, 100);
+
+        window.addEventListener('resize', this.onWindowResize.bind(this));
+        
+        window.addEventListener('mousemove', (event) => {
+            if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
+                this.mouseState.x = event.clientX;
+                this.mouseState.y = event.clientY;
+            }
+            if (this.GPGPUDebugger && this.GPGPUDebugger.handleMouseMove) {
+                this.GPGPUDebugger.handleMouseMove(event);
+            }
+        });
+        
+        canvas.addEventListener('mousedown', (event) => {
+             if (event.target !== canvas) return;
+             if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
+                this.mouseState.z = 1;
+             }
+        });
+        canvas.addEventListener('mouseup', () => {
+            this.mouseState.z = 0;
+        });
+        
+        canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
+        canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
+        canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
+        
+        canvas.addEventListener('wheel', this.onMouseWheel.bind(this), { passive: false });
+
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        this.animate();
     },
 
     animate() {
@@ -523,6 +557,7 @@ const App = {
         
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
+        this.PhysicsManager.update(cappedDelta);
         
         this.CameraManager.update(cappedDelta); 
         

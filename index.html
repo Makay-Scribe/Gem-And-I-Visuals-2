@@ -16,6 +16,8 @@
     <script src="butterchurnPresetsExtra2.min.js"></script>
     <script src="butterchurnPresetsMD1.min.js"></script>
     
+    <!-- REMOVED: Cannon-es Physics Library (now imported via npm in PhysicsManager.js) -->
+    
 </head><body>
 
     <button id="controlsToggleButton">Show</button>
@@ -104,7 +106,7 @@
                     <label>Depth (Z): <span id="actorDepthValue" class="range-value-display">0.0</span></label>
                     <input type="range" id="actorDepth" min="-50" max="50" step="0.5" value="0">
                     
-                    <label>Vertical (Y): <span id="actorYValue" class="range-value-display">0.0</span></label>
+                    <label>Vertical (Y): <span id="actorYValue" class="range-value-display"></span></label>
                     <input type="range" id="actorY" min="-50" max="50" step="0.5" value="0">
 
                     <label>Horizontal (X): <span id="actorXValue" class="range-value-display"></span></label>
@@ -439,16 +441,56 @@
                         
                         <p class="sub-group-title">COLOR</p>
                         <label for="gpgpu_triWaveColor1">Color A:</label>
-                        <input type="color" id="gpgpu_triWaveColor1" value="#ff0040">
+                        <input type="color" id="gpgpu_triWaveColor1" value="#ffffff">
                         <label for="gpgpu_triWaveColor2">Color B:</label>
-                        <input type="color" id="gpgpu_triWaveColor2" value="#000000">
+                        <input type="color" id="gpgpu_triWaveColor2" value="#ffffff">
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                     <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">Q-Bert Effect</button>
+                        <input type="checkbox" id="gpgpu_enableQbert" class="header-toggle-checkbox">
+                    </div>
+                    <div class="accordion-content">
+                        <p class="sub-group-title">BEAT REACTION</p>
+                        <label>Jump Amount: <span id="gpgpu_qbertJumpAmountValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_qbertJumpAmount" min="0.0" max="5.0" step="0.1" value="1.5">
+                        <label>Flash Chance (%): <span id="gpgpu_qbertFlashChanceValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_qbertFlashChance" min="0.0" max="100.0" step="1" value="5.0">
+                    </div>
+                </div>
+
+                <!-- NEW: Physics Cubes Accordion (Child of GPGPU Options) -->
+                <div class="accordion-item">
+                     <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">Physics Cubes</button>
+                        <input type="checkbox" id="enablePhysicsCubes" class="header-toggle-checkbox">
+                    </div>
+                    <div class="accordion-content">
+                        <p class="sub-group-title">SPAWN</p>
+                        <label>Cube Count: <span id="physicsCubeCountValue" class="range-value-display"></span></label>
+                        <input type="range" id="physicsCubeCount" min="0" max="200" step="1" value="10">
+                        <button id="spawnPhysicsCubesButton">Spawn New Cubes</button>
+
+                        <p class="sub-group-title">PROPERTIES</p>
+                        <label>Size: <span id="physicsCubeSizeValue" class="range-value-display"></span></label>
+                        <input type="range" id="physicsCubeSize" min="0.1" max="5.0" step="0.1" value="1.0">
+                        <label>Bounciness: <span id="physicsCubeBouncinessValue" class="range-value-display"></span></label>
+                        <input type="range" id="physicsCubeBounciness" min="0.0" max="1.0" step="0.01" value="0.6">
+                        <label>Friction: <span id="physicsCubeFrictionValue" class="range-value-display"></span></label>
+                        <input type="range" id="physicsCubeFriction" min="0.0" max="1.0" step="0.01" value="0.8">
+                        <label>Gravity Y: <span id="physicsGravityYValue" class="range-value-display"></span></label>
+                        <input type="range" id="physicsGravityY" min="-20.0" max="0.0" step="0.1" value="-9.82">
+
+                        <p class="sub-group-title">INTERACTION</p>
+                        <button id="clearPhysicsCubesButton">Clear All Cubes</button>
                     </div>
                 </div>
                 
             </div>
         </div>
 
-        <!-- ** THE FIX IS HERE: Added new 'Image Effects' accordion ** -->
         <div class="accordion-item" id="imageEffectsAccordion">
             <button class="accordion-header" data-header-id="image-effects">Image Effects</button>
             <div class="accordion-content">

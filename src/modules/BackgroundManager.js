@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+// REMOVED: import * as THREE from 'three';
 import backgroundVertexShader from '../rendering/shaders/background.vert?raw';
 import backgroundFragmentShader from '../rendering/shaders/background.frag?raw';
 
@@ -9,6 +9,7 @@ export const BackgroundManager = {
 
     init(appInstance) {
         this.app = appInstance;
+        // Use this.app.THREE directly
         const THREE = this.app.THREE;
 
         this.app.backgroundScene = new THREE.Scene();
@@ -94,7 +95,7 @@ export const BackgroundManager = {
     update() {
         const S = this.app.vizSettings;
         const A = this.app.AudioProcessor;
-        const THREE = this.app.THREE;
+        const THREE = this.app.THREE; // Alias for convenience
         if (this.app.shaderMaterial && this.app.shaderMaterial.uniforms.iTime) {
             const u = this.app.shaderMaterial.uniforms;
             const d = new Date();

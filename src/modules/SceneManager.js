@@ -1,11 +1,11 @@
-import * as THREE from 'three';
+// REMOVED: import * as THREE from 'three';
 
 export const SceneManager = {
     app: null,
 
     init(appInstance) {
         this.app = appInstance;
-        this.app.scene = new THREE.Scene();
+        this.app.scene = new this.app.THREE.Scene(); // Use app.THREE
         
         // FIX: Set the main scene's background to null (transparent).
         // This prevents it from drawing a solid color over our dedicated background scene.

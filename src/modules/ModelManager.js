@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+// REMOVED: import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const PRESET_DEFAULT_SPEEDS = {
@@ -14,8 +14,8 @@ export const ModelManager = {
     gltfModel: null,
     animationMixer: null,
     activePresetId: null,
-    baseScale: new THREE.Vector3(1, 1, 1),
-    boundingSphere: new THREE.Sphere(),
+    baseScale: null, // Initialized in init
+    boundingSphere: null, // Initialized in init
     _waypointRetryCount: 0, 
     
     state: {
@@ -23,10 +23,10 @@ export const ModelManager = {
         manualControlReleaseTime: -1, 
         manualControlTimeoutId: null,
         returnEaseFactor: 0.0,
-        targetPosition: new THREE.Vector3(),
-        targetQuaternion: new THREE.Quaternion(),
-        homePosition: new THREE.Vector3(),
-        homeQuaternion: new THREE.Quaternion()
+        targetPosition: null, // Initialized in init
+        targetQuaternion: null, // Initialized in init
+        homePosition: null, // Initialized in init
+        homeQuaternion: null // Initialized in init
     },
     
     autopilot: {
@@ -39,15 +39,30 @@ export const ModelManager = {
         waypointProgress: 1.0, 
         waypointTransitionDuration: 10.0,
         holdTimer: 0,
-        randomBounds: null,
-        startPos: new THREE.Vector3(),
-        endPos: new THREE.Vector3(),
-        startQuat: new THREE.Quaternion(),
-        endQuat: new THREE.Quaternion(),
+        randomBounds: null, // Initialized in startAutopilot
+        startPos: null, // Initialized in init
+        endPos: null, // Initialized in init
+        startQuat: null, // Initialized in init
+        endQuat: null, // Initialized in init
     },
 
     init(appInstance) {
         this.app = appInstance;
+        // Initialize Three.js dependent properties here
+        this.baseScale = new this.app.THREE.Vector3(1, 1, 1);
+        this.boundingSphere = new this.app.THREE.Sphere();
+
+        this.state.homePosition = new this.app.THREE.Vector3();
+        this.state.targetPosition = new this.app.THREE.Vector3();
+        this.state.targetQuaternion = new this.app.THREE.Quaternion();
+        this.state.homeQuaternion = new this.app.THREE.Quaternion();
+        
+        this.autopilot.startPos = new this.app.THREE.Vector3();
+        this.autopilot.endPos = new this.app.THREE.Vector3();
+        this.autopilot.startQuat = new this.app.THREE.Quaternion();
+        this.autopilot.endQuat = new this.app.THREE.Quaternion();
+
+
         this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionModel);
         this.state.targetPosition.copy(this.state.homePosition);
         console.log("ModelManager initialized.");
@@ -75,35 +90,36 @@ export const ModelManager = {
         
         const home = this.state.targetPosition; 
 
+        // Use this.app.THREE.Box3
         switch(presetId) {
             case 'autopilotPreset1': 
-                ap.randomBounds = new THREE.Box3(
-                    new THREE.Vector3(home.x - 20, home.y - 15, -20), 
-                    new THREE.Vector3(home.x + 20, home.y + 15, 32)   
+                ap.randomBounds = new this.app.THREE.Box3(
+                    new this.app.THREE.Vector3(home.x - 20, home.y - 15, -20), 
+                    new this.app.THREE.Vector3(home.x + 20, home.y + 15, 32)   
                 );
                 break;
             case 'autopilotPreset2': 
-                ap.randomBounds = new THREE.Box3(
-                    new THREE.Vector3(home.x - 40, home.y, -50),
-                    new THREE.Vector3(home.x + 40, home.y + 30, 32)
+                ap.randomBounds = new this.app.THREE.Box3(
+                    new this.app.THREE.Vector3(home.x - 40, home.y, -50),
+                    new this.app.THREE.Vector3(home.x + 40, home.y + 30, 32)
                 );
                 break;
             case 'autopilotPreset3': 
-                ap.randomBounds = new THREE.Box3(
-                    new THREE.Vector3(home.x - 60, home.y - 10, -70),
-                    new THREE.Vector3(home.x + 60, home.y + 10, 32)
+                ap.randomBounds = new this.app.THREE.Box3(
+                    new this.app.THREE.Vector3(home.x - 60, home.y - 10, -70),
+                    new this.app.THREE.Vector3(home.x + 60, home.y + 10, 32)
                 );
                 break;
             case 'autopilotPreset4': 
-                ap.randomBounds = new THREE.Box3(
-                    new THREE.Vector3(home.x - 80, home.y - 40, -100),
-                    new THREE.Vector3(home.x + 80, home.y + 40, 32)
+                ap.randomBounds = new this.app.THREE.Box3(
+                    new this.app.THREE.Vector3(home.x - 80, home.y - 40, -100),
+                    new this.app.THREE.Vector3(home.x + 80, home.y + 40, 32)
                 );
                 break;
             case 'autopilotPreset5': 
-                ap.randomBounds = new THREE.Box3(
-                    new THREE.Vector3(home.x - 120, home.y - 5, -10),
-                    new THREE.Vector3(home.x + 120, home.y + 5, 25)
+                ap.randomBounds = new this.app.THREE.Box3(
+                    new this.app.THREE.Vector3(home.x - 120, home.y - 5, -10),
+                    new this.app.THREE.Vector3(home.x + 120, home.y + 5, 25)
                 );
                 break;
         }
@@ -126,6 +142,7 @@ export const ModelManager = {
         ap.startQuat.copy(this.state.targetQuaternion);
 
         ap.endPos.copy(this.state.homePosition);
+        // Use this.app.THREE.Vector3 for homeOffset if it exists
         if (this.activePresetId && this.app.modelPresets[this.activePresetId]?.homeOffset) {
             ap.endPos.add(this.app.modelPresets[this.activePresetId].homeOffset);
         }
@@ -159,13 +176,14 @@ export const ModelManager = {
         ap.startPos.copy(this.state.targetPosition);
         ap.startQuat.copy(this.state.targetQuaternion);
         
+        // Use this.app.THREE.MathUtils.randFloat
         ap.endPos.set(
-            THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
-            THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
-            THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
+            this.app.THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
+            this.app.THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
+            this.app.THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
         );
 
-        const direction = new THREE.Vector3().subVectors(ap.endPos, ap.startPos);
+        const direction = new this.app.THREE.Vector3().subVectors(ap.endPos, ap.startPos); // Use app.THREE
         const distance = direction.length();
 
         if (distance < 0.001) {
@@ -177,6 +195,7 @@ export const ModelManager = {
         if (this.app.vizSettings.enableCollisionAvoidance && this.app.ImagePlaneManager.landscape) {
             direction.normalize(); 
 
+            // Raycaster is already on app object
             this.app.raycaster.set(ap.startPos, direction);
             const intersects = this.app.raycaster.intersectObject(this.app.ImagePlaneManager.landscape, false);
 
@@ -194,12 +213,13 @@ export const ModelManager = {
 
         this._waypointRetryCount = 0; 
 
-        const randomRot = new THREE.Euler( (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * Math.PI, (Math.random() - 0.5) * 0.4 );
+        // Use this.app.THREE.Euler and this.app.THREE.MathUtils.randFloat
+        const randomRot = new this.app.THREE.Euler( (this.app.THREE.MathUtils.randFloat(0,1) - 0.5) * 0.8, (this.app.THREE.MathUtils.randFloat(0,1) - 0.5) * Math.PI, (this.app.THREE.MathUtils.randFloat(0,1) - 0.5) * 0.4 );
         ap.endQuat.setFromEuler(randomRot);
         
         const totalDistance = ap.startPos.distanceTo(ap.endPos);
         const speed = this.app.vizSettings.modelAutopilotSpeed;
-        ap.waypointTransitionDuration = THREE.MathUtils.clamp(totalDistance / (speed * 4), 8, 20);
+        this.app.THREE.MathUtils.clamp(totalDistance / (speed * 4), 8, 20); // Use app.THREE.MathUtils
         ap.holdTimer = Math.random() * 5.0 + 2.0;
         ap.waypointProgress = 0;
     },
@@ -219,7 +239,7 @@ export const ModelManager = {
                 console.log("Model has arrived home. Starting hold timer.");
                 ap.isTransitioningToHome = false;
                 ap.isHoldingAtHome = true;
-                ap.homeHoldTimer = THREE.MathUtils.randFloat(5.0, 7.0); // Set 5-7 second hold
+                ap.homeHoldTimer = this.app.THREE.MathUtils.randFloat(5.0, 7.0); // Use app.THREE.MathUtils
             } else {
                  ap.holdTimer = Math.random() * 5.0 + 2.0;
             }
@@ -295,17 +315,17 @@ export const ModelManager = {
                 
                 this.app.scene.add(this.gltfModel);
                 
-                const finalHomePos = new THREE.Vector3().copy(this.state.homePosition);
+                const finalHomePos = new this.app.THREE.Vector3().copy(this.state.homePosition); // Use app.THREE
                 if (preset.homeOffset) {
                     finalHomePos.add(preset.homeOffset);
                 }
                 this.gltfModel.position.copy(finalHomePos);
                 this.state.targetPosition.copy(finalHomePos);
                 
-                const box = new THREE.Box3().setFromObject(this.gltfModel);
+                const box = new this.app.THREE.Box3().setFromObject(this.gltfModel); // Use app.THREE
                 box.getBoundingSphere(this.boundingSphere);
                 
-                const size = box.getSize(new THREE.Vector3());
+                const size = box.getSize(new this.app.THREE.Vector3()); // Use app.THREE
                 const scale = 10 / Math.max(size.x, size.y, size.z);
                 this.baseScale.set(scale, scale, scale);
                 this.gltfModel.scale.copy(this.baseScale);
@@ -313,7 +333,7 @@ export const ModelManager = {
                 this.boundingSphere.radius *= scale;
 
                 if (gltf.animations && gltf.animations.length) {
-                    this.animationMixer = new THREE.AnimationMixer(this.gltfModel);
+                    this.animationMixer = new this.app.THREE.AnimationMixer(this.gltfModel); // Use app.THREE
                     const action = this.animationMixer.clipAction(gltf.animations[0]);
                     action.play();
                     this.app.animationMixer = this.animationMixer;
@@ -353,7 +373,7 @@ export const ModelManager = {
             state.returnEaseFactor = 0;
             this.updateAutopilot(delta);
         } else {
-            const finalHomePos = new THREE.Vector3().copy(this.state.homePosition);
+            const finalHomePos = new this.app.THREE.Vector3().copy(this.state.homePosition); // Use app.THREE
             if (this.activePresetId && this.app.modelPresets[this.activePresetId]?.homeOffset) {
                 finalHomePos.add(this.app.modelPresets[this.activePresetId].homeOffset);
             }
@@ -367,8 +387,8 @@ export const ModelManager = {
         }
         
         if (S.enableModelSpin) {
-            const spinQuaternion = new THREE.Quaternion();
-            const spinAxis = new THREE.Vector3(0, 1, 0); 
+            const spinQuaternion = new this.app.THREE.Quaternion(); // Use app.THREE
+            const spinAxis = new this.app.THREE.Vector3(0, 1, 0); // Use app.THREE
             spinQuaternion.setFromAxisAngle(spinAxis, S.modelSpinSpeed * delta);
             state.targetQuaternion.multiply(spinQuaternion);
         }

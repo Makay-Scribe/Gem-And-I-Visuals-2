@@ -71,6 +71,7 @@ export const ButterchurnManager = {
         this.visualizerCanvas.width = 512; 
         this.visualizerCanvas.height = 512;
         
+        // These already correctly reference `this.app.THREE` (which `App` gets from our singleton)
         if (this.app.butterchurnMaterial) {
             this.app.butterchurnTexture = new this.app.THREE.CanvasTexture(this.visualizerCanvas);
             this.app.butterchurnTexture.minFilter = this.app.THREE.LinearFilter; 
