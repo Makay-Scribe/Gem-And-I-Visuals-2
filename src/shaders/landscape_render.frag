@@ -114,6 +114,9 @@ void main() {
     vec2 workingUV = vUv;
     
     if (u_gpgpu_enableTriangleWave) {
+        // Since UVs are standard, but the faceted geometry is rendered,
+        // we flip the Y coordinate to match expectations if needed.
+        // This line is often useful for faceted/non-indexed geometry.
         workingUV.y = 1.0 - workingUV.y;
     }
     
@@ -129,20 +132,20 @@ void main() {
 
     vec3 albedo = texture2D(u_map, workingUV).rgb;
     
-    // ** THE FIX IS HERE: The PBR lighting logic is now used for ALL cases **
-    // but the normal (N) is calculated differently depending on the mode.
+    // ** THE FIX IS HERE: The PBR lighting logic is now unified for ALL cases. **
+    // The normal (N) is calculated differently depending on the mode, but the lighting code is the same.
     
     vec3 N; // The final normal used for lighting
     if (u_gpgpu_enableTriangleWave) {
-        // For the faceted plane, calculate the flat face normal.
+        // For the faceted Triangle Wave, calculate the flat face normal on the fly using derivatives.
         N = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
         
-        // Modulate the texture color with the triangle's base color
+        // Modulate the main texture color with the triangle's unique base color
         float isEven = mod(vTriangleId, 2.0);
         vec3 baseColor = mix(u_gpgpu_triWaveColor1, u_gpgpu_triWaveColor2, isEven);
         albedo *= baseColor;
     } else {
-        // For the standard plane, use the smooth interpolated normal from the vertex shader.
+        // For the standard GPGPU-driven plane, use the smooth interpolated normal from the vertex shader.
         N = normalize(vWorldNormal);
     }
 
@@ -181,6 +184,7 @@ void main() {
         color += glowColor * glowAmount * 2.0; // Additive emissive glow
     }
 
+    // Basic tone mapping and gamma correction
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
 

@@ -460,33 +460,6 @@
                         <input type="range" id="gpgpu_qbertFlashChance" min="0.0" max="100.0" step="1" value="5.0">
                     </div>
                 </div>
-
-                <!-- NEW: Physics Cubes Accordion (Child of GPGPU Options) -->
-                <div class="accordion-item">
-                     <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">Physics Cubes</button>
-                        <input type="checkbox" id="enablePhysicsCubes" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <p class="sub-group-title">SPAWN</p>
-                        <label>Cube Count: <span id="physicsCubeCountValue" class="range-value-display"></span></label>
-                        <input type="range" id="physicsCubeCount" min="0" max="200" step="1" value="10">
-                        <button id="spawnPhysicsCubesButton">Spawn New Cubes</button>
-
-                        <p class="sub-group-title">PROPERTIES</p>
-                        <label>Size: <span id="physicsCubeSizeValue" class="range-value-display"></span></label>
-                        <input type="range" id="physicsCubeSize" min="0.1" max="5.0" step="0.1" value="1.0">
-                        <label>Bounciness: <span id="physicsCubeBouncinessValue" class="range-value-display"></span></label>
-                        <input type="range" id="physicsCubeBounciness" min="0.0" max="1.0" step="0.01" value="0.6">
-                        <label>Friction: <span id="physicsCubeFrictionValue" class="range-value-display"></span></label>
-                        <input type="range" id="physicsCubeFriction" min="0.0" max="1.0" step="0.01" value="0.8">
-                        <label>Gravity Y: <span id="physicsGravityYValue" class="range-value-display"></span></label>
-                        <input type="range" id="physicsGravityY" min="-20.0" max="0.0" step="0.1" value="-9.82">
-
-                        <p class="sub-group-title">INTERACTION</p>
-                        <button id="clearPhysicsCubesButton">Clear All Cubes</button>
-                    </div>
-                </div>
                 
             </div>
         </div>
@@ -822,10 +795,10 @@
                 <label>Radius: <span class="point-deformer-radius-value range-value-display"></span></label>
                 <input type="range" class="point-deformer-radius" min="0.0" max="0.7" step="0.01" value="0.2">
 
-                <label>Position X: <span class="point-deformer-posX-value" class="range-value-display"></span></label>
+                <label>Position X: <span class="point-deformer-posX-value range-value-display"></span></label>
                 <input type="range" id="point-deformer-posX" min="0.0" max="1.0" step="0.01" value="0.5">
 
-                <label>Position Y: <span class="point-deformer-posY-value" class="range-value-display"></span></label>
+                <label>Position Y: <span class="point-deformer-posY-value range-value-display"></span></label>
                 <input type="range" id="point-deformer-posY" min="0.0" max="1.0" step="0.01" value="0.5">
             </div>
         </div>

@@ -3,7 +3,6 @@
 export const Debugger = {
     app: null,
     panelElement: null,
-    enabled: true, // Legacy property, now superseded by vizSettings for visibility
 
     init(appInstance) {
         this.app = appInstance;
@@ -15,13 +14,12 @@ export const Debugger = {
             return;
         }
 
-        // Set initial state from vizSettings
-        this.enabled = this.app.vizSettings.enableOnScreenDebugger;
-        checkbox.checked = this.enabled;
-        this.panelElement.style.display = this.enabled ? 'block' : 'none';
+        // Set initial checkbox state from vizSettings. The update loop will handle visibility.
+        checkbox.checked = this.app.vizSettings.enableOnScreenDebugger;
+        this.panelElement.style.display = this.app.vizSettings.enableOnScreenDebugger ? 'block' : 'none';
 
         checkbox.addEventListener('change', (e) => {
-            // The checkbox now only updates the central setting
+            // The checkbox *only* updates the central setting.
             this.app.vizSettings.enableOnScreenDebugger = e.target.checked;
         });
     },
@@ -29,16 +27,16 @@ export const Debugger = {
     update() {
         if (!this.panelElement) return;
 
-        // ** THE FIX IS HERE: Control visibility every frame based on the global setting **
+        // ** THE FIX IS HERE: The module is now stateless. It reads the global setting every frame. **
         const shouldBeVisible = this.app.vizSettings.enableOnScreenDebugger;
-        const currentDisplay = this.panelElement.style.display;
-        const newDisplay = shouldBeVisible ? 'block' : 'none';
-
-        if (currentDisplay !== newDisplay) {
-            this.panelElement.style.display = newDisplay;
+        
+        // Efficiently update the DOM only when the visibility state changes.
+        const isCurrentlyVisible = this.panelElement.style.display !== 'none';
+        if (isCurrentlyVisible !== shouldBeVisible) {
+            this.panelElement.style.display = shouldBeVisible ? 'block' : 'none';
         }
         
-        // If it's not supposed to be visible, exit early.
+        // If it's not supposed to be visible, exit early to save processing.
         if (!shouldBeVisible) return;
 
 

@@ -12,7 +12,7 @@ import { ImagePlaneManager } from './modules/ImagePlaneManager.js';
 import { ModelManager } from './modules/ModelManager.js';
 import { ComputeManager } from './compute/ComputeManager.js';
 import { GPGPUDebugger } from './modules/GPGPUDebugger.js';
-import { PhysicsManager } from './modules/PhysicsManager.js';
+// REMOVED: import { PhysicsManager } from './modules/PhysicsManager.js';
 
 const App = {
     THREE: THREE, 
@@ -68,7 +68,7 @@ const App = {
     ComputeManager: ComputeManager,
     GPGPUDebugger: GPGPUDebugger,
     Debugger: Debugger,
-    PhysicsManager: PhysicsManager,
+    // REMOVED: PhysicsManager: PhysicsManager,
 
     defaultVisualizerSettings: {
         activeControl: 'landscape',
@@ -185,13 +185,6 @@ const App = {
         gpgpu_enableQbert: false,
         gpgpu_qbertJumpAmount: 1.5,
         gpgpu_qbertFlashChance: 5.0,
-        // NEW: Physics Cubes Settings
-        enablePhysicsCubes: false, // Default to false, will enable via UI
-        physicsCubeCount: 10,
-        physicsCubeSize: 1.0,
-        physicsCubeBounciness: 0.6,
-        physicsCubeFriction: 0.8,
-        physicsGravityY: -9.82,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
@@ -414,7 +407,7 @@ const App = {
             this.ImagePlaneManager.planeResolution.y
         );    
         this.GPGPUDebugger.init(this);   
-        this.PhysicsManager.init(this);  
+        // REMOVED: this.PhysicsManager.init(this);  
         
         this.ambientLight = new THREE.AmbientLight(this.vizSettings.ambientLightColor, 1.0);
         this.scene.add(this.ambientLight);
@@ -441,15 +434,6 @@ const App = {
         this.BackgroundManager.render(); // Ensure background is rendered once for cubeCamera.update to work
         this.GPGPUDebugger.update(); // Initial update for debugger (if enabled)
         
-        // Use a short setTimeout to allow for first frame GPGPU compute/render target update
-        // before physics tries to read from it.
-        setTimeout(() => {
-            this.PhysicsManager.createGroundPlane(); 
-            if (this.vizSettings.enablePhysicsCubes) {
-                this.PhysicsManager.spawnCubes(); 
-            }
-        }, 50); // Small delay to allow initial rendering pass
-
         setTimeout(() => {
             this.preloadDevAssets();
             
@@ -482,7 +466,7 @@ const App = {
                 this.mouseState.x = event.clientX;
                 this.mouseState.y = event.clientY;
             }
-            if (this.GPGPUDebugger && this.GPGPUDebugger.handleMouseMove) {
+            if (this.GPGPUDebugger) {
                 this.GPGPUDebugger.handleMouseMove(event);
             }
         });
@@ -557,7 +541,7 @@ const App = {
         
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
-        this.PhysicsManager.update(cappedDelta);
+        // REMOVED: this.PhysicsManager.update(cappedDelta);
         
         this.CameraManager.update(cappedDelta); 
         

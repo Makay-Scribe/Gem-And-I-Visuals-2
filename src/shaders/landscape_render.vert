@@ -63,44 +63,22 @@ float snoise(vec3 v) {
     return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
 }
 
-
-// ** THE FIX IS HERE: Added a helper function to create a 3x3 rotation matrix **
-mat3 rotationMatrix3(vec3 axis, float angle) {
-    axis = normalize(axis);
-    float s = sin(angle);
-    float c = cos(angle);
-    float oc = 1.0 - c;
-    return mat3(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,
-                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,
-                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c);
-}
-
-
 void main() {
     vUv = uv; 
     vTriangleId = triangleId;
     
     vec3 transformedPosition;
 
-    // ** THE FIX IS HERE: Clean if/else if structure and added rotation logic **
+    // ** THE FIX IS HERE: Simplified Triangle Wave logic to only do Z-displacement **
     if (u_gpgpu_enableTriangleWave) {
         transformedPosition = position;
-        vec3 center = triangleCenter;
         
-        // Calculate the wave displacement, same as before
+        // Calculate the wave displacement using noise, same as before
         vec3 noiseCoord = vec3(mod(vTriangleId, 128.0) * 0.1, floor(vTriangleId / 128.0) * 0.1, u_time * u_gpgpu_triWaveSpeed);
         float wave = snoise(noiseCoord * u_gpgpu_triWaveFrequency) * u_gpgpu_triWaveAmplitude;
         
+        // Apply the displacement only to the Z coordinate
         transformedPosition.z += wave;
-
-        // NEW: Calculate and apply rotation
-        // Create a rotation axis that itself rotates over time for more dynamic motion
-        vec3 rotAxis = normalize(vec3(cos(u_time * 0.5), sin(u_time * 0.5), 0.0));
-        // Use the same wave value to drive the rotation amount
-        mat3 rotMat = rotationMatrix3(rotAxis, wave * 0.1); 
-        
-        // Apply the rotation around the triangle's center point
-        transformedPosition = rotMat * (transformedPosition - center) + center;
 
     } else {
         // Default GPGPU behavior for all other effects

@@ -78,7 +78,7 @@ export const ImagePlaneManager = {
         this.state.targetPosition.copy(this.state.homePosition);
         this.landscapeContainer = new this.app.THREE.Group(); // Use app.THREE
         this.app.scene.add(this.landscapeContainer);
-        // this.createDefaultLandscape(); // Removed: Called explicitly by main.js now
+        // this.createDefaultLandscape(); // Called explicitly by main.js now
     },
 
     startAutopilot(presetId) {
@@ -203,10 +203,6 @@ export const ImagePlaneManager = {
             if (this.landscape.geometry) this.landscape.geometry.dispose();
             if (this.landscapeMaterial) this.landscapeMaterial.dispose();
         }
-
-        // Removed: this.app.ComputeManager.init(...)
-        // Removed: if (this.app.PhysicsManager) { this.app.PhysicsManager.createGroundPlane(); }
-        // These will now be called explicitly from main.js after ALL managers are initialized.
         
         let landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
 

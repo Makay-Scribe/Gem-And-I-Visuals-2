@@ -53,15 +53,15 @@ export const GPGPUDebugger = {
     pixelValueDisplay: null,
     debugView: 'position',
 
-    // --- NEW PIXEL INSPECTOR PROPERTIES ---
+    // --- PIXEL INSPECTOR PROPERTIES ---
     isMouseOver: false,
-    mouse: null, // Initialize as null, will be set in init
-    pixelBuffer: new Float32Array(4), // This can be initialized here as it doesn't depend on Three.js
+    mouse: null, 
+    pixelBuffer: new Float32Array(4),
     
     init(appInstance) {
         this.app = appInstance;
 
-        // Initialize properties that depend on this.app.THREE here
+        // Initialize properties that depend on app.THREE here
         this.mouse = new this.app.THREE.Vector2(); 
 
         if (!this.app.ComputeManager || !this.app.ComputeManager.gpuCompute) {
@@ -102,14 +102,14 @@ export const GPGPUDebugger = {
         console.log("GPGPU Debugger initialized with selectable views.");
     },
 
-    // --- NEW MOUSE HANDLING FUNCTION ---
+    // --- MOUSE HANDLING FUNCTION ---
     handleMouseMove(event) {
         if (!this.mesh || !this.app.vizSettings.enableGPGPUDebugger) {
             this.isMouseOver = false;
             return;
         }
 
-        // Convert mouse from screen coords to NDC (-1 to 1)
+        // Convert mouse from screen coordinates to Normalized Device Coordinates (NDC: -1 to 1)
         const mouseNDC = new this.app.THREE.Vector2(
             (event.clientX / window.innerWidth) * 2 - 1,
             -(event.clientY / window.innerHeight) * 2 + 1
@@ -125,7 +125,7 @@ export const GPGPUDebugger = {
 
         if (planeBox.containsPoint(mouseNDC)) {
             this.isMouseOver = true;
-            // Calculate the mouse position *within* the plane, from 0.0 to 1.0
+            // Calculate the mouse position *within* the debug plane, from 0.0 to 1.0 (local UV)
             this.mouse.x = (mouseNDC.x - planeBox.min.x) / planeSizeNDC.width;
             this.mouse.y = (mouseNDC.y - planeBox.min.y) / planeSizeNDC.height;
         } else {
@@ -169,7 +169,7 @@ export const GPGPUDebugger = {
             this.mesh.material.uniforms.u_debugMode.value = debugModeValue;
             this.mesh.material.uniforms.u_planeDimensions.value = this.app.ImagePlaneManager.planeDimensions;
 
-            // --- NEW PIXEL READING LOGIC ---
+            // --- PIXEL READING LOGIC ---
             if (this.isMouseOver) {
                 const C = this.app.ComputeManager;
                 const texelX = Math.floor(this.mouse.x * C.WIDTH);
@@ -190,6 +190,7 @@ export const GPGPUDebugger = {
                 }
 
             } else {
+                 // If the mouse is not over the plane, ensure the UI display is reset.
                  if (this.app.UIManager.isDisplayingPixelValue) {
                      this.app.UIManager.resetGPGPUPixelValue();
                  }
