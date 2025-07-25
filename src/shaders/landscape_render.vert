@@ -8,13 +8,13 @@ uniform float u_gpgpu_triWaveSpeed;
 
 attribute vec2 uv_gpgpu; // Custom UV attribute to sample GPGPU textures
 attribute float triangleId; // Custom attribute to identify each triangle
-attribute vec3 triangleCenter; // Receive the pre-calculated center
 
 varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
 varying float vTriangleId;
 
+// Simplex Noise function (for Triangle Wave)
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -69,7 +69,6 @@ void main() {
     
     vec3 transformedPosition;
 
-    // ** THE FIX IS HERE: Simplified Triangle Wave logic to only do Z-displacement **
     if (u_gpgpu_enableTriangleWave) {
         transformedPosition = position;
         

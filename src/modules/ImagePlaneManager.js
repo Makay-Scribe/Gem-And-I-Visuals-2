@@ -288,8 +288,6 @@ export const ImagePlaneManager = {
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
 
-        // ComputeManager's gpuCompute will be initialized by main.js BEFORE this is called the first time.
-        // So positionRenderTarget.texture should be available.
         const positionRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
         
         this.landscapeMaterial = new this.app.THREE.ShaderMaterial({
@@ -323,9 +321,6 @@ export const ImagePlaneManager = {
                 u_gpgpu_triWaveAmplitude: { value: S.gpgpu_triWaveAmplitude },
                 u_gpgpu_triWaveFrequency: { value: S.gpgpu_triWaveFrequency },
                 u_gpgpu_triWaveSpeed: { value: S.gpgpu_triWaveSpeed },
-                u_gpgpu_enableQbert: { value: S.gpgpu_enableQbert },
-                u_gpgpu_qbertJumpAmount: { value: S.gpgpu_qbertJumpAmount },
-                u_gpgpu_qbertFlashChance: { value: S.gpgpu_qbertFlashChance / 100.0 },
             },
             vertexShader: landscapeRenderVertexShader,
             fragmentShader: landscapeRenderFragmentShader,
@@ -376,10 +371,10 @@ export const ImagePlaneManager = {
         
         U.u_time.value = this.app.currentTime;
 
-        if (S.deformationEngine === 'gpgpu' && !S.gpgpu_enableTriangleWave && !S.gpgpu_enableQbert) {
-            const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
-            U.u_positionTexture.value = positionTarget.texture;
-        }
+        // The position texture is always updated, as it's the output of the GPGPU simulation.
+        // The vertex shader will decide whether to use it or not.
+        const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+        U.u_positionTexture.value = positionTarget.texture;
         
         U.u_audioLow.value = this.app.AudioProcessor.energy.low;
         U.u_audioBeat.value = this.app.AudioProcessor.triggers.beat ? 1.0 : 0.0;
@@ -414,12 +409,6 @@ export const ImagePlaneManager = {
             U.u_gpgpu_triWaveAmplitude.value = S.gpgpu_triWaveAmplitude;
             U.u_gpgpu_triWaveFrequency.value = S.gpgpu_triWaveFrequency;
             U.u_gpgpu_triWaveSpeed.value = S.gpgpu_triWaveSpeed;
-        }
-
-        U.u_gpgpu_enableQbert.value = S.gpgpu_enableQbert;
-        if (S.gpgpu_enableQbert) {
-            U.u_gpgpu_qbertJumpAmount.value = S.gpgpu_qbertJumpAmount;
-            U.u_gpgpu_qbertFlashChance.value = S.gpgpu_qbertFlashChance / 100.0;
         }
     },
 

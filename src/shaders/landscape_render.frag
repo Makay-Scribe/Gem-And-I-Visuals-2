@@ -28,11 +28,6 @@ uniform float u_imageEffect_joltStrength;
 uniform float u_imageEffect_joltSpeed;
 uniform float u_imageEffect_joltAudioInfluence;
 
-
-// TENDRIL GLOW UNIFORMS
-uniform bool u_gpgpu_enableTendrils;
-uniform float u_gpgpu_tendrilGlowFalloff;
-
 // TRIANGLE WAVE RENDER UNIFORMS
 uniform bool u_gpgpu_enableTriangleWave;
 uniform vec3 u_gpgpu_triWaveColor1;
@@ -113,13 +108,7 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 void main() {
     vec2 workingUV = vUv;
     
-    if (u_gpgpu_enableTriangleWave) {
-        // Since UVs are standard, but the faceted geometry is rendered,
-        // we flip the Y coordinate to match expectations if needed.
-        // This line is often useful for faceted/non-indexed geometry.
-        workingUV.y = 1.0 - workingUV.y;
-    }
-    
+    // Image effects modify the UV coordinates before texturing
     if (u_imageEffect_enableBalloon) {
         float audioMod = u_audioLow * u_imageEffect_audioInfluence;
         workingUV = balloonLensEffect(workingUV, u_imageEffect_point, audioMod, u_imageEffect_strength, u_imageEffect_radius);
@@ -129,14 +118,15 @@ void main() {
         workingUV = textureJoltEffect(workingUV, u_time, u_audioLow, u_imageEffect_joltStrength, u_imageEffect_joltSpeed, u_imageEffect_joltAudioInfluence);
     }
 
-
-    vec3 albedo = texture2D(u_map, workingUV).rgb;
-    
-    // ** THE FIX IS HERE: The PBR lighting logic is now unified for ALL cases. **
-    // The normal (N) is calculated differently depending on the mode, but the lighting code is the same.
-    
+    vec3 albedo;
     vec3 N; // The final normal used for lighting
+    
     if (u_gpgpu_enableTriangleWave) {
+        // ** THE FIX IS HERE: Flip the Y-coordinate for the texture **
+        workingUV.y = 1.0 - workingUV.y;
+
+        albedo = texture2D(u_map, workingUV).rgb;
+
         // For the faceted Triangle Wave, calculate the flat face normal on the fly using derivatives.
         N = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
         
@@ -145,6 +135,7 @@ void main() {
         vec3 baseColor = mix(u_gpgpu_triWaveColor1, u_gpgpu_triWaveColor2, isEven);
         albedo *= baseColor;
     } else {
+        albedo = texture2D(u_map, workingUV).rgb;
         // For the standard GPGPU-driven plane, use the smooth interpolated normal from the vertex shader.
         N = normalize(vWorldNormal);
     }
@@ -176,13 +167,6 @@ void main() {
     vec3 ambient = (kD * envColor * albedo) + (specular * envColor);
     
     vec3 color = Lo + ambient + u_ambientLightColor * albedo;
-
-    if (u_gpgpu_enableTendrils) {
-        float glowAmount = smoothstep(1.0 - u_gpgpu_tendrilGlowFalloff, 1.0, vUv.y);
-        vec3 glowColor = vec3(1.0, 1.0, 1.0); // White glow
-        color = mix(color, glowColor, glowAmount); // Mix the glow color in
-        color += glowColor * glowAmount * 2.0; // Additive emissive glow
-    }
 
     // Basic tone mapping and gamma correction
     color = color / (color + vec3(1.0));
