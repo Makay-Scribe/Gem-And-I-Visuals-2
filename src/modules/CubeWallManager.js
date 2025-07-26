@@ -82,9 +82,12 @@ export const CubeWallManager = {
         const initialPlayerPos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
         
         if (initialPlayerPos) {
-            const cubeSize = this._getCubeSize() * 0.9;
+            const landscapeCubeSize = this._getCubeSize();
+            const playerCubeSize = landscapeCubeSize * 0.9;
+            const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
+
             this.playerCube.position.copy(initialPlayerPos);
-            this.playerCube.position.z += cubeSize / 2;
+            this.playerCube.position.z += zOffset;
             this.playerCube.quaternion.identity();
         }
         
@@ -136,15 +139,17 @@ export const CubeWallManager = {
         this.playerGridPos.y += nextMove.dy;
 
         const targetPos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
-        const cubeSize = this._getCubeSize() * 0.9;
+        const landscapeCubeSize = this._getCubeSize();
+        const playerCubeSize = landscapeCubeSize * 0.9;
+        const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
+        
         state.targetPosition.copy(targetPos);
-        state.targetPosition.z += cubeSize / 2;
+        state.targetPosition.z += zOffset;
         
         const rotationAxis = new THREE.Vector3();
         if (nextMove.dx !== 0) rotationAxis.set(0, nextMove.dx, 0);
         else if (nextMove.dy !== 0) rotationAxis.set(-nextMove.dy, 0, 0);
         
-        // ** THE FIX IS HERE: The angle is now positive to ensure a forward roll. **
         const rollQuaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis.normalize(), Math.PI / 2);
         
         state.targetQuaternion.copy(rollQuaternion).multiply(state.startQuaternion);
@@ -156,20 +161,21 @@ export const CubeWallManager = {
 
         const state = this.animationState;
         
-        // This is a placeholder for checking if the slider is active. The actual implementation
-        // will depend on how you track UI interaction state globally. For now, we'll assume a flag exists.
         const isSliderActive = false; // TODO: Replace with actual check, e.g., this.app.UIManager.isMorphSliderActive
 
         if (state.isMoving && !isSliderActive) {
             const progress = Math.min(1, (performance.now() - state.startTime) / this.PLAYER_MOVE_DURATION);
             
-            const cubeSize = this._getCubeSize() * 0.9;
+            const landscapeCubeSize = this._getCubeSize();
+            const playerCubeSize = landscapeCubeSize * 0.9;
+            const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
+
             const targetLandscapeZ = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y).z;
-            state.targetPosition.z = targetLandscapeZ + cubeSize / 2;
+            state.targetPosition.z = targetLandscapeZ + zOffset;
 
             const tempPosition = new THREE.Vector3().lerpVectors(state.startPosition, state.targetPosition, progress);
             
-            tempPosition.z += this.PLAYER_ROLL_LIFT_AMOUNT * this._getCubeSize() * Math.sin(progress * Math.PI);
+            tempPosition.z += this.PLAYER_ROLL_LIFT_AMOUNT * landscapeCubeSize * Math.sin(progress * Math.PI);
             this.playerCube.position.copy(tempPosition);
             
             this.playerCube.quaternion.slerpQuaternions(state.startQuaternion, state.targetQuaternion, progress);
@@ -184,9 +190,12 @@ export const CubeWallManager = {
             }
         } else {
             if (this.playerCube && !state.isMoving) {
-                 const currentLandscapeZ = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y).z;
-                 const cubeSize = this._getCubeSize() * 0.9;
-                 this.playerCube.position.z = currentLandscapeZ + cubeSize / 2;
+                const landscapeCubeSize = this._getCubeSize();
+                const playerCubeSize = landscapeCubeSize * 0.9;
+                const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
+                 
+                const currentLandscapeZ = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y).z;
+                this.playerCube.position.z = currentLandscapeZ + zOffset;
             }
         }
     }
