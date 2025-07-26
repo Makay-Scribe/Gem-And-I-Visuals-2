@@ -175,14 +175,14 @@ const App = {
         gpgpu_triWaveSpeed: 1.0,
         gpgpu_triWaveColor1: '#ffffff',
         gpgpu_triWaveColor2: '#ffffff',
-        // --- NEW CUBEWALL SETTINGS ---
+        // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,
-        gpgpu_cubeWallMorph: 0.0,
+        gpgpu_cubeWallMorph: 1.0,
         gpgpu_cubeWallUseImageTexture: false,
         gpgpu_cubeWallSideColor: '#4a586a',
-        gpgpu_cubeWallBevelWidth: 0.02,
-        gpgpu_cubeWallBevelIntensity: 0.5,
+        gpgpu_cubeWallBevelWidth: 0.1,
+        gpgpu_cubeWallBevelIntensity: 1.0,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",

@@ -42,70 +42,89 @@ export const CubeWallManager = {
     _createPlayerCube() {
         if (this.playerCube) {
             this.playerCube.geometry.dispose();
-            this.playerCube.material.dispose();
+            // If material is an array, dispose each one
+            if (Array.isArray(this.playerCube.material)) {
+                this.playerCube.material.forEach(m => m.dispose());
+            } else {
+                this.playerCube.material.dispose();
+            }
             this.playerCube.removeFromParent();
         }
         const cubeSize = this._getCubeSize() * 0.9;
         const playerGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
         
-        const playerMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xe2e8f0,
-            metalness: this.app.vizSettings.metalness,
-            roughness: this.app.vizSettings.roughness,
+        // ** THE FIX IS HERE: Create an array of materials for each face **
+        const textureLoader = new THREE.TextureLoader();
+        const facePaths = [
+            '/Devmedia/playercuberight.png',
+            '/Devmedia/playercubeleft.png',
+            '/Devmedia/playercubetop.png',
+            '/Devmedia/playercubebottom.png',
+            '/Devmedia/playercubefront.png',
+            '/Devmedia/playercubeback.png'
+        ];
+
+        const materials = facePaths.map(path => {
+            const texture = textureLoader.load(path);
+            texture.colorSpace = THREE.SRGBColorSpace; // Assume standard color space for UI images
+
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff, // White color to not tint the texture
+                map: texture,
+                metalness: this.app.vizSettings.metalness,
+                roughness: this.app.vizSettings.roughness,
+            });
+
+            // Apply the same bevel shader logic to each material
+            material.onBeforeCompile = (shader) => {
+                shader.uniforms.u_gpgpu_enableCubeWall = { value: this.app.vizSettings.gpgpu_enableCubeWall };
+                shader.uniforms.u_gpgpu_cubeWallBevelWidth = { value: this.app.vizSettings.gpgpu_cubeWallBevelWidth };
+                shader.uniforms.u_gpgpu_cubeWallBevelIntensity = { value: this.app.vizSettings.gpgpu_cubeWallBevelIntensity };
+
+                shader.vertexShader = 'varying vec2 vUv;\n' + shader.vertexShader;
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <begin_vertex>',
+                    '#include <begin_vertex>\n\tvUv = uv;'
+                );
+
+                shader.fragmentShader = `
+                    uniform bool u_gpgpu_enableCubeWall;
+                    uniform float u_gpgpu_cubeWallBevelWidth;
+                    uniform float u_gpgpu_cubeWallBevelIntensity;
+                    varying vec2 vUv; 
+
+                    vec3 getBeveledNormal(vec3 originalNormal, vec2 faceUV, float bevelWidth, float bevelIntensity) {
+                        if (bevelWidth <= 0.0 || bevelIntensity <= 0.0) { return originalNormal; }
+                        vec2 dist_to_center = abs(faceUV - 0.5);
+                        float dist_to_edge = 0.5 - max(dist_to_center.x, dist_to_center.y);
+                        float bevel_factor = smoothstep(0.0, bevelWidth, dist_to_edge);
+                        if (bevel_factor >= 1.0) { return originalNormal; }
+                        vec2 edge_dir = step(dist_to_center.y, dist_to_center.x) * vec2(1.0, 0.0) + (1.0 - step(dist_to_center.y, dist_to_center.x)) * vec2(0.0, 1.0);
+                        edge_dir *= sign(faceUV - 0.5);
+                        vec3 tangent = (abs(originalNormal.z) > 0.9) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+                        if (abs(originalNormal.y) > 0.9) tangent = vec3(1.0, 0.0, 0.0);
+                        vec3 bitangent = cross(originalNormal, tangent);
+                        vec3 bevel_normal_local = normalize(originalNormal + (tangent * edge_dir.x + bitangent * edge_dir.y) * bevelIntensity);
+                        return normalize(mix(bevel_normal_local, originalNormal, bevel_factor));
+                    }
+                ` + shader.fragmentShader;
+
+                const normalCalculationHook = '#include <normal_fragment_maps>';
+                const bevelLogic = `
+                    if (u_gpgpu_enableCubeWall) {
+                        normal = getBeveledNormal(normal, vUv, u_gpgpu_cubeWallBevelWidth, u_gpgpu_cubeWallBevelIntensity);
+                    }
+                `;
+                shader.fragmentShader = shader.fragmentShader.replace(normalCalculationHook, normalCalculationHook + '\n' + bevelLogic);
+
+                material.userData.shader = shader;
+            };
+
+            return material;
         });
 
-        playerMaterial.onBeforeCompile = (shader) => {
-            shader.uniforms.u_gpgpu_enableCubeWall = { value: this.app.vizSettings.gpgpu_enableCubeWall };
-            shader.uniforms.u_gpgpu_cubeWallBevelWidth = { value: this.app.vizSettings.gpgpu_cubeWallBevelWidth };
-            shader.uniforms.u_gpgpu_cubeWallBevelIntensity = { value: this.app.vizSettings.gpgpu_cubeWallBevelIntensity };
 
-            shader.vertexShader = 'varying vec2 vUv;\n' + shader.vertexShader;
-            shader.vertexShader = shader.vertexShader.replace(
-                '#include <begin_vertex>',
-                '#include <begin_vertex>\n\tvUv = uv;'
-            );
-
-            shader.fragmentShader = `
-                uniform bool u_gpgpu_enableCubeWall;
-                uniform float u_gpgpu_cubeWallBevelWidth;
-                uniform float u_gpgpu_cubeWallBevelIntensity;
-                varying vec2 vUv; 
-
-                vec3 getBeveledNormal(vec3 originalNormal, vec2 faceUV, float bevelWidth, float bevelIntensity) {
-                    if (bevelWidth <= 0.0 || bevelIntensity <= 0.0) {
-                        return originalNormal;
-                    }
-                    vec2 dist_to_center = abs(faceUV - 0.5);
-                    float dist_to_edge = 0.5 - max(dist_to_center.x, dist_to_center.y);
-                    float bevel_factor = smoothstep(0.0, bevelWidth, dist_to_edge);
-                    if (bevel_factor >= 1.0) {
-                        return originalNormal;
-                    }
-                    vec2 edge_dir = step(dist_to_center.y, dist_to_center.x) * vec2(1.0, 0.0) + (1.0 - step(dist_to_center.y, dist_to_center.x)) * vec2(0.0, 1.0);
-                    edge_dir *= sign(faceUV - 0.5);
-                    
-                    vec3 tangent = (abs(originalNormal.z) > 0.9) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
-                    if (abs(originalNormal.y) > 0.9) tangent = vec3(1.0, 0.0, 0.0);
-                    vec3 bitangent = cross(originalNormal, tangent);
-                    vec3 bevel_normal_local = normalize(originalNormal + (tangent * edge_dir.x + bitangent * edge_dir.y) * bevelIntensity);
-                    return normalize(mix(bevel_normal_local, originalNormal, bevel_factor));
-                }
-            ` + shader.fragmentShader;
-
-            const normalCalculationHook = '#include <normal_fragment_maps>';
-            
-            const bevelLogic = `
-                if (u_gpgpu_enableCubeWall) {
-                    normal = getBeveledNormal(normal, vUv, u_gpgpu_cubeWallBevelWidth, u_gpgpu_cubeWallBevelIntensity);
-                }
-            `;
-            shader.fragmentShader = shader.fragmentShader.replace(normalCalculationHook, normalCalculationHook + '\n' + bevelLogic);
-
-            playerMaterial.userData.shader = shader;
-        };
-
-
-        this.playerCube = new THREE.Mesh(playerGeometry, playerMaterial);
+        this.playerCube = new THREE.Mesh(playerGeometry, materials);
         
         this.app.ImagePlaneManager.landscapeContainer.add(this.playerCube);
     },
@@ -216,16 +235,20 @@ export const CubeWallManager = {
         const S = this.app.vizSettings;
         if (!this.playerCube || !this.playerCube.visible || !S.gpgpu_enableCubeWall) return;
 
-        this.playerCube.material.roughness = S.roughness;
-        this.playerCube.material.metalness = S.metalness;
-        // ** THE FIX IS HERE: Sync the reflection strength **
-        this.playerCube.material.envMapIntensity = S.reflectionStrength;
+        // ** THE FIX IS HERE: Update the array of materials **
+        if (Array.isArray(this.playerCube.material)) {
+            this.playerCube.material.forEach(material => {
+                material.roughness = S.roughness;
+                material.metalness = S.metalness;
+                material.envMapIntensity = S.reflectionStrength;
 
-        if (this.playerCube.material.userData.shader) {
-            const shaderUniforms = this.playerCube.material.userData.shader.uniforms;
-            shaderUniforms.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
-            shaderUniforms.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
-            shaderUniforms.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;
+                if (material.userData.shader) {
+                    const shaderUniforms = material.userData.shader.uniforms;
+                    shaderUniforms.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
+                    shaderUniforms.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
+                    shaderUniforms.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;
+                }
+            });
         }
 
         const state = this.animationState;
