@@ -47,7 +47,12 @@ export const CubeWallManager = {
         }
         const cubeSize = this._getCubeSize() * 0.9;
         const playerGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-        const playerMaterial = new THREE.MeshPhongMaterial({ color: 0xe2e8f0, emissive: 0x1a202c });
+        // ** THE FIX IS HERE: Upgraded to the PBR-compatible material **
+        const playerMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xe2e8f0,
+            metalness: this.app.vizSettings.metalness,
+            roughness: this.app.vizSettings.roughness,
+        });
         this.playerCube = new THREE.Mesh(playerGeometry, playerMaterial);
         
         this.app.ImagePlaneManager.landscapeContainer.add(this.playerCube);
@@ -159,8 +164,14 @@ export const CubeWallManager = {
         const S = this.app.vizSettings;
         if (!this.playerCube || !this.playerCube.visible || !S.gpgpu_enableCubeWall) return;
 
+        // ** THE FIX IS HERE: Sync player cube material with global settings **
+        this.playerCube.material.roughness = S.roughness;
+        this.playerCube.material.metalness = S.metalness;
+
         const state = this.animationState;
         
+        // This is a placeholder for checking if the slider is active. The actual implementation
+        // will depend on how you track UI interaction state globally. For now, we'll assume a flag exists.
         const isSliderActive = false; // TODO: Replace with actual check, e.g., this.app.UIManager.isMorphSliderActive
 
         if (state.isMoving && !isSliderActive) {
