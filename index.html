@@ -291,8 +291,33 @@
                 <label for="gpgpuGeometryMode">Geometry Mode</label>
                 <select id="gpgpuGeometryMode">
                     <option value="continuous">Continuous</option>
-                    <option value="faceted" selected>Faceted (Non-Indexed)</option>
+                    <option value="faceted">Faceted</option>
+                    <option value="geocube">GeoCube</option>
                 </select>
+
+                <div class="accordion-item">
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">CubeWall</button>
+                        <input type="checkbox" id="gpgpu_enableCubeWall" class="header-toggle-checkbox">
+                    </div>
+                    <div class="accordion-content">
+                        <!-- Corrected: Labels are now swapped -->
+                        <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
+                            <span>Flat</span>
+                            <span>Stepped</span>
+                        </div>
+                        <label>Morph: <span id="gpgpu_cubeWallMorphValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_cubeWallMorph" min="0.0" max="1.0" step="0.01" value="0.0">
+                        
+                        <div class="checkbox-label-container">
+                            <label for="gpgpu_cubeWallUseImageTexture">Use Image Texture</label>
+                            <input type="checkbox" id="gpgpu_cubeWallUseImageTexture">
+                        </div>
+                        
+                        <label for="gpgpu_cubeWallSideColor">Side Color:</label>
+                        <input type="color" id="gpgpu_cubeWallSideColor" value="#4a586a">
+                    </div>
+                </div>
 
                 <div class="accordion-item">
                     <div class="accordion-header-with-toggle">

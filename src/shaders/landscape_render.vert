@@ -13,6 +13,7 @@ varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
 varying float vTriangleId;
+varying vec3 vLocalNormal; // DECLARE THE MISSING VARYING
 
 // Simplex Noise function (for Triangle Wave)
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -66,21 +67,19 @@ float snoise(vec3 v) {
 void main() {
     vUv = uv; 
     vTriangleId = triangleId;
+    vLocalNormal = normal; // ASSIGN A VALUE TO THE VARYING
     
     vec3 transformedPosition;
 
     if (u_gpgpu_enableTriangleWave) {
         transformedPosition = position;
         
-        // Calculate the wave displacement using noise, same as before
         vec3 noiseCoord = vec3(mod(vTriangleId, 128.0) * 0.1, floor(vTriangleId / 128.0) * 0.1, u_time * u_gpgpu_triWaveSpeed);
         float wave = snoise(noiseCoord * u_gpgpu_triWaveFrequency) * u_gpgpu_triWaveAmplitude;
         
-        // Apply the displacement only to the Z coordinate
         transformedPosition.z += wave;
 
     } else {
-        // Default GPGPU behavior for all other effects
         vec4 gpgpu_pos_data = texture2D(u_positionTexture, uv_gpgpu);
         transformedPosition = gpgpu_pos_data.xyz;
     }
@@ -88,9 +87,6 @@ void main() {
     vec4 worldPos4 = modelMatrix * vec4(transformedPosition, 1.0);
     vWorldPosition = worldPos4.xyz;
 
-    // We calculate the normal based on the original model normal. 
-    // For the Triangle Wave, lighting is handled in the fragment shader.
-    // For GPGPU, this provides a base normal.
     vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
 
     gl_Position = projectionMatrix * viewMatrix * worldPos4;

@@ -12,7 +12,7 @@ import { ImagePlaneManager } from './modules/ImagePlaneManager.js';
 import { ModelManager } from './modules/ModelManager.js';
 import { ComputeManager } from './compute/ComputeManager.js';
 import { GPGPUDebugger } from './modules/GPGPUDebugger.js';
-// REMOVED: import { PhysicsManager } from './modules/PhysicsManager.js';
+import { CubeWallManager } from './modules/CubeWallManager.js';
 
 const App = {
     THREE: THREE, 
@@ -67,8 +67,8 @@ const App = {
     ModelManager: ModelManager,
     ComputeManager: ComputeManager,
     GPGPUDebugger: GPGPUDebugger,
+    CubeWallManager: CubeWallManager,
     Debugger: Debugger,
-    // REMOVED: PhysicsManager: PhysicsManager,
 
     defaultVisualizerSettings: {
         activeControl: 'landscape',
@@ -175,6 +175,12 @@ const App = {
         gpgpu_triWaveSpeed: 1.0,
         gpgpu_triWaveColor1: '#ffffff',
         gpgpu_triWaveColor2: '#ffffff',
+        // --- NEW CUBEWALL SETTINGS ---
+        gpgpu_cubeWallGridSize: 10, // Define the grid size here
+        gpgpu_enableCubeWall: false,
+        gpgpu_cubeWallMorph: 0.0,
+        gpgpu_cubeWallUseImageTexture: false,
+        gpgpu_cubeWallSideColor: '#4a586a',
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
@@ -381,7 +387,7 @@ const App = {
 
         // Phase 1: Initialize all managers (assign this.app)
         this.SceneManager.init(this);
-        this.BackgroundManager.init(this); // BackgroundManager also uses renderer
+        this.BackgroundManager.init(this);
         this.CameraManager.init(this);
         this.AudioProcessor.init(this);
         this.ButterchurnManager.init(this);
@@ -389,7 +395,8 @@ const App = {
         this.Debugger.init(this);
         this.UIManager.init(this); 
         this.ImagePlaneManager.init(this); 
-        // Pass the required plane dimensions and resolution to ComputeManager
+        this.CubeWallManager.init(this);
+        
         this.ComputeManager.init(this, 
             this.ImagePlaneManager.planeDimensions.x, 
             this.ImagePlaneManager.planeDimensions.y, 
@@ -397,7 +404,6 @@ const App = {
             this.ImagePlaneManager.planeResolution.y
         );    
         this.GPGPUDebugger.init(this);   
-        // REMOVED: this.PhysicsManager.init(this);  
         
         this.ambientLight = new THREE.AmbientLight(this.vizSettings.ambientLightColor, 1.0);
         this.scene.add(this.ambientLight);
@@ -421,8 +427,8 @@ const App = {
 
         // Phase 2: Trigger initial setup methods that depend on ALL managers being initialized.
         this.ImagePlaneManager.createDefaultLandscape(); 
-        this.BackgroundManager.render(); // Ensure background is rendered once for cubeCamera.update to work
-        this.GPGPUDebugger.update(); // Initial update for debugger (if enabled)
+        this.BackgroundManager.render(); 
+        this.GPGPUDebugger.update(); 
         
         setTimeout(() => {
             this.preloadDevAssets();
@@ -531,7 +537,7 @@ const App = {
         
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
-        // REMOVED: this.PhysicsManager.update(cappedDelta);
+        this.CubeWallManager.update();
         
         this.CameraManager.update(cappedDelta); 
         
