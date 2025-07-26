@@ -21,8 +21,11 @@ uniform vec3 u_gpgpu_triWaveColor1;
 uniform vec3 u_gpgpu_triWaveColor2;
 
 // CUBEWALL UNIFORMS
+uniform bool u_gpgpu_enableCubeWall;
 uniform vec3 u_gpgpu_cubeWallSideColor;
-
+uniform float u_gpgpu_cubeWallBevelWidth;
+uniform float u_gpgpu_cubeWallBevelIntensity;
+uniform vec2 u_gpgpu_cubeWallGridSize;
 
 // Data from vertex shader
 varying vec2 vUv;
@@ -32,6 +35,27 @@ varying float vTriangleId;
 varying vec3 vLocalNormal;
 
 #define PI 3.14159265359
+
+// --- BEVEL FUNCTION ---
+vec3 getBeveledNormal(vec3 originalNormal, vec2 faceUV, float bevelWidth, float bevelIntensity) {
+    if (bevelWidth <= 0.0 || bevelIntensity <= 0.0) {
+        return originalNormal;
+    }
+    vec2 dist_to_center = abs(faceUV - 0.5);
+    float dist_to_edge = 0.5 - max(dist_to_center.x, dist_to_center.y);
+    float bevel_factor = smoothstep(0.0, bevelWidth, dist_to_edge);
+    if (bevel_factor >= 1.0) {
+        return originalNormal;
+    }
+    vec2 edge_dir = step(dist_to_center.y, dist_to_center.x) * vec2(1.0, 0.0) + (1.0 - step(dist_to_center.y, dist_to_center.x)) * vec2(0.0, 1.0);
+    edge_dir *= sign(faceUV - 0.5);
+    vec3 tangent = (abs(originalNormal.z) > 0.9) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+    if (abs(originalNormal.y) > 0.9) tangent = vec3(1.0, 0.0, 0.0);
+    vec3 bitangent = cross(originalNormal, tangent);
+    vec3 bevel_normal_local = normalize(originalNormal + (tangent * edge_dir.x + bitangent * edge_dir.y) * bevelIntensity);
+    return normalize(mix(bevel_normal_local, originalNormal, bevel_factor));
+}
+
 
 // PBR lighting functions (unchanged)
 vec3 fresnelSchlick(float cosTheta, vec3 F0) { return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0); }
@@ -44,10 +68,18 @@ void main() {
     vec3 albedo;
     vec3 N = normalize(vWorldNormal);
 
-    // --- A clear, structured path for each geometry mode ---
+    // --- BEVEL EFFECT (CONDITIONAL) ---
+    // ** THE FIX IS HERE: Only run bevel logic if the effect is enabled. **
+    if (u_gpgpu_enableCubeWall) {
+        bool isCubeFace = abs(vLocalNormal.z) > 0.9 || abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9;
+        if (isCubeFace) {
+            vec2 faceUV = fract(vUv * u_gpgpu_cubeWallGridSize);
+            N = getBeveledNormal(N, faceUV, u_gpgpu_cubeWallBevelWidth, u_gpgpu_cubeWallBevelIntensity);
+        }
+    }
 
+    // --- ALBEDO (COLOR) LOGIC ---
     if (u_gpgpu_enableTriangleWave) {
-        // --- Path 1: Triangle Wave (Faceted Plane) ---
         workingUV.y = 1.0 - workingUV.y;
         albedo = texture2D(u_map, workingUV).rgb;
         N = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
@@ -57,33 +89,24 @@ void main() {
         albedo *= baseColor;
 
     } else if (abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9) {
-        // --- Path 2: GeoCube Sides ---
-        // This condition is only true for the X and Y faces of a cube.
         albedo = u_gpgpu_cubeWallSideColor;
 
     } else if (abs(vLocalNormal.z) > 0.9) {
-        // --- Path 3: GeoCube Front/Back or a Standard Plane ---
-        // ** THE FIX IS HERE: Differentiate between a plane and a cube's front face **
         bool isPlane = (vLocalNormal.x == 0.0 && vLocalNormal.y == 0.0);
-        
         if (isPlane) {
-             // If it's a plane, always use the texture.
             albedo = texture2D(u_map, workingUV).rgb;
         } else {
-            // If it's a cube face, check the toggle.
             if (gpgpu_cubeWallUseImageTexture) {
                 albedo = texture2D(u_map, workingUV).rgb;
             } else {
-                albedo = vec3(0.1); // Fallback color for cube front face when texture is off
+                albedo = vec3(0.1);
             }
         }
-
     } else {
-        // --- Fallback / Default Path (for Continuous Plane) ---
         albedo = texture2D(u_map, workingUV).rgb;
     }
     
-    // --- The rest is standard PBR lighting for all modes ---
+    // --- PBR LIGHTING CALCULATION (now uses potentially modified normal 'N') ---
     float metalness = u_metalness;
     float roughness = u_roughness;
     

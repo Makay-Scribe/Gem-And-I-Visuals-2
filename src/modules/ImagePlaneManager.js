@@ -337,10 +337,13 @@ export const ImagePlaneManager = {
                 u_gpgpu_triWaveAmplitude: { value: S.gpgpu_triWaveAmplitude },
                 u_gpgpu_triWaveFrequency: { value: S.gpgpu_triWaveFrequency },
                 u_gpgpu_triWaveSpeed: { value: S.gpgpu_triWaveSpeed },
+                u_gpgpu_enableCubeWall: { value: S.gpgpu_enableCubeWall },
                 u_gpgpu_cubeWallGridSize: { value: new this.app.THREE.Vector2(S.gpgpu_cubeWallGridSize, S.gpgpu_cubeWallGridSize) },
                 u_gpgpu_cubeWallMorph: { value: S.gpgpu_cubeWallMorph },
                 u_gpgpu_cubeWallSideColor: { value: new this.app.THREE.Color(S.gpgpu_cubeWallSideColor) },
                 gpgpu_cubeWallUseImageTexture: { value: S.gpgpu_cubeWallUseImageTexture },
+                u_gpgpu_cubeWallBevelWidth: { value: S.gpgpu_cubeWallBevelWidth },
+                u_gpgpu_cubeWallBevelIntensity: { value: S.gpgpu_cubeWallBevelIntensity },
             },
             vertexShader: vertexShader,
             fragmentShader: landscapeRenderFragmentShader,
@@ -410,9 +413,13 @@ export const ImagePlaneManager = {
             U.u_gpgpu_triWaveSpeed.value = S.gpgpu_triWaveSpeed;
         }
 
+        U.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
         U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;
         U.u_gpgpu_cubeWallSideColor.value.set(S.gpgpu_cubeWallSideColor);
+        // ** THE FIX IS HERE: Corrected the typo in the uniform name being updated **
         U.gpgpu_cubeWallUseImageTexture.value = S.gpgpu_cubeWallUseImageTexture;
+        U.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
+        U.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;
     },
 
     updateBoundingBox() {
@@ -447,7 +454,7 @@ export const ImagePlaneManager = {
         const steppedZ = (currentValue - pivotValue) * wallStepDepth;
         const flatZ = 0;
 
-        const z = this.app.THREE.MathUtils.lerp(steppedZ, flatZ, S.gpgpu_cubeWallMorph);
+        const z = this.app.THREE.MathUtils.lerp(flatZ, steppedZ, S.gpgpu_cubeWallMorph);
 
         return new this.app.THREE.Vector3(x, y, z);
     },
@@ -455,10 +462,9 @@ export const ImagePlaneManager = {
     getCubeWorldPosition(gridX, gridY) {
         const localPos = this.getCubeLocalPosition(gridX, gridY);
         const container = this.landscapeContainer;
-        // ** THE FIX IS HERE: Correct order of operations for world position calculation **
         const worldPos = localPos.clone();
         worldPos.applyQuaternion(container.quaternion);
-        worldPos.multiply(container.scale); // Scale after rotation
+        worldPos.multiply(container.scale);
         worldPos.add(container.position);
         return worldPos;
     }

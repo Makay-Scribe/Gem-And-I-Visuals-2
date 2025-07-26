@@ -301,10 +301,9 @@
                         <input type="checkbox" id="gpgpu_enableCubeWall" class="header-toggle-checkbox">
                     </div>
                     <div class="accordion-content">
-                        <!-- THE FIX IS HERE: Add labels for the slider -->
                         <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
-                            <span>Stepped</span>
                             <span>Flat</span>
+                            <span>Stepped</span>
                         </div>
                         <label>Morph: <span id="gpgpu_cubeWallMorphValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_cubeWallMorph" min="0.0" max="1.0" step="0.01" value="0.0">
@@ -316,6 +315,13 @@
                         
                         <label for="gpgpu_cubeWallSideColor">Side Color:</label>
                         <input type="color" id="gpgpu_cubeWallSideColor" value="#4a586a">
+                        
+                        <p class="sub-group-title">EDGE HIGHLIGHT</p>
+                        <label>Bevel Width: <span id="gpgpu_cubeWallBevelWidthValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_cubeWallBevelWidth" min="0.0" max="0.1" step="0.001" value="0.02">
+                        
+                        <label>Bevel Intensity: <span id="gpgpu_cubeWallBevelIntensityValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_cubeWallBevelIntensity" min="0.0" max="1.0" step="0.01" value="0.5">
                     </div>
                 </div>
 

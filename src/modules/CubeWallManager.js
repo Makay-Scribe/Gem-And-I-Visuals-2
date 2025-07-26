@@ -47,12 +47,64 @@ export const CubeWallManager = {
         }
         const cubeSize = this._getCubeSize() * 0.9;
         const playerGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-        // ** THE FIX IS HERE: Upgraded to the PBR-compatible material **
+        
         const playerMaterial = new THREE.MeshStandardMaterial({ 
             color: 0xe2e8f0,
             metalness: this.app.vizSettings.metalness,
             roughness: this.app.vizSettings.roughness,
         });
+
+        playerMaterial.onBeforeCompile = (shader) => {
+            shader.uniforms.u_gpgpu_enableCubeWall = { value: this.app.vizSettings.gpgpu_enableCubeWall };
+            shader.uniforms.u_gpgpu_cubeWallBevelWidth = { value: this.app.vizSettings.gpgpu_cubeWallBevelWidth };
+            shader.uniforms.u_gpgpu_cubeWallBevelIntensity = { value: this.app.vizSettings.gpgpu_cubeWallBevelIntensity };
+
+            shader.vertexShader = 'varying vec2 vUv;\n' + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                '#include <begin_vertex>\n\tvUv = uv;'
+            );
+
+            shader.fragmentShader = `
+                uniform bool u_gpgpu_enableCubeWall;
+                uniform float u_gpgpu_cubeWallBevelWidth;
+                uniform float u_gpgpu_cubeWallBevelIntensity;
+                varying vec2 vUv; 
+
+                vec3 getBeveledNormal(vec3 originalNormal, vec2 faceUV, float bevelWidth, float bevelIntensity) {
+                    if (bevelWidth <= 0.0 || bevelIntensity <= 0.0) {
+                        return originalNormal;
+                    }
+                    vec2 dist_to_center = abs(faceUV - 0.5);
+                    float dist_to_edge = 0.5 - max(dist_to_center.x, dist_to_center.y);
+                    float bevel_factor = smoothstep(0.0, bevelWidth, dist_to_edge);
+                    if (bevel_factor >= 1.0) {
+                        return originalNormal;
+                    }
+                    vec2 edge_dir = step(dist_to_center.y, dist_to_center.x) * vec2(1.0, 0.0) + (1.0 - step(dist_to_center.y, dist_to_center.x)) * vec2(0.0, 1.0);
+                    edge_dir *= sign(faceUV - 0.5);
+                    
+                    vec3 tangent = (abs(originalNormal.z) > 0.9) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+                    if (abs(originalNormal.y) > 0.9) tangent = vec3(1.0, 0.0, 0.0);
+                    vec3 bitangent = cross(originalNormal, tangent);
+                    vec3 bevel_normal_local = normalize(originalNormal + (tangent * edge_dir.x + bitangent * edge_dir.y) * bevelIntensity);
+                    return normalize(mix(bevel_normal_local, originalNormal, bevel_factor));
+                }
+            ` + shader.fragmentShader;
+
+            const normalCalculationHook = '#include <normal_fragment_maps>';
+            
+            const bevelLogic = `
+                if (u_gpgpu_enableCubeWall) {
+                    normal = getBeveledNormal(normal, vUv, u_gpgpu_cubeWallBevelWidth, u_gpgpu_cubeWallBevelIntensity);
+                }
+            `;
+            shader.fragmentShader = shader.fragmentShader.replace(normalCalculationHook, normalCalculationHook + '\n' + bevelLogic);
+
+            playerMaterial.userData.shader = shader;
+        };
+
+
         this.playerCube = new THREE.Mesh(playerGeometry, playerMaterial);
         
         this.app.ImagePlaneManager.landscapeContainer.add(this.playerCube);
@@ -164,22 +216,27 @@ export const CubeWallManager = {
         const S = this.app.vizSettings;
         if (!this.playerCube || !this.playerCube.visible || !S.gpgpu_enableCubeWall) return;
 
-        // ** THE FIX IS HERE: Sync player cube material with global settings **
         this.playerCube.material.roughness = S.roughness;
         this.playerCube.material.metalness = S.metalness;
+        // ** THE FIX IS HERE: Sync the reflection strength **
+        this.playerCube.material.envMapIntensity = S.reflectionStrength;
+
+        if (this.playerCube.material.userData.shader) {
+            const shaderUniforms = this.playerCube.material.userData.shader.uniforms;
+            shaderUniforms.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
+            shaderUniforms.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
+            shaderUniforms.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;
+        }
 
         const state = this.animationState;
         
-        // This is a placeholder for checking if the slider is active. The actual implementation
-        // will depend on how you track UI interaction state globally. For now, we'll assume a flag exists.
-        const isSliderActive = false; // TODO: Replace with actual check, e.g., this.app.UIManager.isMorphSliderActive
+        const isSliderActive = false; // TODO: Replace with actual check
 
         if (state.isMoving && !isSliderActive) {
             const progress = Math.min(1, (performance.now() - state.startTime) / this.PLAYER_MOVE_DURATION);
             
             const landscapeCubeSize = this._getCubeSize();
-            const playerCubeSize = landscapeCubeSize * 0.9;
-            const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
+            const zOffset = (landscapeCubeSize / 2) + ((landscapeCubeSize * 0.9) / 2);
 
             const targetLandscapeZ = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y).z;
             state.targetPosition.z = targetLandscapeZ + zOffset;
@@ -202,8 +259,7 @@ export const CubeWallManager = {
         } else {
             if (this.playerCube && !state.isMoving) {
                 const landscapeCubeSize = this._getCubeSize();
-                const playerCubeSize = landscapeCubeSize * 0.9;
-                const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
+                const zOffset = (landscapeCubeSize / 2) + ((landscapeCubeSize * 0.9) / 2);
                  
                 const currentLandscapeZ = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y).z;
                 this.playerCube.position.z = currentLandscapeZ + zOffset;

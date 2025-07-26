@@ -181,6 +181,8 @@ const App = {
         gpgpu_cubeWallMorph: 0.0,
         gpgpu_cubeWallUseImageTexture: false,
         gpgpu_cubeWallSideColor: '#4a586a',
+        gpgpu_cubeWallBevelWidth: 0.02,
+        gpgpu_cubeWallBevelIntensity: 0.5,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
