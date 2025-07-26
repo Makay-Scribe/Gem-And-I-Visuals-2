@@ -15,9 +15,8 @@ export const CubeWallManager = {
         startTime: 0,
         startPosition: null, 
         targetPosition: null,
-        pivot: null,
-        axis: null,
-        angle: 0
+        startQuaternion: null,
+        targetQuaternion: null,
     },
     playerGridPos: { x: 0, y: 0 },
     currentDirection: null,
@@ -34,9 +33,8 @@ export const CubeWallManager = {
         
         this.animationState.startPosition = new THREE.Vector3();
         this.animationState.targetPosition = new THREE.Vector3();
-        this.animationState.pivot = new THREE.Object3D();
-
-        this.app.scene.add(this.animationState.pivot); 
+        this.animationState.startQuaternion = new THREE.Quaternion();
+        this.animationState.targetQuaternion = new THREE.Quaternion();
 
         console.log("CubeWallManager initialized.");
     },
@@ -45,13 +43,14 @@ export const CubeWallManager = {
         if (this.playerCube) {
             this.playerCube.geometry.dispose();
             this.playerCube.material.dispose();
-            this.app.scene.remove(this.playerCube);
+            this.playerCube.removeFromParent();
         }
         const cubeSize = this._getCubeSize() * 0.9;
         const playerGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
         const playerMaterial = new THREE.MeshPhongMaterial({ color: 0xe2e8f0, emissive: 0x1a202c });
         this.playerCube = new THREE.Mesh(playerGeometry, playerMaterial);
-        this.app.scene.add(this.playerCube);
+        
+        this.app.ImagePlaneManager.landscapeContainer.add(this.playerCube);
     },
 
     setActive(isActive) {
@@ -80,7 +79,7 @@ export const CubeWallManager = {
         this.playerGridPos.x = Math.floor(this.gridSize / 2);
         this.playerGridPos.y = Math.floor(this.gridSize / 2);
 
-        const initialPlayerPos = this.app.ImagePlaneManager.getCubeWorldPosition(this.playerGridPos.x, this.playerGridPos.y);
+        const initialPlayerPos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
         
         if (initialPlayerPos) {
             const cubeSize = this._getCubeSize() * 0.9;
@@ -118,7 +117,7 @@ export const CubeWallManager = {
             if (validMoves.length > 0) {
                 nextMove = validMoves[Math.floor(Math.random() * validMoves.length)];
             } else {
-                this.resetPlayerState();
+                this.resetPlayerState(); // Stuck, so reset
                 this.moveTimeoutId = setTimeout(() => this.startNextMove(), 1000);
                 return;
             }
@@ -127,89 +126,67 @@ export const CubeWallManager = {
         this.currentDirection = nextMove;
         
         const state = this.animationState;
-        const cubeSize = this._getCubeSize() * 0.9;
+        
         state.isMoving = true;
         state.startTime = performance.now();
         state.startPosition.copy(this.playerCube.position);
-        
+        state.startQuaternion.copy(this.playerCube.quaternion);
+
         this.playerGridPos.x += nextMove.dx;
         this.playerGridPos.y += nextMove.dy;
 
-        const targetPos = this.app.ImagePlaneManager.getCubeWorldPosition(this.playerGridPos.x, this.playerGridPos.y);
+        const targetPos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
+        const cubeSize = this._getCubeSize() * 0.9;
         state.targetPosition.copy(targetPos);
         state.targetPosition.z += cubeSize / 2;
-
-        const CUBE_UNIT_SIZE = this._getCubeSize();
-        state.axis = new THREE.Vector3(-nextMove.dy, nextMove.dx, 0);
-        state.angle = Math.PI / 2;
         
-        const pivotPoint = new THREE.Vector3(
-            (nextMove.dx * CUBE_UNIT_SIZE) / 2,
-            (nextMove.dy * CUBE_UNIT_SIZE) / 2,
-            -cubeSize / 2
-        );
+        const rotationAxis = new THREE.Vector3();
+        if (nextMove.dx !== 0) rotationAxis.set(0, nextMove.dx, 0);
+        else if (nextMove.dy !== 0) rotationAxis.set(-nextMove.dy, 0, 0);
         
-        state.pivot.position.copy(this.playerCube.position);
-        state.pivot.quaternion.copy(this.playerCube.quaternion);
-        state.pivot.translateX(pivotPoint.x);
-        state.pivot.translateY(pivotPoint.y);
-        state.pivot.translateZ(pivotPoint.z);
+        // ** THE FIX IS HERE: The angle is now positive to ensure a forward roll. **
+        const rollQuaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis.normalize(), Math.PI / 2);
         
-        this.app.scene.attach(state.pivot);
-        state.pivot.attach(this.playerCube);
+        state.targetQuaternion.copy(rollQuaternion).multiply(state.startQuaternion);
     },
 
     update() {
-        if (!this.playerCube || !this.playerCube.visible || !this.app.ImagePlaneManager) return;
+        const S = this.app.vizSettings;
+        if (!this.playerCube || !this.playerCube.visible || !S.gpgpu_enableCubeWall) return;
 
         const state = this.animationState;
         
-        if (state.isMoving) {
+        // This is a placeholder for checking if the slider is active. The actual implementation
+        // will depend on how you track UI interaction state globally. For now, we'll assume a flag exists.
+        const isSliderActive = false; // TODO: Replace with actual check, e.g., this.app.UIManager.isMorphSliderActive
+
+        if (state.isMoving && !isSliderActive) {
             const progress = Math.min(1, (performance.now() - state.startTime) / this.PLAYER_MOVE_DURATION);
-            const easedProgress = 1.0 - Math.pow(1.0 - progress, 3);
-
+            
             const cubeSize = this._getCubeSize() * 0.9;
-            const startGridPos = this.app.ImagePlaneManager.getCubeWorldPosition(this.playerGridPos.x - this.currentDirection.dx, this.playerGridPos.y - this.currentDirection.dy);
-            
-            if (startGridPos) {
-                 const lift = this.PLAYER_ROLL_LIFT_AMOUNT * this._getCubeSize() * Math.sin(progress * Math.PI);
-                 
-                 const liftVector = new THREE.Vector3(0, 0, lift);
-                 liftVector.applyQuaternion(this.app.ImagePlaneManager.landscapeContainer.quaternion);
-                 
-                 const startPosWithOffset = startGridPos.clone();
-                 const localZOffset = new THREE.Vector3(0, 0, cubeSize / 2);
-                 localZOffset.applyQuaternion(this.app.ImagePlaneManager.landscapeContainer.quaternion);
-                 startPosWithOffset.add(localZOffset);
+            const targetLandscapeZ = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y).z;
+            state.targetPosition.z = targetLandscapeZ + cubeSize / 2;
 
-                 state.pivot.position.copy(startPosWithOffset).add(liftVector);
-            }
+            const tempPosition = new THREE.Vector3().lerpVectors(state.startPosition, state.targetPosition, progress);
             
-            state.pivot.quaternion.setFromAxisAngle(state.axis, state.angle * easedProgress);
+            tempPosition.z += this.PLAYER_ROLL_LIFT_AMOUNT * this._getCubeSize() * Math.sin(progress * Math.PI);
+            this.playerCube.position.copy(tempPosition);
+            
+            this.playerCube.quaternion.slerpQuaternions(state.startQuaternion, state.targetQuaternion, progress);
 
             if (progress >= 1) {
                 state.isMoving = false;
-                
-                this.app.scene.attach(this.playerCube);
-                state.pivot.rotation.set(0, 0, 0);
-                state.pivot.position.set(0, 0, 0);
-
-                const finalRotation = new THREE.Quaternion().setFromAxisAngle(state.axis, state.angle);
-                this.playerCube.quaternion.premultiply(finalRotation).normalize();
                 this.playerCube.position.copy(state.targetPosition);
+                this.playerCube.quaternion.copy(state.targetQuaternion);
 
                 const pauseDuration = Math.random() < 0.15 ? 500 : 200;
                 this.moveTimeoutId = setTimeout(() => this.startNextMove(), pauseDuration);
             }
         } else {
-            const currentLandscapePos = this.app.ImagePlaneManager.getCubeWorldPosition(this.playerGridPos.x, this.playerGridPos.y);
-            if (currentLandscapePos) {
-                const cubeSize = this._getCubeSize() * 0.9;
-                
-                const localZOffset = new THREE.Vector3(0, 0, cubeSize / 2);
-                localZOffset.applyQuaternion(this.app.ImagePlaneManager.landscapeContainer.quaternion);
-                
-                this.playerCube.position.copy(currentLandscapePos).add(localZOffset);
+            if (this.playerCube && !state.isMoving) {
+                 const currentLandscapeZ = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y).z;
+                 const cubeSize = this._getCubeSize() * 0.9;
+                 this.playerCube.position.z = currentLandscapeZ + cubeSize / 2;
             }
         }
     }

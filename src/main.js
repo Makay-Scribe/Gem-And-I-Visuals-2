@@ -176,7 +176,7 @@ const App = {
         gpgpu_triWaveColor1: '#ffffff',
         gpgpu_triWaveColor2: '#ffffff',
         // --- NEW CUBEWALL SETTINGS ---
-        gpgpu_cubeWallGridSize: 10, // Define the grid size here
+        gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,
         gpgpu_cubeWallMorph: 0.0,
         gpgpu_cubeWallUseImageTexture: false,

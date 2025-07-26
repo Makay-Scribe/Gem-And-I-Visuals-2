@@ -37,9 +37,8 @@ void main() {
     float steppedZ = (currentValue - pivotValue) * wallStepDepth;
     float flatZ = 0.0;
 
-    // --- 3. Morph between the two states (Corrected to match UI) ---
-    // Morph from flat (0.0) to stepped (1.0)
-    float finalZ = mix(flatZ, steppedZ, u_gpgpu_cubeWallMorph);
+    // --- 3. Morph between the two states ---
+    float finalZ = mix(steppedZ, flatZ, u_gpgpu_cubeWallMorph);
 
     // --- 4. Calculate Cube's Base (X, Y) Position ---
     float cubeSize = u_planeDimensions.x / u_gpgpu_cubeWallGridSize.x;
@@ -53,10 +52,13 @@ void main() {
     );
 
     // --- 5. Calculate Final Vertex Position ---
+    // The 'position' attribute is the vertex position within the base cube model.
+    // We add our calculated instancePosition to it before applying model matrices.
     vec4 worldPos4 = modelMatrix * (vec4(position, 1.0) + vec4(instancePosition, 0.0));
     gl_Position = projectionMatrix * viewMatrix * worldPos4;
 
     // --- 6. Calculate Custom UV for Texture Mapping ---
+    // We map the standard UVs of a single face onto the correct tile of the larger texture.
     vec2 flippedUv = vec2(uv.x, 1.0 - uv.y);
     vec2 uvOffset = vec2(gridX, (u_gpgpu_cubeWallGridSize.y - 1.0) - gridY) / u_gpgpu_cubeWallGridSize;
     vec2 uvScale = 1.0 / u_gpgpu_cubeWallGridSize;
@@ -66,5 +68,5 @@ void main() {
     vWorldPosition = worldPos4.xyz;
     vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
     vLocalNormal = normal; 
-    vTriangleId = instanceId;
+    vTriangleId = instanceId; // Pass instanceId for potential debugging or effects
 }

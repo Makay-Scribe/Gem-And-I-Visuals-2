@@ -44,7 +44,7 @@ void main() {
     vec3 albedo;
     vec3 N = normalize(vWorldNormal);
 
-    // --- THE FIX IS HERE: A clear, structured path for each geometry mode ---
+    // --- A clear, structured path for each geometry mode ---
 
     if (u_gpgpu_enableTriangleWave) {
         // --- Path 1: Triangle Wave (Faceted Plane) ---
@@ -63,12 +63,19 @@ void main() {
 
     } else if (abs(vLocalNormal.z) > 0.9) {
         // --- Path 3: GeoCube Front/Back or a Standard Plane ---
-        if (gpgpu_cubeWallUseImageTexture) {
+        // ** THE FIX IS HERE: Differentiate between a plane and a cube's front face **
+        bool isPlane = (vLocalNormal.x == 0.0 && vLocalNormal.y == 0.0);
+        
+        if (isPlane) {
+             // If it's a plane, always use the texture.
             albedo = texture2D(u_map, workingUV).rgb;
         } else {
-            // If it's a plane, use the texture. If it's a cube without the texture toggle, show dark grey.
-            bool isPlane = (vLocalNormal.x == 0.0 && vLocalNormal.y == 0.0);
-            albedo = isPlane ? texture2D(u_map, workingUV).rgb : vec3(0.1);
+            // If it's a cube face, check the toggle.
+            if (gpgpu_cubeWallUseImageTexture) {
+                albedo = texture2D(u_map, workingUV).rgb;
+            } else {
+                albedo = vec3(0.1); // Fallback color for cube front face when texture is off
+            }
         }
 
     } else {

@@ -8,7 +8,6 @@ export const ImagePlaneManager = {
     landscape: null, 
     // --- Instanced Cube Geometry ---
     instancedMesh: null,
-    numberSprites: [],
     
     landscapeContainer: null, 
     landscapeMaterial: null,
@@ -78,7 +77,7 @@ export const ImagePlaneManager = {
     },
 
     startAutopilot(presetId) {
-        if (!this.landscape) return;
+        if (!this.landscape && !this.instancedMesh) return;
         const ap = this.autopilot;
         ap.active = true;
         ap.preset = presetId;
@@ -134,13 +133,11 @@ export const ImagePlaneManager = {
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
         if (this.landscape) this.landscape.visible = !isCubeMode;
         if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
-        this.numberSprites.forEach(s => s.visible = isCubeMode && !S.gpgpu_cubeWallUseImageTexture);
-
+        
         const state = this.state;
         const ap = this.autopilot;
         const now = this.app.currentTime;
         
-        // ** THE FIX IS HERE: The rotation logic is now unified **
         if (ap.active && ap.waypointProgress >= 1.0) {
             this.generateNewRandomWaypoint();
         }
@@ -196,10 +193,6 @@ export const ImagePlaneManager = {
         if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
         this.updateDeformationUniforms();
         this.updateBoundingBox();
-
-        if (isCubeMode && this.numberSprites.length > 0 && this.numberSprites[0]?.visible) {
-            this.updateSpritePositions();
-        }
     },
 
     createDefaultLandscape() {
@@ -237,12 +230,6 @@ export const ImagePlaneManager = {
             this.landscapeContainer.remove(this.instancedMesh);
             this.instancedMesh = null;
         }
-        this.numberSprites.forEach(sprite => {
-            if (sprite.material.map) sprite.material.map.dispose();
-            sprite.material.dispose();
-            this.landscapeContainer.remove(sprite); // Sprites should be children of the container
-        });
-        this.numberSprites = [];
 
         if (this.landscapeMaterial) {
             this.landscapeMaterial.dispose();
@@ -292,73 +279,14 @@ export const ImagePlaneManager = {
         this.instancedMesh.frustumCulled = false;
 
         const instanceIds = new Float32Array(COUNT);
-        
-        for (let y = 0; y < GRID_SIZE; y++) {
-            for (let x = 0; x < GRID_SIZE; x++) {
-                const instanceId = y * GRID_SIZE + x;
-                
-                instanceIds[instanceId] = instanceId;
-                
-                const sprite = this._createNumberSprite(instanceId.toString());
-                this.landscapeContainer.add(sprite); // Corrected: Add sprite to container
-                this.numberSprites[instanceId] = sprite;
-            }
+        for (let i = 0; i < COUNT; i++) {
+            instanceIds[i] = i;
         }
 
         this.instancedMesh.geometry.setAttribute('instanceId', new this.app.THREE.InstancedBufferAttribute(instanceIds, 1));
         this.landscapeContainer.add(this.instancedMesh);
     },
-
-    _createNumberSprite(text) {
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        const fontSize = 48;
-        canvas.width = 128;
-        canvas.height = 64;
-        context.font = `bold ${fontSize}px monospace`;
-        context.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(text, canvas.width / 2, canvas.height / 2);
-        const texture = new this.app.THREE.CanvasTexture(canvas);
-        const material = new this.app.THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-        const sprite = new this.app.THREE.Sprite(material);
-        const GRID_SIZE = this.app.vizSettings.gpgpu_cubeWallGridSize;
-        const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
-        sprite.scale.set(CUBE_SIZE, CUBE_SIZE / 2, 1.0);
-        return sprite;
-    },
-
-    updateSpritePositions() {
-        const S = this.app.vizSettings;
-        const GRID_SIZE = S.gpgpu_cubeWallGridSize;
-        const COUNT = GRID_SIZE * GRID_SIZE;
-        const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
-
-        // Corrected: This normal vector represents the direction "out" of the cube's front face
-        const normal = new this.app.THREE.Vector3(0, 0, 1);
-        // We only need to apply the container's rotation to this vector
-        normal.applyQuaternion(this.landscapeContainer.quaternion);
-        // And scale it by the desired offset distance
-        normal.multiplyScalar(CUBE_SIZE * 0.55);
-
-        for (let i = 0; i < COUNT; i++) {
-            if (this.numberSprites[i]) {
-                const gridX = i % GRID_SIZE;
-                const gridY = Math.floor(i / GRID_SIZE);
-                
-                // Get the final WORLD position of the cube's center
-                const cubePos = this.getCubeWorldPosition(gridX, gridY);
-
-                if (cubePos) {
-                    // Add the pre-calculated, rotated offset vector to the cube's world position
-                    cubePos.add(normal);
-                    this.numberSprites[i].position.copy(cubePos);
-                }
-            }
-        }
-    },
-
+    
     updatePlaneDimensions() {
         const baseSize = 40;
         const aspectRatio = parseFloat(this.app.vizSettings.planeAspectRatio) || 1.0;
@@ -391,7 +319,7 @@ export const ImagePlaneManager = {
         this.landscapeMaterial = new this.app.THREE.ShaderMaterial({
             uniforms: {
                 u_map: { value: textureToUse },
-                u_positionTexture: { value: positionRenderTarget.texture }, 
+                u_positionTexture: { value: positionRenderTarget.texture },
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
@@ -409,7 +337,6 @@ export const ImagePlaneManager = {
                 u_gpgpu_triWaveAmplitude: { value: S.gpgpu_triWaveAmplitude },
                 u_gpgpu_triWaveFrequency: { value: S.gpgpu_triWaveFrequency },
                 u_gpgpu_triWaveSpeed: { value: S.gpgpu_triWaveSpeed },
-                // CubeWall Uniforms
                 u_gpgpu_cubeWallGridSize: { value: new this.app.THREE.Vector2(S.gpgpu_cubeWallGridSize, S.gpgpu_cubeWallGridSize) },
                 u_gpgpu_cubeWallMorph: { value: S.gpgpu_cubeWallMorph },
                 u_gpgpu_cubeWallSideColor: { value: new this.app.THREE.Color(S.gpgpu_cubeWallSideColor) },
@@ -446,6 +373,8 @@ export const ImagePlaneManager = {
             new this.app.THREE.TextureLoader().load(objectURL, (texture) => {
                 applyTextureSettings(texture);
                 URL.revokeObjectURL(objectURL);
+            }, undefined, (error) => {
+                console.error("An error occurred loading the texture:", error);
             });
         }
     },
@@ -467,6 +396,7 @@ export const ImagePlaneManager = {
         U.u_envMapIntensity.value = S.reflectionStrength;
         U.t_envMap.value = this.app.hdrTexture; 
         U.u_cameraPosition.value = this.app.camera.position;
+
         U.u_lightColor.value.set(S.lightColor);
         U.u_ambientLightColor.value.set(S.ambientLightColor);
         U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
@@ -492,9 +422,7 @@ export const ImagePlaneManager = {
         this.boundingBox.setFromObject(this.landscapeContainer, true);
     },
 
-    getCubeWorldPosition(gridX, gridY) {
-        if (!this.landscapeContainer) return null; 
-        
+    getCubeLocalPosition(gridX, gridY) {
         const S = this.app.vizSettings;
         const GRID_SIZE = S.gpgpu_cubeWallGridSize;
         const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
@@ -519,11 +447,19 @@ export const ImagePlaneManager = {
         const steppedZ = (currentValue - pivotValue) * wallStepDepth;
         const flatZ = 0;
 
-        const z = this.app.THREE.MathUtils.lerp(flatZ, steppedZ, S.gpgpu_cubeWallMorph);
+        const z = this.app.THREE.MathUtils.lerp(steppedZ, flatZ, S.gpgpu_cubeWallMorph);
 
-        const localPos = new this.app.THREE.Vector3(x, y, z);
+        return new this.app.THREE.Vector3(x, y, z);
+    },
+
+    getCubeWorldPosition(gridX, gridY) {
+        const localPos = this.getCubeLocalPosition(gridX, gridY);
         const container = this.landscapeContainer;
-        
-        return localPos.applyQuaternion(container.quaternion).multiplyScalar(container.scale.x).add(container.position);
+        // ** THE FIX IS HERE: Correct order of operations for world position calculation **
+        const worldPos = localPos.clone();
+        worldPos.applyQuaternion(container.quaternion);
+        worldPos.multiply(container.scale); // Scale after rotation
+        worldPos.add(container.position);
+        return worldPos;
     }
 };
