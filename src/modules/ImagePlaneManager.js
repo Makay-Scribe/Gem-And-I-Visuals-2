@@ -152,7 +152,7 @@ export const ImagePlaneManager = {
         if (state.isUnderManualControl || inGracePeriod) {
             state.returnEaseFactor = 0; 
             baseRotationTarget.copy(state.targetQuaternion);
-        } else if (ap.active && !isCubeMode) { // Autopilot only works for planes for now
+        } else if (ap.active) { // Autopilot only works for planes for now
             state.returnEaseFactor = 0; 
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
