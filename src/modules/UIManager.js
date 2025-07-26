@@ -804,7 +804,7 @@ export const UIManager = {
         this.demoShaderIndex = 0;
         this.cycleDemoShader(); 
         if(this.demoShaderInterval) clearInterval(this.demoShaderInterval);
-        this.demoShaderInterval = setInterval(() => this.cycleDemoShader(), 120 * 1000); 
+        this.demoShaderInterval = setInterval(() => this.cycleDemoShader(), 60 * 1000); 
 
         this.app.vizSettings.enableGPGPUDebugger = false;
         this.app.vizSettings.enableOnScreenDebugger = false;
