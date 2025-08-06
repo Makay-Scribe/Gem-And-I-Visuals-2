@@ -1,6 +1,6 @@
 # AI CONTEXT CONSTITUTION for GEM-AND-I-VISUALS
 
-This document contains the foundational principles, architecture, and rules for the Audio-Image-Video Visualizer project. You MUST adhere to these guidelines in all responses.
+This document contains the foundational principles, architecture, and rules for the Audio-Image-Video Visualizer project. You MUST adhere to these guidelines in all responses. This document SHALL be provided at the beginning of every new task.
 
 ## 1. Project Overview
 
@@ -21,11 +21,10 @@ These rules are non-negotiable and define the project's architecture.
 - **Build Tool:** Vite
 - **Physics Engine:** cannon-es
 - **GPGPU:** `GPUComputationRenderer` from Three.js addons.
+- **Node Materials:** TSL via `three/examples/jsm/nodes/Nodes.js`.
 - **Shaders:** GLSL 3, loaded from `.vert` and `.frag` files using Vite's `?raw` import.
 
 ## 4. AI Custom Instructions for Collaboration
-
-(This is your list of 12 rules, copied directly)
 
 1- Code Blocks Are Mandatory.
 2- Provide Full Files.
@@ -41,17 +40,16 @@ These rules are non-negotiable and define the project's architecture.
 11- Allow time for Q/A.
 12- Do not use ellipses (...).
 
-## 5. File Structure Overview (High Level)
+## 5. Standard Workflow for New Effects
 
-- **`src/main.js`**: The main entry point. Initializes all systems and contains the `animate()` loop.
-- **`src/modules/`**: Contains all the core logic, separated by responsibility into manager files. This is where most development happens.
-- **`src/compute/`**: Contains the GPGPU compute shader logic.
-- **`src/rendering/shaders/` & `src/shaders/`**: Contains all GLSL shader code.
-- **`public/`**: Contains all static assets like models, audio, and textures.
+1.  **Context Review:** You will receive this Constitution and a Task Brief with the goal and relevant files.
+2.  **Implementation:** You will provide the necessary code, one file at a time, to implement the new feature according to the Task Brief.
+3.  **Testing & Iteration:** The user will test the code and provide the single top-most error from the console. You will provide the fix. We repeat this loop until the feature's acceptance criteria are met.
 
 ## 6. "Gotchas" & Anti-Patterns (What to Avoid)
 
 - **DO NOT** add `OrbitControls` or any other camera-moving logic.
 - **DO NOT** modify the `camera.position` or `camera.quaternion` after its initial setup in `CameraManager.js`.
-- **DO NOT** add visual objects directly to the main `scene`. Add them to the `ImagePlaneManager.landscapeContainer` or `ModelManager.gltfModel` groups.
+- **DO NOT** add visual objects directly to the main `scene` unless explicitly told to. Most objects belong to a manager's container group.
 - When updating a setting in `UIManager.js`, **ALWAYS** check if the corresponding logic in the relevant manager file also needs to be updated.
+- **TSL Imports:** In Three.js r165, Node Material classes like `ShaderNodeMaterial` must be imported from their specific file path (e.g., `three/examples/jsm/nodes/materials/ShaderNodeMaterial.js`), not from the main `TSL` namespace.

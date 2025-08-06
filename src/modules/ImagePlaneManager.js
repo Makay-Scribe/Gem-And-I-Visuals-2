@@ -1,6 +1,8 @@
 import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import cubewallRenderVertexShader from '../shaders/cubewall_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
+import triangleLegoVertexShader from '../shaders/triangleLego.vert?raw';
+import triangleLegoFragmentShader from '../shaders/triangleLego.frag?raw';
 
 export const ImagePlaneManager = {
     app: null,
@@ -11,6 +13,7 @@ export const ImagePlaneManager = {
     
     landscapeContainer: null, 
     landscapeMaterial: null,
+    triangleLegoMaterial: null, // New custom shader material
     boundingBox: null, 
     planeDimensions: null, 
     planeResolution: null, 
@@ -131,6 +134,7 @@ export const ImagePlaneManager = {
         this.landscapeContainer.visible = true;
 
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
+        const isLegoMode = S.gpgpuGeometryMode === 'triangleLegos';
         if (this.landscape) this.landscape.visible = !isCubeMode;
         if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
         
@@ -152,14 +156,13 @@ export const ImagePlaneManager = {
         if (state.isUnderManualControl || inGracePeriod) {
             state.returnEaseFactor = 0; 
             baseRotationTarget.copy(state.targetQuaternion);
-        } else if (ap.active) { // Autopilot only works for planes for now
+        } else if (ap.active) { 
             state.returnEaseFactor = 0; 
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
             baseRotationTarget.copy(ap.startQuat).slerp(ap.endQuat, ease);
             state.targetQuaternion.copy(baseRotationTarget);
         } else {
-            // Idle: return to home position and home rotation
             const maxEase = 0.02;
             const easeIncrement = 0.0005;
             state.returnEaseFactor = Math.min(state.returnEaseFactor + easeIncrement, maxEase);
@@ -169,7 +172,6 @@ export const ImagePlaneManager = {
             baseRotationTarget.copy(state.targetQuaternion);
         }
         
-        // Spin is independent and applies to the base rotation
         if (S.enableLandscapeSpin) {
             const incrementalSpin = new this.app.THREE.Quaternion();
             const spinAxis = new this.app.THREE.Vector3(0, 0, 1);
@@ -185,13 +187,21 @@ export const ImagePlaneManager = {
 
         const finalTargetQuaternion = new this.app.THREE.Quaternion().copy(baseRotationTarget).multiply(this.spinAccumulator);
 
-        // Apply final transformations
         this.landscapeContainer.position.lerp(state.targetPosition, 0.05);
         this.landscapeContainer.quaternion.slerp(finalTargetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
-        if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
-        this.updateDeformationUniforms();
+        if (!isLegoMode) {
+            if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
+            this.updateDeformationUniforms();
+        } else if (this.triangleLegoMaterial) {
+            const U = this.triangleLegoMaterial.uniforms;
+            U.u_time.value = this.app.currentTime;
+            U.u_noiseScale.value = S.legoNoiseScale;
+            U.u_displacementStrength.value = S.legoDisplacementStrength;
+            U.u_animationSpeed.value = S.legoAnimationSpeed;
+        }
+        
         this.updateBoundingBox();
     },
 
@@ -200,9 +210,8 @@ export const ImagePlaneManager = {
         this._cleanupMeshes(); 
 
         const S = this.app.vizSettings;
-        const isCubeMode = S.gpgpuGeometryMode === 'geocube';
 
-        if (isCubeMode) {
+        if (S.gpgpuGeometryMode === 'geocube') {
             this._createInstancedCubeMesh();
             this.app.CubeWallManager.setActive(true);
         } else {
@@ -235,12 +244,26 @@ export const ImagePlaneManager = {
             this.landscapeMaterial.dispose();
             this.landscapeMaterial = null;
         }
+        if (this.triangleLegoMaterial) {
+            this.triangleLegoMaterial.dispose();
+            this.triangleLegoMaterial = null;
+        }
     },
 
     _createPlaneMesh(mode) {
-        let landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
-
-        if (mode === 'faceted') {
+        let landGeom;
+        if (mode === 'triangleLegos') {
+            landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, 64, 64);
+            landGeom = landGeom.toNonIndexed(); // Faceted look is required
+            const count = landGeom.attributes.position.count;
+            const barycentric = new Float32Array(count * 3);
+            for (let i = 0; i < count; i++) {
+                barycentric[i * 3 + (i % 3)] = 1.0;
+            }
+            const attributeBuffer = new this.app.THREE.BufferAttribute(barycentric, 3);
+            landGeom.setAttribute('barycentric', attributeBuffer);
+        } else if (mode === 'faceted') {
+            landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
             landGeom = landGeom.toNonIndexed();
             const uvGpgpuAttribute = landGeom.attributes.uv.clone();
             const uvArray = uvGpgpuAttribute.array;
@@ -249,6 +272,7 @@ export const ImagePlaneManager = {
             }
             landGeom.setAttribute('uv_gpgpu', uvGpgpuAttribute);
         } else { // continuous
+            landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
             const uvCount = this.planeResolution.x * this.planeResolution.y;
             const uv_gpu = new Float32Array(uvCount * 2);
             for (let i = 0; i < this.planeResolution.y; i++) {
@@ -261,8 +285,16 @@ export const ImagePlaneManager = {
             landGeom.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(uv_gpu, 2));
         }
 
-        this.createMaterials();
-        this.landscape = new this.app.THREE.Mesh(landGeom, this.landscapeMaterial);
+        let materialToUse;
+        if (mode === 'triangleLegos') {
+            this.createTriangleLegoMaterial();
+            materialToUse = this.triangleLegoMaterial;
+        } else {
+            this.createGPGPUMaterial();
+            materialToUse = this.landscapeMaterial;
+        }
+
+        this.landscape = new this.app.THREE.Mesh(landGeom, materialToUse);
         this.landscape.frustumCulled = false;
         this.landscapeContainer.add(this.landscape);
     },
@@ -273,7 +305,7 @@ export const ImagePlaneManager = {
         const COUNT = GRID_SIZE * GRID_SIZE;
 
         const cubeGeom = new this.app.THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
-        this.createMaterials();
+        this.createGPGPUMaterial();
         
         this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.landscapeMaterial, COUNT);
         this.instancedMesh.frustumCulled = false;
@@ -297,7 +329,7 @@ export const ImagePlaneManager = {
         if (!this.landscape && !this.instancedMesh) return;
         const S = this.app.vizSettings;
         
-        if (S.gpgpuGeometryMode === 'geocube') {
+        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'triangleLegos') {
             this.state.homeQuaternion.identity(); 
         } else {
             const tempObject = new this.app.THREE.Object3D();
@@ -307,7 +339,22 @@ export const ImagePlaneManager = {
         }
     },
     
-    createMaterials() {
+    createTriangleLegoMaterial() {
+        const S = this.app.vizSettings;
+        this.triangleLegoMaterial = new this.app.THREE.ShaderMaterial({
+            uniforms: {
+                u_time: { value: 0.0 },
+                u_noiseScale: { value: S.legoNoiseScale },
+                u_displacementStrength: { value: S.legoDisplacementStrength },
+                u_animationSpeed: { value: S.legoAnimationSpeed }
+            },
+            vertexShader: triangleLegoVertexShader,
+            fragmentShader: triangleLegoFragmentShader,
+            side: this.app.THREE.DoubleSide
+        });
+    },
+
+    createGPGPUMaterial() {
         const S = this.app.vizSettings;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
@@ -416,7 +463,6 @@ export const ImagePlaneManager = {
         U.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
         U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;
         U.u_gpgpu_cubeWallSideColor.value.set(S.gpgpu_cubeWallSideColor);
-        // ** THE FIX IS HERE: Corrected the typo in the uniform name being updated **
         U.gpgpu_cubeWallUseImageTexture.value = S.gpgpu_cubeWallUseImageTexture;
         U.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
         U.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;

@@ -41,6 +41,7 @@ export const UIManager = {
         this.updateWarpControlsVisibility(true);
         this.updateDeformationEngineControls(true);
         this.updateImageEffectsVisibility(true);
+        this.updateGPGPUControlsVisibility(true); // Added for Triangle Legos controls
 
         this.updateMasterControls();
     },
@@ -373,9 +374,9 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'legoNoiseScale', 'legoAnimationSpeed'].includes(id)) {
                 precision = 2;
-            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed'].includes(id)) {
+            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'sagAmount', 'sagFalloffSharpness', 'droopAmount', 'droopFalloffSharpness', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'legoDisplacementStrength'].includes(id)) {
                 precision = 2;
             } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod', 'gpgpu_eqRippleBarCount'].includes(id)) {
                 precision = 0;
@@ -472,6 +473,19 @@ export const UIManager = {
         if (!isInitial) {
             this.refreshAccordion(legacyContainer);
             this.refreshAccordion(gpgpuAccordion.querySelector('.accordion-content'));
+        }
+    },
+
+    updateGPGPUControlsVisibility(isInitial = false) {
+        const mode = this.app.vizSettings.gpgpuGeometryMode;
+        const legoControls = document.getElementById('triangleLegosControls');
+
+        if (legoControls) {
+            legoControls.style.display = (mode === 'triangleLegos') ? 'block' : 'none';
+        }
+
+        if (!isInitial) {
+            this.refreshAccordion(legoControls);
         }
     },
 
@@ -610,6 +624,7 @@ export const UIManager = {
             gpgpuGeometryModeSelect.addEventListener('change', (e) => {
                 this.app.vizSettings.gpgpuGeometryMode = e.target.value;
                 this.app.ImagePlaneManager.createDefaultLandscape();
+                this.updateGPGPUControlsVisibility();
             });
         }
         

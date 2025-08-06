@@ -183,6 +183,10 @@ const App = {
         gpgpu_cubeWallSideColor: '#4a586a',
         gpgpu_cubeWallBevelWidth: 0.1,
         gpgpu_cubeWallBevelIntensity: 1.0,
+        // --- TRIANGLE LEGOS SETTINGS ---
+        legoNoiseScale: 0.5,
+        legoDisplacementStrength: 2.0,
+        legoAnimationSpeed: 0.1,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
