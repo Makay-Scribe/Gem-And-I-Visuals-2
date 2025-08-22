@@ -13,7 +13,7 @@ varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
 varying float vTriangleId;
-varying vec3 vLocalNormal; // DECLARE THE MISSING VARYING
+varying vec3 vLocalNormal;
 
 // Simplex Noise function (for Triangle Wave)
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -67,7 +67,7 @@ float snoise(vec3 v) {
 void main() {
     vUv = uv; 
     vTriangleId = triangleId;
-    vLocalNormal = normal; // ASSIGN A VALUE TO THE VARYING
+    vLocalNormal = normal;
     
     vec3 transformedPosition;
 

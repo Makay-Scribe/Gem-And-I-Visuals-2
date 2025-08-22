@@ -1,4 +1,3 @@
-// REMOVED: import * as THREE from 'three';
 import backgroundVertexShader from '../rendering/shaders/background.vert?raw';
 import backgroundFragmentShader from '../rendering/shaders/background.frag?raw';
 
@@ -17,7 +16,9 @@ export const BackgroundManager = {
 
         const bgGeom = new THREE.PlaneGeometry(2, 2);
         
+        // ** THE FIX IS HERE: Create only ONE placeholder texture **
         const bgPlaceholderTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
+        bgPlaceholderTexture.needsUpdate = true; // Ensure it gets uploaded to the GPU
 
         const defaultFragShader = `
             out vec4 outColor;
@@ -40,10 +41,11 @@ export const BackgroundManager = {
                 iAudioMid: { value: 0.0 },
                 iAudioHigh: { value: 0.0 },
                 iBeat: { value: 0.0 },
-                iChannel0: { value: bgPlaceholderTexture.clone() },
-                iChannel1: { value: bgPlaceholderTexture.clone() },
-                iChannel2: { value: bgPlaceholderTexture.clone() },
-                iChannel3: { value: bgPlaceholderTexture.clone() },
+                // ** THE FIX IS HERE: All channels now reference the SAME texture instance **
+                iChannel0: { value: bgPlaceholderTexture },
+                iChannel1: { value: bgPlaceholderTexture },
+                iChannel2: { value: bgPlaceholderTexture },
+                iChannel3: { value: bgPlaceholderTexture },
                 iChannelResolution: { value: [new THREE.Vector3(1, 1, 1), new THREE.Vector3(1, 1, 1), new THREE.Vector3(1, 1, 1), new THREE.Vector3(1, 1, 1)] }
             },
             glslVersion: THREE.GLSL3
