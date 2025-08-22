@@ -29,6 +29,11 @@
     --status-light-off: #444;
     --status-light-on: #34C759;
     --status-light-on-glow: rgba(52, 199, 89, 0.6);
+
+    /* --- THE FIX IS HERE: NEW TAG COLORS --- */
+    --tag-legacy-bg: #6a4a4a;
+    --tag-gpgpu-bg: #4a6a69;
+    --tag-geometry-bg: #634a6a;
 }
 
 /* --- GLOW ANIMATION --- */
@@ -188,7 +193,22 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--sub-header-hover-bg);
 }
 
+/* --- THE FIX IS HERE: Styling for header title and new engine tags --- */
 .accordion-header .header-title { flex-grow: 1; }
+.accordion-header .header-engine-tag {
+    font-size: 8px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 5px;
+    font-weight: 500;
+    color: #E0E0E0;
+    opacity: 0.8;
+}
+.header-engine-tag.legacy-tag { background-color: var(--tag-legacy-bg); }
+.header-engine-tag.gpgpu-tag { background-color: var(--tag-gpgpu-bg); }
+.header-engine-tag.geometry-tag { background-color: var(--tag-geometry-bg); }
+/* --- END OF FIX --- */
+
 .accordion-header::after { content: ''; }
 
 .accordion-content {

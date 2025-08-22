@@ -389,11 +389,21 @@ export const UIManager = {
         const mode = this.app.vizSettings.backgroundMode;
         const shaderControls = document.getElementById('shaderToyControls');
         const butterchurnControls = document.getElementById('butterchurnControls');
+        
         if (shaderControls) shaderControls.style.display = (mode === 'shader') ? 'block' : 'none';
         if (butterchurnControls) butterchurnControls.style.display = (mode === 'butterchurn') ? 'block' : 'none';
-        if (mode === 'butterchurn' && this.app.ButterchurnManager && !this.app.ButterchurnManager.visualizer) {
-            this.app.AudioProcessor.connectButterchurn();
+    
+        // ** THE FIX IS HERE: Activate or deactivate the Butterchurn texture. **
+        if (mode === 'butterchurn') {
+            this.app.ButterchurnManager.activate();
+            // Also ensure audio is connected if it hasn't been already
+            if (this.app.AudioProcessor.audioContext && !this.app.ButterchurnManager.visualizer) {
+                this.app.AudioProcessor.connectButterchurn();
+            }
+        } else {
+            this.app.ButterchurnManager.deactivate();
         }
+    
         if (!isInitial) this.refreshAccordion(document.getElementById('backgroundMode'));
     },
     

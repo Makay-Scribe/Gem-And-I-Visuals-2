@@ -8,8 +8,6 @@ export const ButterchurnManager = {
     
     init(appInstance) {
         this.app = appInstance;
-        // The UIManager is now responsible for populating its own list.
-        // This manager just needs to provide the preset list when asked.
         this._waitForLibraries();
     },
 
@@ -45,8 +43,6 @@ export const ButterchurnManager = {
         this.presetKeys = Object.keys(allPresets);
         this.presetKeys.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
         
-        // ** THE FIX IS HERE **
-        // Directly notify UIManager that the presets are ready for display.
         if (this.app.UIManager) {
             this.app.UIManager.filterButterchurnPresets();
         }
@@ -66,21 +62,13 @@ export const ButterchurnManager = {
             return;
         }
 
-        console.log("Creating new Butterchurn visualizer instance.");
+        console.log("Creating new Butterchurn visualizer instance (without texture).");
         this.visualizerCanvas = document.createElement('canvas'); 
         this.visualizerCanvas.width = 512; 
         this.visualizerCanvas.height = 512;
         
-        // These already correctly reference `this.app.THREE` (which `App` gets from our singleton)
-        if (this.app.butterchurnMaterial) {
-            this.app.butterchurnTexture = new this.app.THREE.CanvasTexture(this.visualizerCanvas);
-            this.app.butterchurnTexture.minFilter = this.app.THREE.LinearFilter; 
-            this.app.butterchurnTexture.magFilter = this.app.THREE.LinearFilter;
-            this.app.butterchurnMaterial.map = this.app.butterchurnTexture;
-            this.app.butterchurnMaterial.color.set(this.app.vizSettings.butterchurnTintColor);
-            this.app.butterchurnMaterial.opacity = this.app.vizSettings.butterchurnOpacity;
-            this.app.butterchurnMaterial.needsUpdate = true;
-        }
+        // ** THE FIX IS HERE: Texture creation is REMOVED from this function. **
+        // It will now be created on-demand by the activate() method.
         
         this.visualizer = bc.createVisualizer(audioContext, this.visualizerCanvas, { width: 512, height: 512, pixelRatio: 1 });
         this.visualizer.connectAudio(audioSourceNode);
@@ -97,14 +85,45 @@ export const ButterchurnManager = {
         this.updateCycleInterval();
     },
 
+    // ** THE FIX IS HERE: New method to create and assign the texture on-demand. **
+    activate() {
+        // Only create texture if we have a canvas and a material, and the texture doesn't already exist.
+        if (this.visualizerCanvas && this.app.butterchurnMaterial && !this.app.butterchurnTexture) {
+            console.log("Activating Butterchurn texture.");
+            this.app.butterchurnTexture = new this.app.THREE.CanvasTexture(this.visualizerCanvas);
+            this.app.butterchurnTexture.minFilter = this.app.THREE.LinearFilter; 
+            this.app.butterchurnTexture.magFilter = this.app.THREE.LinearFilter;
+        }
+
+        // Always ensure the material is correctly configured when activated.
+        if (this.app.butterchurnMaterial && this.app.butterchurnTexture) {
+            this.app.butterchurnMaterial.map = this.app.butterchurnTexture;
+            this.app.butterchurnMaterial.color.set(this.app.vizSettings.butterchurnTintColor);
+            this.app.butterchurnMaterial.opacity = this.app.vizSettings.butterchurnOpacity;
+            this.app.butterchurnMaterial.needsUpdate = true;
+        }
+    },
+
+    // ** THE FIX IS HERE: New method to dispose of the texture and free the GPU slot. **
+    deactivate() {
+        if (this.app.butterchurnTexture) {
+            console.log("Deactivating and disposing of Butterchurn texture.");
+            // Remove from material
+            if (this.app.butterchurnMaterial) {
+                this.app.butterchurnMaterial.map = null;
+                this.app.butterchurnMaterial.needsUpdate = true;
+            }
+            // Dispose of the texture to free GPU memory and the texture unit
+            this.app.butterchurnTexture.dispose();
+            this.app.butterchurnTexture = null;
+        }
+    },
+
     loadPresetByIndex(index) {
         if (!this.presetKeys || this.presetKeys.length === 0 || index < 0 || index >= this.presetKeys.length) return;
         
         this.currentPresetIndex = index;
         const presetKey = this.presetKeys[index];
-        
-        // This manager should not directly touch the DOM. We'll let UIManager handle this.
-        // document.getElementById('butterchurnCurrentPresetName').textContent = presetKey.split(" - ").pop();
         
         if (this.app.UIManager) {
             this.app.UIManager.updateButterchurnPresetDisplay(presetKey, index);
