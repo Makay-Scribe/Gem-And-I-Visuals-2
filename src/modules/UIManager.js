@@ -37,11 +37,13 @@ export const UIManager = {
         this.setupMasterControls();
         this.setupEQCanvas(); 
         this.setupEventListeners();
+
+        this.updateUIVisibilityForMode(this.app.vizSettings.gpgpuGeometryMode);
+        
         this.updateBackgroundControlsVisibility(true);
         this.updateWarpControlsVisibility(true);
         this.updateDeformationEngineControls(true);
         this.updateImageEffectsVisibility(true);
-        this.updateGPGPUControlsVisibility(true); // Added for Triangle Legos controls
 
         this.updateMasterControls();
     },
@@ -393,10 +395,8 @@ export const UIManager = {
         if (shaderControls) shaderControls.style.display = (mode === 'shader') ? 'block' : 'none';
         if (butterchurnControls) butterchurnControls.style.display = (mode === 'butterchurn') ? 'block' : 'none';
     
-        // ** THE FIX IS HERE: Activate or deactivate the Butterchurn texture. **
         if (mode === 'butterchurn') {
             this.app.ButterchurnManager.activate();
-            // Also ensure audio is connected if it hasn't been already
             if (this.app.AudioProcessor.audioContext && !this.app.ButterchurnManager.visualizer) {
                 this.app.AudioProcessor.connectButterchurn();
             }
@@ -486,17 +486,40 @@ export const UIManager = {
         }
     },
 
-    updateGPGPUControlsVisibility(isInitial = false) {
-        const mode = this.app.vizSettings.gpgpuGeometryMode;
+    updateUIVisibilityForMode(mode) {
         const legoControls = document.getElementById('triangleLegosControls');
+        const gpgpuEffectsAccordion = document.getElementById('gpgpuEffectsAccordion');
+        const legacyDeformersContainer = document.getElementById('legacyDeformersContainer');
+        const deformationEngineToggle = document.getElementById('deformationEngineToggle');
+        
+        const cubeWallAccordion = document.getElementById('gpgpu_enableCubeWall')?.closest('.accordion-item');
+        const triWaveAccordion = document.getElementById('gpgpu_enableTriangleWave')?.closest('.accordion-item');
+        const waterRippleAccordion = document.getElementById('gpgpu_enableWaterRipple')?.closest('.accordion-item');
+        const eqRippleAccordion = document.getElementById('gpgpu_enableEqRipple')?.closest('.accordion-item');
+        const clothAccordion = document.getElementById('gpgpu_enableCloth')?.closest('.accordion-item');
 
-        if (legoControls) {
-            legoControls.style.display = (mode === 'triangleLegos') ? 'block' : 'none';
+        legoControls.style.display = 'none';
+        [cubeWallAccordion, triWaveAccordion, waterRippleAccordion, eqRippleAccordion, clothAccordion, legacyDeformersContainer, deformationEngineToggle]
+            .forEach(el => el?.classList.add('container-disabled'));
+
+        switch (mode) {
+            case 'geocube':
+                if (cubeWallAccordion) cubeWallAccordion.classList.remove('container-disabled');
+                break;
+            case 'triangleLegos':
+                legoControls.style.display = 'block';
+                if (legoControls) legoControls.closest('#gpgpuEffectsAccordion').classList.remove('container-disabled');
+                if (triWaveAccordion) triWaveAccordion.classList.remove('container-disabled');
+                break;
+            case 'continuous':
+            case 'faceted':
+                [waterRippleAccordion, eqRippleAccordion, clothAccordion, legacyDeformersContainer, deformationEngineToggle]
+                    .forEach(el => el?.classList.remove('container-disabled'));
+                break;
         }
 
-        if (!isInitial) {
-            this.refreshAccordion(legoControls);
-        }
+        this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
+        this.refreshAccordion(document.getElementById('legacyDeformersContainer'));
     },
 
     toggleLightSliders() { 
@@ -567,6 +590,27 @@ export const UIManager = {
         });
     },
 
+    handleExclusiveGPGPUToggle(toggledId) {
+        const S = this.app.vizSettings;
+        const exclusiveEffects = [
+            'gpgpu_enableWaterRipple',
+            'gpgpu_enableEqRipple',
+            'gpgpu_enableCloth'
+        ];
+    
+        if (S[toggledId]) {
+            exclusiveEffects.forEach(effectId => {
+                if (effectId !== toggledId) {
+                    S[effectId] = false;
+                    const checkbox = document.getElementById(effectId);
+                    if (checkbox) {
+                        checkbox.checked = false;
+                    }
+                }
+            });
+        }
+    },
+
     setupEventListeners() {
         document.getElementById('toggleMicInput').addEventListener('click', () => this.app.AudioProcessor.startMic());
         document.getElementById('playPauseAudioButton').addEventListener('click', () => this.app.AudioProcessor.toggleFilePlayback());
@@ -634,7 +678,7 @@ export const UIManager = {
             gpgpuGeometryModeSelect.addEventListener('change', (e) => {
                 this.app.vizSettings.gpgpuGeometryMode = e.target.value;
                 this.app.ImagePlaneManager.createDefaultLandscape();
-                this.updateGPGPUControlsVisibility();
+                this.updateUIVisibilityForMode(e.target.value);
             });
         }
         
@@ -692,7 +736,10 @@ export const UIManager = {
                     if (this.app.directionalLight) {
                         this.app.directionalLight.position.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
                     }
-                } else if (id === 'planeAspectRatio' || id === 'planeOrientation') {
+                // ** THE FIX IS HERE: Modified the condition to be more specific **
+                } else if (id === 'planeAspectRatio' && document.getElementById('planeAspectRatio')) {
+                    this.app.ImagePlaneManager.createDefaultLandscape();
+                } else if (id === 'planeOrientation' && document.getElementById('planeOrientation')) {
                     this.app.ImagePlaneManager.createDefaultLandscape();
                 }
             });
@@ -700,7 +747,6 @@ export const UIManager = {
 
         // Checkboxes (header toggles)
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-             // Exclude general checkboxes already handled in the loop above
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.id === 'enableWarp') return;
              
              checkbox.addEventListener('input', (e) => {
@@ -716,6 +762,12 @@ export const UIManager = {
                         ipm.currentTexture.needsUpdate = true;
                     }
                 }
+                
+                const exclusiveGpgpuEffects = ['gpgpu_enableWaterRipple', 'gpgpu_enableEqRipple', 'gpgpu_enableCloth'];
+                if (exclusiveGpgpuEffects.includes(e.target.id)) {
+                    this.handleExclusiveGPGPUToggle(e.target.id);
+                }
+
              });
         });
 
@@ -778,13 +830,11 @@ export const UIManager = {
             });
         }
         
-        // This button setup uses THREE.Vector3 as it refers to defaultVisualizerSettings
         Object.keys(this.app.modelPresets).forEach(presetId => {
             const btn = document.getElementById(presetId);
             if(btn) {
                 btn.addEventListener('click', () => {
                     const preset = this.app.modelPresets[presetId];
-                    // Ensure homeOffset is a THREE.Vector3 if it's not already
                     if (preset.homeOffset && !(preset.homeOffset instanceof this.app.THREE.Vector3)) {
                         preset.homeOffset = new this.app.THREE.Vector3(preset.homeOffset.x, preset.homeOffset.y, preset.homeOffset.z);
                     }
@@ -980,10 +1030,6 @@ export const UIManager = {
                 break;
             case 'hdriInput': 
                 this.updateFileNameDisplay('hdri', file.name);
-                // SceneManager no longer handles HDRI directly; BackgroundManager does via CubeCamera
-                // This call might need adjustment if you ever want custom HDRI loading again
-                // For now, it will simply update the filename display.
-                // if(this.app.SceneManager) this.app.SceneManager.loadHDRI(file); 
                 console.warn("Custom HDRI loading for main scene environment is currently handled by BackgroundManager based on BG FX mode. Direct HDRI input is not fully implemented in this version.");
                 break;
             case 'gltfModelInput':
@@ -1009,7 +1055,6 @@ export const UIManager = {
         const playButton = document.getElementById('playPauseAudioButton');
         if (!playButton) return;
 
-        // Reset glow state first
         playButton.classList.remove('button-glow-effect', 'button-solid-glow');
         
         let message = '';
@@ -1019,17 +1064,17 @@ export const UIManager = {
             case 'file_ready': 
                 message = "AUDIO: File Ready"; 
                 playButton.textContent = "Play File"; 
-                playButton.classList.add('button-glow-effect'); // Flashing
+                playButton.classList.add('button-glow-effect');
                 break; 
             case 'file_playing': 
                 message = "AUDIO: Playing"; 
                 playButton.textContent = "Pause File"; 
-                playButton.classList.add('button-solid-glow'); // Solid
+                playButton.classList.add('button-solid-glow');
                 break; 
             case 'file_paused': 
                 message = "AUDIO: Paused"; 
                 playButton.textContent = "Play File"; 
-                playButton.classList.add('button-glow-effect'); // Flashing
+                playButton.classList.add('button-glow-effect');
                 break; 
             case 'testTone': message = "AUDIO: Test Tone"; break;
             case 'error': message = `ERROR: ${statusText}`; break;

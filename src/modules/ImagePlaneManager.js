@@ -207,6 +207,17 @@ export const ImagePlaneManager = {
 
     createDefaultLandscape() {
         this.updatePlaneDimensions();
+
+        // ** THE FIX IS HERE: Re-initialize the ComputeManager with the new dimensions **
+        if (this.app.ComputeManager && this.app.ComputeManager.init) {
+            this.app.ComputeManager.init(this.app,
+                this.planeDimensions.x,
+                this.planeDimensions.y,
+                this.planeResolution.x,
+                this.planeResolution.y
+            );
+        }
+
         this._cleanupMeshes(); 
 
         const S = this.app.vizSettings;
