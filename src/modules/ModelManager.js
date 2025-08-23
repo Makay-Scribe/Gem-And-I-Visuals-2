@@ -1,4 +1,3 @@
-// REMOVED: import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const PRESET_DEFAULT_SPEEDS = {
@@ -33,8 +32,8 @@ export const ModelManager = {
         active: false,
         preset: null,
         isTransitioningToHome: false, 
-        isHoldingAtHome: false, // ** NEW: Flag for home hold state **
-        homeHoldTimer: 0, // ** NEW: Timer for the hold **
+        isHoldingAtHome: false, 
+        homeHoldTimer: 0, 
         nextPresetId: null, 
         waypointProgress: 1.0, 
         waypointTransitionDuration: 10.0,
@@ -176,14 +175,13 @@ export const ModelManager = {
         ap.startPos.copy(this.state.targetPosition);
         ap.startQuat.copy(this.state.targetQuaternion);
         
-        // Use this.app.THREE.MathUtils.randFloat
         ap.endPos.set(
             this.app.THREE.MathUtils.randFloat(ap.randomBounds.min.x, ap.randomBounds.max.x),
             this.app.THREE.MathUtils.randFloat(ap.randomBounds.min.y, ap.randomBounds.max.y),
             this.app.THREE.MathUtils.randFloat(ap.randomBounds.min.z, ap.randomBounds.max.z)
         );
 
-        const direction = new this.app.THREE.Vector3().subVectors(ap.endPos, ap.startPos); // Use app.THREE
+        const direction = new this.app.THREE.Vector3().subVectors(ap.endPos, ap.startPos);
         const distance = direction.length();
 
         if (distance < 0.001) {
@@ -195,7 +193,6 @@ export const ModelManager = {
         if (this.app.vizSettings.enableCollisionAvoidance && this.app.ImagePlaneManager.landscape) {
             direction.normalize(); 
 
-            // Raycaster is already on app object
             this.app.raycaster.set(ap.startPos, direction);
             const intersects = this.app.raycaster.intersectObject(this.app.ImagePlaneManager.landscape, false);
 
@@ -213,14 +210,16 @@ export const ModelManager = {
 
         this._waypointRetryCount = 0; 
 
-        // Use this.app.THREE.Euler and this.app.THREE.MathUtils.randFloat
         const randomRot = new this.app.THREE.Euler( (this.app.THREE.MathUtils.randFloat(0,1) - 0.5) * 0.8, (this.app.THREE.MathUtils.randFloat(0,1) - 0.5) * Math.PI, (this.app.THREE.MathUtils.randFloat(0,1) - 0.5) * 0.4 );
         ap.endQuat.setFromEuler(randomRot);
         
         const totalDistance = ap.startPos.distanceTo(ap.endPos);
         const speed = this.app.vizSettings.modelAutopilotSpeed;
-        this.app.THREE.MathUtils.clamp(totalDistance / (speed * 4), 8, 20); // Use app.THREE.MathUtils
-        ap.holdTimer = Math.random() * 5.0 + 2.0;
+        
+        // ** THE FIX IS HERE: Assign the result of the clamp function **
+        ap.waypointTransitionDuration = this.app.THREE.MathUtils.clamp(totalDistance / (speed * 2), 16, 40);
+        
+        ap.holdTimer = 0.5; 
         ap.waypointProgress = 0;
     },
     
@@ -235,13 +234,12 @@ export const ModelManager = {
 
         if (ap.waypointProgress >= 1.0) {
             if (ap.isTransitioningToHome) {
-                // ** THE FIX IS HERE: Start the hold timer upon arrival **
                 console.log("Model has arrived home. Starting hold timer.");
                 ap.isTransitioningToHome = false;
                 ap.isHoldingAtHome = true;
-                ap.homeHoldTimer = this.app.THREE.MathUtils.randFloat(5.0, 7.0); // Use app.THREE.MathUtils
+                ap.homeHoldTimer = 0.5;
             } else {
-                 ap.holdTimer = Math.random() * 5.0 + 2.0;
+                 ap.holdTimer = 0.5;
             }
         }
     },
@@ -249,13 +247,11 @@ export const ModelManager = {
     updateAutopilot(delta) {
         const ap = this.autopilot;
         
-        // ** THE FIX IS HERE: New state check for holding at home **
         if (ap.isHoldingAtHome) {
             ap.homeHoldTimer -= delta;
             if (ap.homeHoldTimer <= 0) {
                 console.log("Home hold finished.");
                 ap.isHoldingAtHome = false;
-                // Decide what to do next
                 if (ap.nextPresetId) {
                     console.log(`Resuming autopilot on preset: ${ap.nextPresetId}`);
                     this.startAutopilot(ap.nextPresetId);
@@ -266,7 +262,7 @@ export const ModelManager = {
                     if (this.app.UIManager) this.app.UIManager.updateMasterControls();
                 }
             }
-            return; // Important: Do nothing else while holding.
+            return;
         }
         
         if (ap.isTransitioningToHome) {
@@ -293,7 +289,17 @@ export const ModelManager = {
             if (this.app.UIManager) this.app.UIManager.logError("Cannot load model: Invalid preset.");
             return;
         }
-        this.stopAutopilot();
+
+        const ap = this.autopilot;
+        ap.active = false;
+        ap.preset = null;
+        ap.nextPresetId = null;
+        ap.isTransitioningToHome = false;
+        ap.isHoldingAtHome = false;
+        this.app.vizSettings.modelAutopilotOn = false;
+        if (this.app.UIManager) {
+            this.app.UIManager.updateMasterControls();
+        }
 
         this.activePresetId = preset.id;
         if (this.app.UIManager) this.app.UIManager.updateModelPresetGlow();
@@ -315,17 +321,17 @@ export const ModelManager = {
                 
                 this.app.scene.add(this.gltfModel);
                 
-                const finalHomePos = new this.app.THREE.Vector3().copy(this.state.homePosition); // Use app.THREE
+                const finalHomePos = new this.app.THREE.Vector3().copy(this.state.homePosition);
                 if (preset.homeOffset) {
                     finalHomePos.add(preset.homeOffset);
                 }
                 this.gltfModel.position.copy(finalHomePos);
                 this.state.targetPosition.copy(finalHomePos);
                 
-                const box = new this.app.THREE.Box3().setFromObject(this.gltfModel); // Use app.THREE
+                const box = new this.app.THREE.Box3().setFromObject(this.gltfModel);
                 box.getBoundingSphere(this.boundingSphere);
                 
-                const size = box.getSize(new this.app.THREE.Vector3()); // Use app.THREE
+                const size = box.getSize(new this.app.THREE.Vector3());
                 const scale = 10 / Math.max(size.x, size.y, size.z);
                 this.baseScale.set(scale, scale, scale);
                 this.gltfModel.scale.copy(this.baseScale);
@@ -333,7 +339,7 @@ export const ModelManager = {
                 this.boundingSphere.radius *= scale;
 
                 if (gltf.animations && gltf.animations.length) {
-                    this.animationMixer = new this.app.THREE.AnimationMixer(this.gltfModel); // Use app.THREE
+                    this.animationMixer = new this.app.THREE.AnimationMixer(this.gltfModel);
                     const action = this.animationMixer.clipAction(gltf.animations[0]);
                     action.play();
                     this.app.animationMixer = this.animationMixer;
@@ -373,7 +379,7 @@ export const ModelManager = {
             state.returnEaseFactor = 0;
             this.updateAutopilot(delta);
         } else {
-            const finalHomePos = new this.app.THREE.Vector3().copy(this.state.homePosition); // Use app.THREE
+            const finalHomePos = new this.app.THREE.Vector3().copy(this.state.homePosition);
             if (this.activePresetId && this.app.modelPresets[this.activePresetId]?.homeOffset) {
                 finalHomePos.add(this.app.modelPresets[this.activePresetId].homeOffset);
             }
@@ -387,8 +393,8 @@ export const ModelManager = {
         }
         
         if (S.enableModelSpin) {
-            const spinQuaternion = new this.app.THREE.Quaternion(); // Use app.THREE
-            const spinAxis = new this.app.THREE.Vector3(0, 1, 0); // Use app.THREE
+            const spinQuaternion = new this.app.THREE.Quaternion();
+            const spinAxis = new this.app.THREE.Vector3(0, 1, 0);
             spinQuaternion.setFromAxisAngle(spinAxis, S.modelSpinSpeed * delta);
             state.targetQuaternion.multiply(spinQuaternion);
         }

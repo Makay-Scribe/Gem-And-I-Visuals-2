@@ -396,10 +396,11 @@ export const UIManager = {
         if (butterchurnControls) butterchurnControls.style.display = (mode === 'butterchurn') ? 'block' : 'none';
     
         if (mode === 'butterchurn') {
-            this.app.ButterchurnManager.activate();
+            // ** THE FIX IS HERE: Ensure the visualizer exists before activating **
             if (this.app.AudioProcessor.audioContext && !this.app.ButterchurnManager.visualizer) {
                 this.app.AudioProcessor.connectButterchurn();
             }
+            this.app.ButterchurnManager.activate();
         } else {
             this.app.ButterchurnManager.deactivate();
         }
@@ -736,10 +737,7 @@ export const UIManager = {
                     if (this.app.directionalLight) {
                         this.app.directionalLight.position.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
                     }
-                // ** THE FIX IS HERE: Modified the condition to be more specific **
-                } else if (id === 'planeAspectRatio' && document.getElementById('planeAspectRatio')) {
-                    this.app.ImagePlaneManager.createDefaultLandscape();
-                } else if (id === 'planeOrientation' && document.getElementById('planeOrientation')) {
+                } else if ((id === 'planeAspectRatio' || id === 'planeOrientation') && document.getElementById(id)) {
                     this.app.ImagePlaneManager.createDefaultLandscape();
                 }
             });
