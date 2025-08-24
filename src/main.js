@@ -13,6 +13,8 @@ import { ModelManager } from './modules/ModelManager.js';
 import { ComputeManager } from './compute/ComputeManager.js';
 import { GPGPUDebugger } from './modules/GPGPUDebugger.js';
 import { CubeWallManager } from './modules/CubeWallManager.js';
+// ** THE FIX IS HERE: Import the new DirectorManager **
+import { DirectorManager } from './modules/DirectorManager.js';
 
 const App = {
     THREE: THREE, 
@@ -69,6 +71,8 @@ const App = {
     GPGPUDebugger: GPGPUDebugger,
     CubeWallManager: CubeWallManager,
     Debugger: Debugger,
+    // ** THE FIX IS HERE: Add DirectorManager to the list **
+    DirectorManager: DirectorManager,
 
     defaultVisualizerSettings: {
         activeControl: 'landscape',
@@ -399,9 +403,11 @@ const App = {
         this.ButterchurnManager.init(this);
         this.ModelManager.init(this);
         this.Debugger.init(this);
-        this.UIManager.init(this); 
         this.ImagePlaneManager.init(this); 
         this.CubeWallManager.init(this);
+        // ** THE FIX IS HERE: Initialize the DirectorManager **
+        this.DirectorManager.init(this);
+        this.UIManager.init(this); 
         
         this.ComputeManager.init(this, 
             this.ImagePlaneManager.planeDimensions.x, 
@@ -491,6 +497,22 @@ const App = {
 
         canvas.addEventListener('contextmenu', e => e.preventDefault());
 
+        // ** THE FIX IS HERE: Add event listener for the new button **
+        const directorButton = document.getElementById('directorModeButton');
+        if (directorButton) {
+            directorButton.addEventListener('click', () => {
+                if (this.DirectorManager.isActive) {
+                    this.DirectorManager.stop();
+                    directorButton.textContent = "Start Director Mode";
+                    directorButton.classList.remove('button-solid-glow');
+                } else {
+                    this.DirectorManager.start();
+                    directorButton.textContent = "Stop Director Mode";
+                    directorButton.classList.add('button-solid-glow');
+                }
+            });
+        }
+
         this.animate();
     },
 
@@ -541,6 +563,8 @@ const App = {
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
+        // ** THE FIX IS HERE: Add the DirectorManager update call **
+        this.DirectorManager.update(cappedDelta);
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
         this.CubeWallManager.update();

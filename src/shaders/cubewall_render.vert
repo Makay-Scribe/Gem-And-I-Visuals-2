@@ -1,70 +1,93 @@
-// Uniforms passed from ImagePlaneManager
+uniform sampler2D u_positionTexture; // GPGPU position output
+
+uniform bool u_gpgpu_enableTriangleWave;
 uniform float u_time;
-uniform vec2 u_planeDimensions;
-uniform vec2 u_gpgpu_cubeWallGridSize;
-uniform float u_gpgpu_cubeWallMorph;
+uniform float u_gpgpu_triWaveAmplitude;
+uniform float u_gpgpu_triWaveFrequency;
+uniform float u_gpgpu_triWaveSpeed;
 
-// Attribute sent for each instance
-attribute float instanceId;
+attribute vec2 uv_gpgpu; // Custom UV attribute to sample GPGPU textures
+attribute float triangleId; // Custom attribute to identify each triangle
 
-// Varyings to pass data to the fragment shader
 varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
-varying vec3 vLocalNormal; 
 varying float vTriangleId;
+varying vec3 vLocalNormal;
+
+// Simplex Noise function (for Triangle Wave)
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+float snoise(vec3 v) {
+    const vec2 C = vec2(1.0/6.0, 1.0/3.0) ;
+    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+    vec3 i  = floor(v + dot(v, C.yyy) );
+    vec3 x0 = v - i + dot(i, C.xxx) ;
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min( g.xyz, l.zxy );
+    vec3 i2 = max( g.xyz, l.zxy );
+    vec3 x1 = x0 - i1 + C.xxx;
+    vec3 x2 = x0 - i2 + C.yyy;
+    vec3 x3 = x0 - D.yyy;
+    i = mod289(i);
+    vec4 p = permute( permute( permute(
+        i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+        + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+        + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+    float n_ = 0.142857142857;
+    vec3 ns = n_ * D.wyz - D.xzx;
+    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+    vec4 x_ = floor(j * ns.z);
+    vec4 y_ = floor(j - 7.0 * x_ );
+    vec4 x = x_ *ns.x + ns.yyyy;
+    vec4 y = y_ *ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs(x) - abs(y);
+    vec4 b0 = vec4( x.xy, y.xy );
+    vec4 b1 = vec4( x.zw, y.zw );
+    vec4 s0 = floor(b0)*2.0 + 1.0;
+    vec4 s1 = floor(b1)*2.0 + 1.0;
+    vec4 sh = -step(h, vec4(0.0));
+    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+    vec3 p0 = vec3(a0.xy,h.x);
+    vec3 p1 = vec3(a0.zw,h.y);
+    vec3 p2 = vec3(a1.xy,h.z);
+    vec3 p3 = vec3(a1.zw,h.w);
+    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+    m = m * m;
+    return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
+}
 
 void main() {
-    // --- 1. Calculate Grid Position from Instance ID ---
-    float gridX = mod(instanceId, u_gpgpu_cubeWallGridSize.x);
-    float gridY = floor(instanceId / u_gpgpu_cubeWallGridSize.x);
-
-    // --- 2. Calculate Stepped and Flat Z Positions (Corrected Pivot Math) ---
-    float maxSteppedDisplacement = u_planeDimensions.x * 0.4;
+    vUv = uv; 
+    vTriangleId = triangleId;
+    vLocalNormal = normal;
     
-    float PIVOT_CUBE_ID = 40.0;
-    float pivotGridX = mod(PIVOT_CUBE_ID, u_gpgpu_cubeWallGridSize.x);
-    float pivotGridY = floor(PIVOT_CUBE_ID / u_gpgpu_cubeWallGridSize.x);
-    float pivotValue = pivotGridX + pivotGridY;
+    vec3 transformedPosition;
 
-    float currentValue = gridX + gridY;
-    
-    float minSteppedInput = 0.0 - pivotValue;
-    float maxSteppedInput = (u_gpgpu_cubeWallGridSize.x - 1.0) + (u_gpgpu_cubeWallGridSize.y - 1.0) - pivotValue;
-    float largestDisplacement = max(abs(minSteppedInput), abs(maxSteppedInput));
-    float wallStepDepth = largestDisplacement > 0.0 ? maxSteppedDisplacement / largestDisplacement : 0.0;
-    
-    float steppedZ = (currentValue - pivotValue) * wallStepDepth;
-    float flatZ = 0.0;
+    if (u_gpgpu_enableTriangleWave) {
+        transformedPosition = position;
+        
+        vec3 noiseCoord = vec3(mod(vTriangleId, 128.0) * 0.1, floor(vTriangleId / 128.0) * 0.1, u_time * u_gpgpu_triWaveSpeed);
+        float wave = snoise(noiseCoord * u_gpgpu_triWaveFrequency) * u_gpgpu_triWaveAmplitude;
+        
+        transformedPosition.z += wave;
 
-    // --- 3. Morph between the two states (Reverted to Correct Direction) ---
-    // ** THE FIX IS HERE: The mix function is reversed to match the new UI. **
-    float finalZ = mix(flatZ, steppedZ, u_gpgpu_cubeWallMorph);
+    } else {
+        vec4 gpgpu_pos_data = texture2D(u_positionTexture, uv_gpgpu);
+        transformedPosition = gpgpu_pos_data.xyz;
+    }
 
-    // --- 4. Calculate Cube's Base (X, Y) Position ---
-    float cubeSize = u_planeDimensions.x / u_gpgpu_cubeWallGridSize.x;
-    float offsetX = (u_gpgpu_cubeWallGridSize.x * cubeSize) / 2.0 - cubeSize / 2.0;
-    float offsetY = (u_gpgpu_cubeWallGridSize.y * cubeSize) / 2.0 - cubeSize / 2.0;
-
-    vec3 instancePosition = vec3(
-        gridX * cubeSize - offsetX,
-        gridY * cubeSize - offsetY,
-        finalZ
-    );
-
-    // --- 5. Calculate Final Vertex Position ---
-    vec4 worldPos4 = modelMatrix * (vec4(position, 1.0) + vec4(instancePosition, 0.0));
-    gl_Position = projectionMatrix * viewMatrix * worldPos4;
-
-    // --- 6. Calculate Custom UV for Texture Mapping ---
-    vec2 flippedUv = vec2(uv.x, 1.0 - uv.y);
-    vec2 uvOffset = vec2(gridX, (u_gpgpu_cubeWallGridSize.y - 1.0) - gridY) / u_gpgpu_cubeWallGridSize;
-    vec2 uvScale = 1.0 / u_gpgpu_cubeWallGridSize;
-    vUv = (flippedUv * uvScale) + uvOffset;
-    
-    // --- 7. Pass World Position and Normals to Fragment Shader ---
+    vec4 worldPos4 = modelMatrix * vec4(transformedPosition, 1.0);
     vWorldPosition = worldPos4.xyz;
+
     vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
-    vLocalNormal = normal; 
-    vTriangleId = instanceId;
+
+    gl_Position = projectionMatrix * viewMatrix * worldPos4;
 }
