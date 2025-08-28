@@ -13,7 +13,6 @@ import { ModelManager } from './modules/ModelManager.js';
 import { ComputeManager } from './compute/ComputeManager.js';
 import { GPGPUDebugger } from './modules/GPGPUDebugger.js';
 import { CubeWallManager } from './modules/CubeWallManager.js';
-// ** THE FIX IS HERE: Import the new DirectorManager **
 import { DirectorManager } from './modules/DirectorManager.js';
 
 const App = {
@@ -71,7 +70,6 @@ const App = {
     GPGPUDebugger: GPGPUDebugger,
     CubeWallManager: CubeWallManager,
     Debugger: Debugger,
-    // ** THE FIX IS HERE: Add DirectorManager to the list **
     DirectorManager: DirectorManager,
 
     defaultVisualizerSettings: {
@@ -179,6 +177,35 @@ const App = {
         gpgpu_triWaveSpeed: 1.0,
         gpgpu_triWaveColor1: '#ffffff',
         gpgpu_triWaveColor2: '#ffffff',
+        gpgpu_enableFold: false,
+        gpgpu_foldAngle: 20,
+        gpgpu_foldDepth: 0.38,
+        gpgpu_foldRoundness: 0.05,
+        gpgpu_foldAudioMod: 31,
+        gpgpu_foldNudge: 0.60,
+        gpgpu_enableFoldCrease: true,
+        gpgpu_foldCreaseDepth: 1.60,
+        gpgpu_foldCreaseSharpness: 1.0,
+        gpgpu_enableFoldTuck: true,
+        gpgpu_foldTuckAmount: -1.0,
+        gpgpu_foldTuckReach: 0.40,
+        gpgpu_enableCylinder: false,
+        gpgpu_cylinderRadius: 5.0,
+        gpgpu_cylinderHeightScale: 1.0,
+        gpgpu_cylinderAxisAlignment: "y",
+        gpgpu_cylinderArcAngle: 360,
+        gpgpu_cylinderArcOffset: 0,
+        // ** THE FIX IS HERE: Add default values for GPGPU Sag and Droop **
+        gpgpu_enableSag: false,
+        gpgpu_sagAmount: 2.0,
+        gpgpu_sagFalloffSharpness: 1.5,
+        gpgpu_sagAudioMod: 0.2,
+        gpgpu_enableDroop: false,
+        gpgpu_droopAmount: 0.3,
+        gpgpu_droopAudioMod: 1.0,
+        gpgpu_droopFalloffSharpness: 2.5,
+        gpgpu_droopSupportedWidthFactor: 0.6,
+        gpgpu_droopSupportedDepthFactor: 0.5,
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,
@@ -405,7 +432,6 @@ const App = {
         this.Debugger.init(this);
         this.ImagePlaneManager.init(this); 
         this.CubeWallManager.init(this);
-        // ** THE FIX IS HERE: Initialize the DirectorManager **
         this.DirectorManager.init(this);
         this.UIManager.init(this); 
         
@@ -497,7 +523,6 @@ const App = {
 
         canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-        // ** THE FIX IS HERE: Add event listener for the new button **
         const directorButton = document.getElementById('directorModeButton');
         if (directorButton) {
             directorButton.addEventListener('click', () => {
@@ -563,7 +588,6 @@ const App = {
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
-        // ** THE FIX IS HERE: Add the DirectorManager update call **
         this.DirectorManager.update(cappedDelta);
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);

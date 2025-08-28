@@ -1,5 +1,4 @@
 import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
-// REMOVED: import * as THREE from 'three'; // Explicitly import THREE
 
 export const ComputeManager = {
     app: null, // Main app instance
@@ -18,7 +17,6 @@ export const ComputeManager = {
 
     init(appInstance, planeWidth, planeHeight, planeResX, planeResY) {
         this.app = appInstance;
-        // Rely on app.renderer and app.THREE which are already passed or globally available
         const renderer = this.app.renderer;
 
         this.WIDTH = planeResX;
@@ -56,7 +54,6 @@ export const ComputeManager = {
             }
         }
 
-        // Use app.THREE for DataTexture creation
         this.initialPositionTexture = new this.app.THREE.DataTexture(initialPositionData, this.WIDTH, this.HEIGHT, this.app.THREE.RGBAFormat, this.app.THREE.FloatType);
         this.initialPositionTexture.needsUpdate = true;
         
@@ -72,7 +69,7 @@ export const ComputeManager = {
             u_delta: { value: 0 },
             u_audioLow: { value: 0 },
             u_audioTexture: { value: this.app.AudioProcessor.audioTexture }, 
-            u_planeDimensions: { value: new this.app.THREE.Vector2(planeWidth, planeHeight) }, // Use app.THREE
+            u_planeDimensions: { value: new this.app.THREE.Vector2(planeWidth, planeHeight) },
             u_isLegacyMode: { value: true },
             u_enableAudioDeform: { value: true },
             u_deformationStrength: { value: 0.0 },
@@ -135,9 +132,39 @@ export const ComputeManager = {
             u_gpgpu_ambientWindStrength: { value: 4.0 },
             u_gpgpu_ambientWindSpeed: { value: 0.3 },
             u_gpgpu_ambientWindScale: { value: 2.0 },
-            u_gpgpu_directionalWind: { value: new this.app.THREE.Vector3(0, 1.6, 5.8) }, // Use app.THREE
+            u_gpgpu_directionalWind: { value: new this.app.THREE.Vector3(0, 1.6, 5.8) },
             u_gpgpu_clothBlendTime: { value: 9.6 },
             u_gpgpu_clothBlendFactor: { value: 0.0 },
+            u_gpgpu_enableFold: { value: false },
+            u_gpgpu_foldAngle: { value: 0.0 },
+            u_gpgpu_foldDepth: { value: 0.0 },
+            u_gpgpu_foldRoundness: { value: 0.0 },
+            u_gpgpu_foldAudioMod: { value: 0.0 },
+            u_gpgpu_foldNudge: { value: 0.0 },
+            u_gpgpu_enableFoldCrease: { value: false },
+            u_gpgpu_foldCreaseDepth: { value: 0.0 },
+            u_gpgpu_foldCreaseSharpness: { value: 0.0 },
+            u_gpgpu_enableFoldTuck: { value: false },
+            u_gpgpu_foldTuckAmount: { value: 0.0 },
+            u_gpgpu_foldTuckReach: { value: 0.0 },
+            u_gpgpu_enableCylinder: { value: false },
+            u_gpgpu_cylinderRadius: { value: 0.0 },
+            u_gpgpu_cylinderHeightScale: { value: 0.0 },
+            u_gpgpu_cylinderAxisAlignment: { value: 0 },
+            u_gpgpu_cylinderArcAngle: { value: 0.0 },
+            u_gpgpu_cylinderArcOffset: { value: 0.0 },
+
+            // ** THE FIX IS HERE: Add new uniforms for GPGPU Sag and Droop **
+            u_gpgpu_enableSag: { value: false },
+            u_gpgpu_sagAmount: { value: 0.0 },
+            u_gpgpu_sagFalloffSharpness: { value: 0.0 },
+            u_gpgpu_sagAudioMod: { value: 0.0 },
+            u_gpgpu_enableDroop: { value: false },
+            u_gpgpu_droopAmount: { value: 0.0 },
+            u_gpgpu_droopAudioMod: { value: 0.0 },
+            u_gpgpu_droopFalloffSharpness: { value: 0.0 },
+            u_gpgpu_droopSupportedWidthFactor: { value: 0.0 },
+            u_gpgpu_droopSupportedDepthFactor: { value: 0.0 },
         };
 
         this.positionVariable.material.uniforms = uniforms;
@@ -251,6 +278,39 @@ export const ComputeManager = {
             uniforms.u_gpgpu_ambientWindSpeed.value = S.gpgpu_ambientWindSpeed;
             uniforms.u_gpgpu_ambientWindScale.value = S.gpgpu_ambientWindScale;
             uniforms.u_gpgpu_directionalWind.value.set(S.gpgpu_directionalWindX, S.gpgpu_directionalWindY, S.gpgpu_directionalWindZ);
+
+            uniforms.u_gpgpu_enableFold.value = S.gpgpu_enableFold;
+            uniforms.u_gpgpu_foldAngle.value = S.gpgpu_foldAngle * (Math.PI / 180.0);
+            uniforms.u_gpgpu_foldDepth.value = S.gpgpu_foldDepth;
+            uniforms.u_gpgpu_foldRoundness.value = S.gpgpu_foldRoundness;
+            uniforms.u_gpgpu_foldAudioMod.value = S.gpgpu_foldAudioMod * (Math.PI / 180.0);
+            uniforms.u_gpgpu_foldNudge.value = S.gpgpu_foldNudge;
+            uniforms.u_gpgpu_enableFoldCrease.value = S.gpgpu_enableFoldCrease;
+            uniforms.u_gpgpu_foldCreaseDepth.value = S.gpgpu_foldCreaseDepth;
+            uniforms.u_gpgpu_foldCreaseSharpness.value = S.gpgpu_foldCreaseSharpness;
+            uniforms.u_gpgpu_enableFoldTuck.value = S.gpgpu_enableFoldTuck;
+            uniforms.u_gpgpu_foldTuckAmount.value = S.gpgpu_foldTuckAmount;
+            uniforms.u_gpgpu_foldTuckReach.value = S.gpgpu_foldTuckReach;
+
+            uniforms.u_gpgpu_enableCylinder.value = S.gpgpu_enableCylinder;
+            uniforms.u_gpgpu_cylinderRadius.value = S.gpgpu_cylinderRadius;
+            uniforms.u_gpgpu_cylinderHeightScale.value = S.gpgpu_cylinderHeightScale;
+            const cylAxisMapGpgpu = { 'y': 0, 'x': 1, 'z': 2 };
+            uniforms.u_gpgpu_cylinderAxisAlignment.value = cylAxisMapGpgpu[S.gpgpu_cylinderAxisAlignment] || 0;
+            uniforms.u_gpgpu_cylinderArcAngle.value = S.gpgpu_cylinderArcAngle * (Math.PI / 180.0);
+            uniforms.u_gpgpu_cylinderArcOffset.value = S.gpgpu_cylinderArcOffset * (Math.PI / 180.0);
+
+            // ** THE FIX IS HERE: Update GPGPU Sag and Droop uniforms **
+            uniforms.u_gpgpu_enableSag.value = S.gpgpu_enableSag;
+            uniforms.u_gpgpu_sagAmount.value = S.gpgpu_sagAmount;
+            uniforms.u_gpgpu_sagFalloffSharpness.value = S.gpgpu_sagFalloffSharpness;
+            uniforms.u_gpgpu_sagAudioMod.value = S.gpgpu_sagAudioMod;
+            uniforms.u_gpgpu_enableDroop.value = S.gpgpu_enableDroop;
+            uniforms.u_gpgpu_droopAmount.value = S.gpgpu_droopAmount;
+            uniforms.u_gpgpu_droopAudioMod.value = S.gpgpu_droopAudioMod;
+            uniforms.u_gpgpu_droopFalloffSharpness.value = S.gpgpu_droopFalloffSharpness;
+            uniforms.u_gpgpu_droopSupportedWidthFactor.value = S.gpgpu_droopSupportedWidthFactor;
+            uniforms.u_gpgpu_droopSupportedDepthFactor.value = S.gpgpu_droopSupportedDepthFactor;
         }
 
         // --- GLOBAL UNIFORMS (always updated) ---
@@ -338,6 +398,38 @@ export const ComputeManager = {
         uniform vec3 u_gpgpu_directionalWind;
         uniform float u_gpgpu_clothBlendTime;
         uniform float u_gpgpu_clothBlendFactor;
+        
+        uniform bool u_gpgpu_enableFold;
+        uniform float u_gpgpu_foldAngle;
+        uniform float u_gpgpu_foldDepth;
+        uniform float u_gpgpu_foldRoundness;
+        uniform float u_gpgpu_foldAudioMod;
+        uniform float u_gpgpu_foldNudge;
+        uniform bool u_gpgpu_enableFoldCrease;
+        uniform float u_gpgpu_foldCreaseDepth;
+        uniform float u_gpgpu_foldCreaseSharpness;
+        uniform bool u_gpgpu_enableFoldTuck;
+        uniform float u_gpgpu_foldTuckAmount;
+        uniform float u_gpgpu_foldTuckReach;
+
+        uniform bool u_gpgpu_enableCylinder;
+        uniform float u_gpgpu_cylinderRadius;
+        uniform float u_gpgpu_cylinderHeightScale;
+        uniform int u_gpgpu_cylinderAxisAlignment;
+        uniform float u_gpgpu_cylinderArcAngle;
+        uniform float u_gpgpu_cylinderArcOffset;
+
+        // ** THE FIX IS HERE: Add GLSL uniform declarations for GPGPU Sag and Droop **
+        uniform bool u_gpgpu_enableSag;
+        uniform float u_gpgpu_sagAmount;
+        uniform float u_gpgpu_sagFalloffSharpness;
+        uniform float u_gpgpu_sagAudioMod;
+        uniform bool u_gpgpu_enableDroop;
+        uniform float u_gpgpu_droopAmount;
+        uniform float u_gpgpu_droopAudioMod;
+        uniform float u_gpgpu_droopFalloffSharpness;
+        uniform float u_gpgpu_droopSupportedWidthFactor;
+        uniform float u_gpgpu_droopSupportedDepthFactor;
     `,
 
     commonShaderCode: `
@@ -430,7 +522,7 @@ export const ComputeManager = {
         vec3 calculateDroop(vec2 uv, float audio, float droopAmount, float audioMod, float falloffSharpness, float supportedWidthFactor, float supportedDepthFactor) { vec2 centered_uv = uv - 0.5; float supported_half_w = supportedWidthFactor * 0.5; float supported_half_h = supportedDepthFactor * 0.5; float dist_outside_w = max(0.0, abs(centered_uv.x) - supported_half_w); float dist_outside_h = max(0.0, abs(centered_uv.y) - supported_half_h); float unsupported_range_w = 0.5 - supported_half_w; float unsupported_range_h = 0.5 - supported_half_h; float normalized_dist_w = (unsupported_range_w > EPSILON_SHADER) ? dist_outside_w / unsupported_range_w : 0.0; float normalized_dist_h = (unsupported_range_h > EPSILON_SHADER) ? dist_outside_h / unsupported_range_h : 0.0; float droop_factor_w = 1.0 - (1.0 - normalized_dist_w) * (1.0 - normalized_dist_w); float droop_factor_h = 1.0 - (1.0 - normalized_dist_h) * (1.0 - normalized_dist_h); float combined_droop_factor = max(droop_factor_w, droop_factor_h); float final_droop_mask = pow(combined_droop_factor, falloffSharpness); float total_droop_amount = droopAmount * (1.0 + audio * audioMod); float droop_displacement = total_droop_amount * final_droop_mask; return getDisplacementNormal() * -droop_displacement; }
         vec3 calculateCylinder(vec2 uv, float audio, vec2 planeDimensions, float cylinderRadius, float cylinderHeightScale, int cylinderAxisAlignment, float cylinderArcAngle, float cylinderArcOffset, float deformationStrength) { float angle = -(cylinderArcOffset + uv.x * cylinderArcAngle); float length_coord = (uv.y - 0.5) * planeDimensions.y * cylinderHeightScale; vec3 p; vec3 normal_dir; if (cylinderAxisAlignment == 1) { p = vec3(length_coord, cos(angle) * cylinderRadius, sin(angle) * cylinderRadius); normal_dir = normalize(vec3(0.0, p.y, p.z)); }  else if (cylinderAxisAlignment == 2) { p = vec3(cos(angle) * cylinderRadius, sin(angle) * cylinderRadius, length_coord); normal_dir = normalize(vec3(p.x, p.y, 0.0)); }  else { p = vec3(cos(angle) * cylinderRadius, length_coord, sin(angle) * cylinderRadius); normal_dir = normalize(vec3(p.x, 0.0, p.z)); } p += normal_dir * audio * deformationStrength; return p; }
         vec3 calculateBend(vec3 p, vec2 uv, float audio, vec2 planeSize, float bendAngle, float bendAudioMod, float bendFalloffSharpness, int bendAxis) { float falloff_coord = (bendAxis == 0) ? abs(uv.y - 0.5) * 2.0 : abs(uv.x - 0.5) * 2.0; float falloff_multiplier = pow(falloff_coord, bendFalloffSharpness); float total_bend_angle = bendAngle * (1.0 + audio * bendAudioMod) * falloff_multiplier; if (abs(total_bend_angle) < EPSILON_SHADER) { return p; } vec3 segment_axis = (bendAxis == 0) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0); float segment_extent = (bendAxis == 0) ? planeSize.y : planeSize.x; vec3 bend_axis_dir = normalize(cross(getDisplacementNormal(), segment_axis)); float half_extent = segment_extent * 0.5; float bend_radius = half_extent / max(EPSILON_SHADER, abs(sin(total_bend_angle * 0.5))); float segment_val = dot(p, segment_axis); float angle_on_arc = (segment_val / max(EPSILON_SHADER, half_extent)) * (total_bend_angle * 0.5); vec3 bent_position = bend_axis_dir * dot(p, bend_axis_dir); bent_position += segment_axis * (sin(angle_on_arc) * bend_radius); bent_position += getDisplacementNormal() * ((cos(angle_on_arc) - 1.0) * bend_radius * -sign(total_bend_angle)); return bent_position; }
-        vec3 calculateFold(vec3 flat_pos, vec2 uv_param, float audio, vec2 planeSize, float foldAngle, float foldDepth, float foldRoundness, float foldAudioMod, float foldNudge, bool enableFoldCrease, float foldCreaseDepth, float foldCreaseSharpness, bool enableFoldTuck, float foldTuckAmount, float foldTuckReach, float deformationStrength) { vec2 local_uv; int corner_index; if(uv_param.x<0.5&&uv_param.y<0.5){local_uv=uv_param;corner_index=0;}else if(uv_param.x>0.5&&uv_param.y<0.5){local_uv=vec2(1.0-uv_param.x,uv_param.y);corner_index=1;}else if(uv_param.x<0.5&&uv_param.y>0.5){local_uv=vec2(uv_param.x,1.0-uv_param.y);corner_index=2;}else{local_uv=vec2(1.0-uv_param.x,1.0-uv_param.y);corner_index=3;} vec3 axis_U = vec3(1.0, 0.0, 0.0); vec3 axis_V = vec3(0.0, 1.0, 0.0); vec3 axis_W = getDisplacementNormal(); float uv_sum_diag=local_uv.x+local_uv.y; if(uv_sum_diag>=foldDepth+foldRoundness+EPSILON_SHADER){return flat_pos + axis_W * audio * deformationStrength;} float arm_U=foldDepth*planeSize.x;float arm_V=foldDepth*planeSize.y; vec3 corner_sign=(corner_index==0)?vec3(-1,-1,1):(corner_index==1)?vec3(1,-1,-1):(corner_index==2)?vec3(-1,1,-1):vec3(1,1,1); vec3 hinge_start=corner_sign.x*axis_U*(planeSize.x*0.5-arm_U)+corner_sign.y*axis_V*(planeSize.y*0.5); vec3 hinge_end=corner_sign.x*axis_U*(planeSize.x*0.5)+corner_sign.y*axis_V*(planeSize.y*0.5-arm_V); vec3 hinge_axis=normalize(hinge_end-hinge_start); float main_fold_angle=(-foldAngle+foldAudioMod*audio)*corner_sign.z; float blend_factor=1.0-smoothstep(foldDepth-foldRoundness,foldDepth+u_foldRoundness,uv_sum_diag); float actual_rotation_angle=main_fold_angle*blend_factor; mat3 R = rotationMatrix3(hinge_axis, actual_rotation_angle); vec3 folded_pos = hinge_start + R * (flat_pos - hinge_start); vec3 transformed_normal = R * axis_W; if(abs(foldNudge)>0.001){float progress_along_hinge=clamp(dot(flat_pos-hinge_start,hinge_axis)/length(hinge_end-hinge_start),0.0,1.0);float arch_factor=sin(progress_along_hinge*PI);folded_pos+=transformed_normal*foldNudge*arch_factor*blend_factor;} if(enableFoldTuck){float tuck_falloff=1.0-smoothstep(0.0,foldTuckReach,length(local_uv));if(tuck_falloff>0.0){vec3 outward_vector=normalize(corner_sign.x*axis_U+corner_sign.y*axis_V);float tuck_strength=foldTuckAmount*-0.5;folded_pos+=outward_vector*tuck_strength*tuck_falloff*blend_factor;}} if(enableFoldCrease){float dist_from_diag=abs(local_uv.x-local_uv.y)/1.4142;float crease_mask=1.0-smoothstep(0.0,foldDepth*0.5,dist_from_diag);crease_mask=pow(crease_mask,foldCreaseSharpness*0.5);folded_pos+=transformed_normal*foldCreaseDepth*crease_mask*blend_factor;} folded_pos+=transformed_normal*audio*deformationStrength; return folded_pos; }
+        vec3 calculateFold(vec3 flat_pos, vec2 uv_param, float audio, vec2 planeSize, float foldAngle, float foldDepth, float foldRoundness, float foldAudioMod, float foldNudge, bool enableFoldCrease, float foldCreaseDepth, float foldCreaseSharpness, bool enableFoldTuck, float foldTuckAmount, float foldTuckReach, float deformationStrength) { vec2 local_uv; int corner_index; if(uv_param.x<0.5&&uv_param.y<0.5){local_uv=uv_param;corner_index=0;}else if(uv_param.x>0.5&&uv_param.y<0.5){local_uv=vec2(1.0-uv_param.x,uv_param.y);corner_index=1;}else if(uv_param.x<0.5&&uv_param.y>0.5){local_uv=vec2(uv_param.x,1.0-uv_param.y);corner_index=2;}else{local_uv=vec2(1.0-uv_param.x,1.0-uv_param.y);corner_index=3;} vec3 axis_U = vec3(1.0, 0.0, 0.0); vec3 axis_V = vec3(0.0, 1.0, 0.0); vec3 axis_W = getDisplacementNormal(); float uv_sum_diag=local_uv.x+local_uv.y; if(uv_sum_diag>=foldDepth+foldRoundness+EPSILON_SHADER){return flat_pos + axis_W * audio * deformationStrength;} float arm_U=foldDepth*planeSize.x;float arm_V=foldDepth*planeSize.y; vec3 corner_sign=(corner_index==0)?vec3(-1,-1,1):(corner_index==1)?vec3(1,-1,-1):(corner_index==2)?vec3(-1,1,-1):vec3(1,1,1); vec3 hinge_start=corner_sign.x*axis_U*(planeSize.x*0.5-arm_U)+corner_sign.y*axis_V*(planeSize.y*0.5); vec3 hinge_end=corner_sign.x*axis_U*(planeSize.x*0.5)+corner_sign.y*axis_V*(planeSize.y*0.5-arm_V); vec3 hinge_axis=normalize(hinge_end-hinge_start); float main_fold_angle=(-foldAngle+foldAudioMod*audio)*corner_sign.z; float blend_factor=1.0-smoothstep(foldDepth-foldRoundness,foldDepth+foldRoundness,uv_sum_diag); float actual_rotation_angle=main_fold_angle*blend_factor; mat3 R = rotationMatrix3(hinge_axis, actual_rotation_angle); vec3 folded_pos = hinge_start + R * (flat_pos - hinge_start); vec3 transformed_normal = R * axis_W; if(abs(foldNudge)>0.001){float progress_along_hinge=clamp(dot(flat_pos-hinge_start,hinge_axis)/length(hinge_end-hinge_start),0.0,1.0);float arch_factor=sin(progress_along_hinge*PI);folded_pos+=transformed_normal*foldNudge*arch_factor*blend_factor;} if(enableFoldTuck){float tuck_falloff=1.0-smoothstep(0.0,foldTuckReach,length(local_uv));if(tuck_falloff>0.0){vec3 outward_vector=normalize(corner_sign.x*axis_U+corner_sign.y*axis_V);float tuck_strength=foldTuckAmount*-0.5;folded_pos+=outward_vector*tuck_strength*tuck_falloff*blend_factor;}} if(enableFoldCrease){float dist_from_diag=abs(local_uv.x-local_uv.y)/1.4142;float crease_mask=1.0-smoothstep(0.0,foldDepth*0.5,dist_from_diag);crease_mask=pow(crease_mask,foldCreaseSharpness*0.5);folded_pos+=transformed_normal*foldCreaseDepth*crease_mask*blend_factor;} folded_pos+=transformed_normal*audio*deformationStrength; return folded_pos; }
         void satisfyConstraints(inout vec3 p, vec2 uv, float stiffness, float restLength) { vec2 texelSize = 1.0 / resolution.xy; vec3 pRight = texture2D(texturePosition, uv + vec2(texelSize.x, 0.0)).xyz; vec3 delta = pRight - p; float deltaLength = length(delta); if (deltaLength > 0.0) { float diff = (deltaLength - restLength) / deltaLength; p += delta * 0.5 * stiffness * diff; } vec3 pLeft = texture2D(texturePosition, uv - vec2(texelSize.x, 0.0)).xyz; delta = pLeft - p; deltaLength = length(delta); if (deltaLength > 0.0) { float diff = (deltaLength - restLength) / deltaLength; p += delta * 0.5 * stiffness * diff; } vec3 pUp = texture2D(texturePosition, uv + vec2(0.0, texelSize.y)).xyz; vec3 deltaUp = pUp - p; float deltaLengthUp = length(deltaUp); if (deltaLengthUp > 0.0) { float diffUp = (deltaLengthUp - restLength) / deltaLengthUp; p += deltaUp * 0.5 * stiffness * diffUp; } vec3 pDown = texture2D(texturePosition, uv - vec2(0.0, texelSize.y)).xyz; vec3 deltaDown = pDown - p; float deltaLengthDown = length(deltaDown); if (deltaLengthDown > 0.0) { float diffDown = (deltaLengthDown - restLength) / deltaLengthDown; p += deltaDown * 0.5 * stiffness * diffDown; } }
     `,
 
@@ -464,11 +556,36 @@ export const ComputeManager = {
                 if (u_enablePeel > 0.5) { float audio = u_peelEnableAudio ? u_peelAudio : 0.0; totalDisplacement += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount); }
                 finalPos = pos + totalDisplacement;
             } else { 
+                vec3 gpgpuPos = initialPos;
                 vec3 gpgpuDisplacement = vec3(0.0);
+
+                if (u_gpgpu_enableCylinder) {
+                     gpgpuPos = calculateCylinder(uv, u_audioLow, u_planeDimensions,
+                                                u_gpgpu_cylinderRadius, u_gpgpu_cylinderHeightScale, 
+                                                u_gpgpu_cylinderAxisAlignment, u_gpgpu_cylinderArcAngle, 
+                                                u_gpgpu_cylinderArcOffset, 0.0);
+                }
+                
+                if (u_gpgpu_enableFold) {
+                    gpgpuPos = calculateFold(gpgpuPos, uv, u_audioLow, u_planeDimensions, 
+                                            u_gpgpu_foldAngle, u_gpgpu_foldDepth, u_gpgpu_foldRoundness, 
+                                            u_gpgpu_foldAudioMod, u_gpgpu_foldNudge, u_gpgpu_enableFoldCrease, 
+                                            u_gpgpu_foldCreaseDepth, u_gpgpu_foldCreaseSharpness, 
+                                            u_gpgpu_enableFoldTuck, u_gpgpu_foldTuckAmount, u_gpgpu_foldTuckReach, 
+                                            0.0);
+                }
+
+                // ** THE FIX IS HERE: Add Sag and Droop to the displacement calculation **
+                if (u_gpgpu_enableSag) {
+                    gpgpuDisplacement += calculateSag(uv, u_audioLow, u_gpgpu_sagAmount, u_gpgpu_sagFalloffSharpness, u_gpgpu_sagAudioMod);
+                }
+                if (u_gpgpu_enableDroop) {
+                    gpgpuDisplacement += calculateDroop(uv, u_audioLow, u_gpgpu_droopAmount, u_gpgpu_droopAudioMod, u_gpgpu_droopFalloffSharpness, u_gpgpu_droopSupportedWidthFactor, u_gpgpu_droopSupportedDepthFactor);
+                }
                 if (u_gpgpu_enableWaterRipple) { gpgpuDisplacement += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency); }
                 if (u_gpgpu_enableEqRipple) { gpgpuDisplacement += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleStyle, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd); }
                 
-                finalPos = initialPos + gpgpuDisplacement;
+                finalPos = gpgpuPos + gpgpuDisplacement;
 
                 if (u_gpgpu_enableCloth) {
                     vec3 currentPos = texture2D(texturePosition, uv).xyz;

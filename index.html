@@ -16,8 +16,6 @@
     <script src="butterchurnPresetsExtra2.min.js"></script>
     <script src="butterchurnPresetsMD1.min.js"></script>
     
-    <!-- REMOVED: Cannon-es Physics Library (now imported via npm in PhysicsManager.js) -->
-    
 </head><body>
 
     <button id="controlsToggleButton">Show</button>
@@ -81,7 +79,6 @@
                     <button class="segmented-control-button" data-actor="model">3D Model</button>
                 </div>
 
-                <!-- ** THE FIX IS HERE: New Director Mode button ** -->
                 <p class="sub-group-title">SHOW CONTROL</p>
                 <button id="directorModeButton">Start Director Mode</button>
 
@@ -408,6 +405,108 @@
 
                         <label>Range End: <span id="gpgpu_eqRippleRangeEndValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_eqRippleRangeEnd" min="0.0" max="1.0" step="0.01" value="1.0">
+                    </div>
+                </div>
+                
+                <div class="accordion-item">
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">
+                            <span class="header-title">Fold</span>
+                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                        </button>
+                        <input type="checkbox" id="gpgpu_enableFold" class="header-toggle-checkbox">
+                    </div>
+                    <div class="accordion-content">
+                        <label>Angle: <span id="gpgpu_foldAngleValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_foldAngle" min="0" max="90" step="1" value="20">
+                        <label>Depth: <span id="gpgpu_foldDepthValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_foldDepth" min="0.01" max="0.49" step="0.01" value="0.38">
+                        <label>Roundness: <span id="gpgpu_foldRoundnessValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_foldRoundness" min="0.0" max="0.1" step="0.001" value="0.05">
+                        <label>Audio Strength: <span id="gpgpu_foldAudioModValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_foldAudioMod" min="0.0" max="45.0" step="1" value="31">
+                        <label>Nudge (Arch): <span id="gpgpu_foldNudgeValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_foldNudge" min="-0.6" max="0.6" step="0.01" value="0.60">
+                        
+                        <p class="sub-group-title">DETAILS</p>
+                        <div class="checkbox-label-container"><label for="gpgpu_enableFoldCrease">Enable Crease</label><input type="checkbox" id="gpgpu_enableFoldCrease" checked></div>
+                        <label>Crease Depth: <span id="gpgpu_foldCreaseDepthValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_foldCreaseDepth" min="-1.6" max="1.6" step="0.05" value="1.60">
+                        <label>Crease Sharpness: <span id="gpgpu_foldCreaseSharpnessValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_foldCreaseSharpness" min="1.0" max="10.0" step="0.1" value="1.0">
+                        
+                        <div class="checkbox-label-container"><label for="gpgpu_enableFoldTuck">Enable Tuck</label><input type="checkbox" id="gpgpu_enableFoldTuck" checked></div>
+                        <label>Tuck Amount: <span id="gpgpu_foldTuckAmountValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_foldTuckAmount" min="-1.0" max="1.0" step="0.05" value="-1.00">
+                        <label>Tuck Reach: <span id="gpgpu_foldTuckReachValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_foldTuckReach" min="0.01" max="0.4" step="0.005" value="0.40">
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">
+                            <span class="header-title">Cylinder</span>
+                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                        </button>
+                        <input type="checkbox" id="gpgpu_enableCylinder" class="header-toggle-checkbox">
+                    </div>
+                    <div class="accordion-content">
+                        <label>Radius: <span id="gpgpu_cylinderRadiusValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_cylinderRadius" min="0.5" max="20.0" step="0.1" value="5.0">
+                        <label>Height Scale: <span id="gpgpu_cylinderHeightScaleValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_cylinderHeightScale" min="0.1" max="5.0" step="0.1" value="1.0">
+                        <label>Axis:</label>
+                        <select id="gpgpu_cylinderAxisAlignment">
+                            <option value="y" selected>Y</option>
+                            <option value="x">X</option>
+                            <option value="z">Z</option>
+                        </select>
+                        <label>Arc Angle: <span id="gpgpu_cylinderArcAngleValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_cylinderArcAngle" min="1" max="360" step="1" value="360">
+                        <label>Arc Offset: <span id="gpgpu_cylinderArcOffsetValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_cylinderArcOffset" min="0" max="359" step="1" value="0">
+                    </div>
+                </div>
+
+                <!-- ** THE FIX IS HERE: New accordions for GPGPU Sag and Droop ** -->
+                <div class="accordion-item">
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">
+                            <span class="header-title">Sag</span>
+                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                        </button>
+                        <input type="checkbox" id="gpgpu_enableSag" class="header-toggle-checkbox">
+                    </div>
+                    <div class="accordion-content">
+                        <label>Amount: <span id="gpgpu_sagAmountValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_sagAmount" min="0.0" max="10.0" step="0.1" value="2.0">
+                        <label>Falloff Sharpness: <span id="gpgpu_sagFalloffSharpnessValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_sagFalloffSharpness" min="0.1" max="5.0" step="0.1" value="1.5">
+                        <label>Audio Strength: <span id="gpgpu_sagAudioModValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_sagAudioMod" min="0.0" max="1.0" step="0.05" value="0.2">
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <div class="accordion-header-with-toggle">
+                        <button class="accordion-header">
+                            <span class="header-title">Droop</span>
+                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                        </button>
+                        <input type="checkbox" id="gpgpu_enableDroop" class="header-toggle-checkbox">
+                    </div>
+                    <div class="accordion-content">
+                        <label>Amount: <span id="gpgpu_droopAmountValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_droopAmount" min="0.0" max="15.0" step="0.1" value="0.3">
+                        <label>Audio Strength: <span id="gpgpu_droopAudioModValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_droopAudioMod" min="0.0" max="5.0" step="0.1" value="1.0">
+                        <label>Falloff Sharpness: <span id="gpgpu_droopFalloffSharpnessValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_droopFalloffSharpness" min="0.1" max="10.0" step="0.1" value="2.5">
+                        <label>Supported Width: <span id="gpgpu_droopSupportedWidthFactorValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_droopSupportedWidthFactor" min="0.0" max="1.0" step="0.01" value="0.6">
+                        <label>Supported Depth: <span id="gpgpu_droopSupportedDepthFactorValue" class="range-value-display"></span></label>
+                        <input type="range" id="gpgpu_droopSupportedDepthFactor" min="0.0" max="1.0" step="0.01" value="0.5">
                     </div>
                 </div>
 
