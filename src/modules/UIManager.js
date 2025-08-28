@@ -31,7 +31,7 @@ export const UIManager = {
             toggleButton.classList.add('button-glow-effect');
         }
 
-        this.syncAllControlsToSettings(); // Use the new sync function
+        this.syncAllControlsToSettings(); 
 
         this.initImageEffectsControls();
         this.setupMasterControls();
@@ -41,8 +41,6 @@ export const UIManager = {
         this.updateUIVisibilityForMode(this.app.vizSettings.gpgpuGeometryMode);
         
         this.updateBackgroundControlsVisibility(true);
-        this.updateWarpControlsVisibility(true);
-        this.updateDeformationEngineControls(true);
         this.updateImageEffectsVisibility(true);
 
         this.updateMasterControls();
@@ -407,27 +405,10 @@ export const UIManager = {
         if (!isInitial) this.refreshAccordion(document.getElementById('backgroundMode'));
     },
     
-    updateWarpControlsVisibility(isInitial = false) {
-        const S = this.app.vizSettings;
-        const mode = S.enableWarp ? S.warpMode : 'none';
-
-        const sagControls = document.getElementById('warpSagControls');
-        const droopControls = document.getElementById('warpDroopControls');
-        const cylinderControls = document.getElementById('warpCylinderControls');
-        const bendControls = document.getElementById('warpBendControls');
-        const foldControls = document.getElementById('warpFoldControls');
-        
-        if (sagControls) sagControls.style.display = (mode === 'sag') ? 'block' : 'none';
-        if (droopControls) droopControls.style.display = (mode === 'droop') ? 'block' : 'none';
-        if (cylinderControls) cylinderControls.style.display = (mode === 'cylinder') ? 'block' : 'none';
-        if (bendControls) bendControls.style.display = (mode === 'bend') ? 'block' : 'none';
-        if (foldControls) foldControls.style.display = (mode === 'fold') ? 'block' : 'none';
-
-        if (!isInitial) {
-            const warpAccordionContent = document.getElementById('warpMode')?.closest('.accordion-content');
-            if(warpAccordionContent) this.refreshAccordion(warpAccordionContent);
-        }
-    },
+    // ** THE FIX IS HERE: This function is now removed **
+    /*
+    updateWarpControlsVisibility(isInitial = false) { ... }
+    */
 
     updateImageEffectsVisibility(isInitial = false) {
         const type = this.app.vizSettings.imageEffectType;
@@ -447,50 +428,14 @@ export const UIManager = {
         }
     },
 
-    updateDeformationEngineControls(isInitial = false) {
-        const S = this.app.vizSettings;
-        const engineMode = S.deformationEngine;
-    
-        const legacyContainer = document.getElementById('legacyDeformersContainer');
-        const gpgpuAccordion = document.getElementById('gpgpuEffectsAccordion');
-        const gpgpuStatusLight = document.getElementById('gpgpuStatusLight');
-        const toggleContainer = document.getElementById('deformationEngineToggle');
-        const resetButton = document.getElementById('landscapeResetButton');
-    
-        if (!legacyContainer || !gpgpuAccordion || !gpgpuStatusLight || !toggleContainer) return;
-    
-        const isGpuMode = engineMode === 'gpgpu';
-    
-        legacyContainer.classList.toggle('container-disabled', isGpuMode);
-        gpgpuAccordion.classList.toggle('container-disabled', !isGpuMode);
-        
-        if (resetButton) {
-            resetButton.disabled = isGpuMode;
-        }
-    
-        toggleContainer.querySelectorAll('.segmented-control-button').forEach(btn => {
-            const light = btn.querySelector('.status-light');
-            const isActive = btn.dataset.mode === engineMode;
-            btn.classList.toggle('active', isActive);
-            if (light) {
-                light.classList.toggle('active', isActive);
-            }
-            btn.classList.toggle('button-glow-effect', isActive);
-        });
-    
-        gpgpuStatusLight.classList.toggle('active', isGpuMode);
-    
-        if (!isInitial) {
-            this.refreshAccordion(legacyContainer);
-            this.refreshAccordion(gpgpuAccordion.querySelector('.accordion-content'));
-        }
-    },
+    // ** THE FIX IS HERE: This function is now removed **
+    /*
+    updateDeformationEngineControls(isInitial = false) { ... }
+    */
 
     updateUIVisibilityForMode(mode) {
         const legoControls = document.getElementById('triangleLegosControls');
         const gpgpuEffectsAccordion = document.getElementById('gpgpuEffectsAccordion');
-        const legacyDeformersContainer = document.getElementById('legacyDeformersContainer');
-        const deformationEngineToggle = document.getElementById('deformationEngineToggle');
         
         const cubeWallAccordion = document.getElementById('gpgpu_enableCubeWall')?.closest('.accordion-item');
         const triWaveAccordion = document.getElementById('gpgpu_enableTriangleWave')?.closest('.accordion-item');
@@ -503,9 +448,9 @@ export const UIManager = {
         const gpgpuDroopAccordion = document.getElementById('gpgpu_enableDroop')?.closest('.accordion-item');
         const gpgpuPeelAccordion = document.getElementById('gpgpu_enablePeel')?.closest('.accordion-item');
 
-
+        // ** THE FIX IS HERE: Legacy containers are no longer referenced **
         legoControls.style.display = 'none';
-        [cubeWallAccordion, triWaveAccordion, waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion, legacyDeformersContainer, deformationEngineToggle]
+        [cubeWallAccordion, triWaveAccordion, waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion]
             .forEach(el => el?.classList.add('container-disabled'));
 
         switch (mode) {
@@ -519,13 +464,13 @@ export const UIManager = {
                 break;
             case 'continuous':
             case 'faceted':
-                [waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion, legacyDeformersContainer, deformationEngineToggle]
+                // For standard planes, enable all GPGPU effect accordions
+                [waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion]
                     .forEach(el => el?.classList.remove('container-disabled'));
                 break;
         }
 
         this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
-        this.refreshAccordion(document.getElementById('legacyDeformersContainer'));
     },
 
     toggleLightSliders() { 
@@ -657,26 +602,8 @@ export const UIManager = {
             if (el) el.addEventListener('change', (e) => this.handleFileSelect(e, id));
         });
 
-        const enableWarpCheckbox = document.getElementById('enableWarp');
-        if (enableWarpCheckbox) {
-            enableWarpCheckbox.addEventListener('change', (e) => {
-                const isChecked = e.target.checked;
-                this.app.vizSettings.enableWarp = isChecked;
-                const warpModeSelect = document.getElementById('warpMode');
-                
-                if (isChecked) {
-                    if (this.app.vizSettings.warpMode === 'none') {
-                        this.app.vizSettings.warpMode = 'fold';
-                        warpModeSelect.value = 'fold';
-                    }
-                } else {
-                    this.app.vizSettings.warpMode = 'none';
-                    warpModeSelect.value = 'none';
-                }
-                this.updateWarpControlsVisibility();
-            });
-        }
-
+        // ** THE FIX IS HERE: Removed event listener for the now-deleted 'enableWarp' checkbox **
+        
         const gpgpuDebugCheckbox = document.getElementById('enableGPGPUDebugger');
         if (gpgpuDebugCheckbox) {
             gpgpuDebugCheckbox.addEventListener('change', (e) => {
@@ -693,20 +620,11 @@ export const UIManager = {
             });
         }
         
-        document.querySelectorAll('#deformationEngineToggle button').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const btn = e.target.closest('.segmented-control-button');
-                if (btn) {
-                    this.app.vizSettings.deformationEngine = btn.dataset.mode;
-                    this.updateDeformationEngineControls();
-                }
-            });
-        });
-
-
+        // ** THE FIX IS HERE: Removed event listener for the now-deleted deformation engine toggle **
+        
         // General input/select event listeners
-        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger):not(#enableWarp), select:not(#gpgpuGeometryMode)').forEach(control => {
-            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#deformationEngineToggle') || control.closest('#imageEffectsAccordion')) return;
+        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select:not(#gpgpuGeometryMode)').forEach(control => {
+            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion')) return;
             
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -731,12 +649,6 @@ export const UIManager = {
                     if (this.app.renderer) this.app.renderer.toneMappingExposure = parseFloat(value);
                 } else if (id === 'backgroundMode') {
                     this.updateBackgroundControlsVisibility();
-                } else if (id === 'warpMode') {
-                    this.app.vizSettings.warpMode = value; 
-                    const isEnabled = value !== 'none';
-                    this.app.vizSettings.enableWarp = isEnabled;
-                    document.getElementById('enableWarp').checked = isEnabled;
-                    this.updateWarpControlsVisibility();
                 } else if (id === 'enableLightOrbit') {
                     this.toggleLightSliders();
                 } else if (id === 'lightColor') {
@@ -755,7 +667,7 @@ export const UIManager = {
 
         // Checkboxes (header toggles)
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.id === 'enableWarp') return;
+             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin') return;
              
              checkbox.addEventListener('input', (e) => {
                  if (this.app.vizSettings[e.target.id] !== undefined) {
@@ -894,7 +806,6 @@ export const UIManager = {
 
         this.syncAllControlsToSettings();
         this.updateMasterControls();
-        this.updateDeformationEngineControls();
     },
 
     stopDemoMode() {
@@ -923,8 +834,7 @@ export const UIManager = {
         
         this.syncAllControlsToSettings();
         this.updateMasterControls();
-        this.updateDeformationEngineControls();
-        this.updateWarpControlsVisibility(true);
+        this.updateUIVisibilityForMode(this.app.vizSettings.gpgpuGeometryMode);
         this.updateBackgroundControlsVisibility(true);
     },
     
@@ -1159,7 +1069,8 @@ export const UIManager = {
             }
         });
     
-        this.updateWarpControlsVisibility();
+        // ** THE FIX IS HERE: Call to removed function is now also removed **
+        // this.updateWarpControlsVisibility();
         this.app.ImagePlaneManager.createDefaultLandscape();
     
         this.logSuccess("Landscape settings reset.");

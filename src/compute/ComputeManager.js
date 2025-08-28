@@ -63,6 +63,7 @@ export const ComputeManager = {
         this.gpuCompute.setVariableDependencies(this.positionVariable, [this.positionVariable, this.previousPositionVariable]);
         this.gpuCompute.setVariableDependencies(this.previousPositionVariable, [this.positionVariable]);
         
+        // ** THE FIX IS HERE: All legacy uniforms have been removed **
         const uniforms = {
             u_initialPosition: { value: this.initialPositionTexture },
             u_time: { value: 0 },
@@ -70,45 +71,6 @@ export const ComputeManager = {
             u_audioLow: { value: 0 },
             u_audioTexture: { value: this.app.AudioProcessor.audioTexture }, 
             u_planeDimensions: { value: new this.app.THREE.Vector2(planeWidth, planeHeight) },
-            u_isLegacyMode: { value: true },
-            u_enableAudioDeform: { value: true },
-            u_deformationStrength: { value: 0.0 },
-            u_enablePeel: { value: 0.0 },
-            u_peelAmount: { value: 0.0 },
-            u_peelCurl: { value: 0.0 },
-            u_peelEnableAudio: { value: true },
-            u_peelTextureAmount: { value: 0.0 },
-            u_peelDrift: { value: 0.0 },
-            u_peelAudio: { value: 0.0 },
-            u_warpMode: { value: 0 },
-            u_sagAmount: { value: 0.0 },
-            u_sagFalloffSharpness: { value: 0.0 },
-            u_sagAudioMod: { value: 0.0 },
-            u_droopAmount: { value: 0.0 },
-            u_droopAudioMod: { value: 0.0 },
-            u_droopFalloffSharpness: { value: 0.0 },
-            u_droopSupportedWidthFactor: { value: 0.0 },
-            u_droopSupportedDepthFactor: { value: 0.0 },
-            u_cylinderRadius: { value: 0.0 },
-            u_cylinderHeightScale: { value: 0.0 },
-            u_cylinderAxisAlignment: { value: 0 },
-            u_cylinderArcAngle: { value: 0.0 },
-            u_cylinderArcOffset: { value: 0.0 },
-            u_bendAngle: { value: 0.0 },
-            u_bendAudioMod: { value: 0.0 },
-            u_bendFalloffSharpness: { value: 0.0 },
-            u_bendAxis: { value: 0 },
-            u_foldAngle: { value: 0.0 },
-            u_foldDepth: { value: 0.0 },
-            u_foldRoundness: { value: 0.0 },
-            u_foldAudioMod: { value: 0.0 },
-            u_foldNudge: { value: 0.0 },
-            u_enableFoldCrease: { value: false },
-            u_foldCreaseDepth: { value: 0.0 },
-            u_foldCreaseSharpness: { value: 0.0 },
-            u_enableFoldTuck: { value: false },
-            u_foldTuckAmount: { value: 0.0 },
-            u_foldTuckReach: { value: 0.0 },
             u_gpgpu_enableWaterRipple: { value: false },
             u_gpgpu_rippleSpeed: { value: 0.5 },
             u_gpgpu_rippleStrength: { value: 1.0 },
@@ -190,138 +152,88 @@ export const ComputeManager = {
         const A = this.app.AudioProcessor;
         const uniforms = this.positionVariable.material.uniforms;
 
-        const isLegacyMode = S.deformationEngine === 'legacy';
-        uniforms.u_isLegacyMode.value = isLegacyMode;
-
-        if (isLegacyMode) {
-            const warpModeMap = { 'none': 0, 'sag': 2, 'droop': 5, 'cylinder': 4, 'bend': 3, 'fold': 1 };
-            uniforms.u_warpMode.value = warpModeMap[S.warpMode] || 0;
-            
-            let peelAudioValue = 0.0;
-            if (S.peelEnableAudio) {
-                peelAudioValue = A.energy.low;
-            }
-            
-            uniforms.u_enableAudioDeform.value = S.enableAudioDeform;
-            uniforms.u_deformationStrength.value = S.deformationStrength;
-            uniforms.u_enablePeel.value = S.enablePeel ? 1.0 : 0.0;
-            uniforms.u_peelAmount.value = S.peelAmount;
-            uniforms.u_peelCurl.value = S.peelCurl;
-            uniforms.u_peelEnableAudio.value = S.peelEnableAudio;
-            uniforms.u_peelTextureAmount.value = S.peelTextureAmount;
-            uniforms.u_peelDrift.value = S.peelDrift;
-            uniforms.u_peelAudio.value = peelAudioValue; 
-            uniforms.u_sagAmount.value = S.sagAmount;
-            uniforms.u_sagFalloffSharpness.value = S.sagFalloffSharpness;
-            uniforms.u_sagAudioMod.value = S.sagAudioMod;
-            uniforms.u_droopAmount.value = S.droopAmount;
-            uniforms.u_droopAudioMod.value = S.droopAudioMod;
-            uniforms.u_droopFalloffSharpness.value = S.droopFalloffSharpness;
-            uniforms.u_droopSupportedWidthFactor.value = S.droopSupportedWidthFactor;
-            uniforms.u_droopSupportedDepthFactor.value = S.droopSupportedDepthFactor;
-            uniforms.u_cylinderRadius.value = S.cylinderRadius;
-            uniforms.u_cylinderHeightScale.value = S.cylinderHeightScale;
-            const cylAxisMap = { 'y': 0, 'x': 1, 'z': 2 };
-            uniforms.u_cylinderAxisAlignment.value = cylAxisMap[S.cylinderAxisAlignment] || 0;
-            uniforms.u_cylinderArcAngle.value = S.cylinderArcAngle * (Math.PI / 180.0);
-            uniforms.u_cylinderArcOffset.value = S.cylinderArcOffset * (Math.PI / 180.0);
-            uniforms.u_bendAngle.value = S.bendAngle * (Math.PI / 180.0);
-            uniforms.u_bendAudioMod.value = S.bendAudioMod;
-            uniforms.u_bendFalloffSharpness.value = S.bendFalloffSharpness;
-            uniforms.u_bendAxis.value = S.bendAxis === 'primary' ? 0 : 1;
-            uniforms.u_foldAngle.value = S.foldAngle * (Math.PI / 180.0);
-            uniforms.u_foldDepth.value = S.foldDepth;
-            uniforms.u_foldRoundness.value = S.foldRoundness;
-            uniforms.u_foldAudioMod.value = S.foldAudioMod * (Math.PI / 180.0);
-            uniforms.u_foldNudge.value = S.foldNudge;
-            uniforms.u_enableFoldCrease.value = S.enableFoldCrease;
-            uniforms.u_foldCreaseDepth.value = S.foldCreaseDepth;
-            uniforms.u_foldCreaseSharpness.value = S.foldCreaseSharpness;
-            uniforms.u_enableFoldTuck.value = S.enableFoldTuck;
-            uniforms.u_foldTuckAmount.value = S.foldTuckAmount;
-            uniforms.u_foldTuckReach.value = S.foldTuckReach;
-
-        } else {
-            // --- GPGPU MODE UNIFORMS ---
-            if (S.gpgpu_enableCloth && this.clothEnableTime < 0) {
-                this.clothEnableTime = this.app.currentTime;
-            } else if (!S.gpgpu_enableCloth) {
-                this.clothEnableTime = -1;
-            }
-
-            let blendFactor = 0.0;
-            if (this.clothEnableTime > 0) {
-                const elapsedTime = this.app.currentTime - this.clothEnableTime;
-                const blendDuration = S.gpgpu_clothBlendTime > 0 ? S.gpgpu_clothBlendTime : 0.01;
-                blendFactor = Math.min(elapsedTime / blendDuration, 1.0);
-            }
-            uniforms.u_gpgpu_clothBlendFactor.value = blendFactor;
-
-            uniforms.u_gpgpu_enableWaterRipple.value = S.gpgpu_enableWaterRipple;
-            uniforms.u_gpgpu_rippleSpeed.value = S.gpgpu_rippleSpeed;
-            uniforms.u_gpgpu_rippleStrength.value = S.gpgpu_rippleStrength;
-            uniforms.u_gpgpu_rippleFrequency.value = S.gpgpu_rippleFrequency;
-            uniforms.u_gpgpu_enableEqRipple.value = S.gpgpu_enableEqRipple;
-            uniforms.u_gpgpu_eqRippleStrength.value = S.gpgpu_eqRippleStrength;
-            const styleMap = { 'Left': 0, 'Center': 1, 'Full': 2 };
-            uniforms.u_gpgpu_eqRippleStyle.value = styleMap[S.gpgpu_eqRippleStyle] || 0;
-            uniforms.u_gpgpu_eqRippleBarCount.value = S.gpgpu_eqRippleBarCount;
-            uniforms.u_gpgpu_eqRippleBarWidth.value = S.gpgpu_eqRippleBarWidth;
-            uniforms.u_gpgpu_eqRippleRangeStart.value = S.gpgpu_eqRippleRangeStart;
-            uniforms.u_gpgpu_eqRippleRangeEnd.value = S.gpgpu_eqRippleRangeEnd;
-            uniforms.u_gpgpu_enableCloth.value = S.gpgpu_enableCloth;
-            uniforms.u_gpgpu_clothDamping.value = S.gpgpu_clothDamping;
-            uniforms.u_gpgpu_clothStiffness.value = S.gpgpu_clothStiffness;
-            uniforms.u_gpgpu_clothAudioForce.value = S.gpgpu_clothAudioForce;
-            uniforms.u_gpgpu_clothForceRadius.value = S.gpgpu_clothForceRadius;
-            uniforms.gpgpu_clothIterations.value = S.gpgpu_clothIterations;
-            const pinModeMap = { 'none': 0, 'corners': 1, 'top_edge': 2, 'center': 3 };
-            uniforms.gpgpu_clothPinMode.value = pinModeMap[S.gpgpu_clothPinMode] || 0;
-            uniforms.u_gpgpu_tetherStrength.value = S.gpgpu_tetherStrength;
-            uniforms.u_gpgpu_ambientWindStrength.value = S.gpgpu_ambientWindStrength;
-            uniforms.u_gpgpu_ambientWindSpeed.value = S.gpgpu_ambientWindSpeed;
-            uniforms.u_gpgpu_ambientWindScale.value = S.gpgpu_ambientWindScale;
-            uniforms.u_gpgpu_directionalWind.value.set(S.gpgpu_directionalWindX, S.gpgpu_directionalWindY, S.gpgpu_directionalWindZ);
-
-            uniforms.u_gpgpu_enableFold.value = S.gpgpu_enableFold;
-            uniforms.u_gpgpu_foldAngle.value = S.gpgpu_foldAngle * (Math.PI / 180.0);
-            uniforms.u_gpgpu_foldDepth.value = S.gpgpu_foldDepth;
-            uniforms.u_gpgpu_foldRoundness.value = S.gpgpu_foldRoundness;
-            uniforms.u_gpgpu_foldAudioMod.value = S.gpgpu_foldAudioMod * (Math.PI / 180.0);
-            uniforms.u_gpgpu_foldNudge.value = S.gpgpu_foldNudge;
-            uniforms.u_gpgpu_enableFoldCrease.value = S.gpgpu_enableFoldCrease;
-            uniforms.u_gpgpu_foldCreaseDepth.value = S.gpgpu_foldCreaseDepth;
-            uniforms.u_gpgpu_foldCreaseSharpness.value = S.gpgpu_foldCreaseSharpness;
-            uniforms.u_gpgpu_enableFoldTuck.value = S.gpgpu_enableFoldTuck;
-            uniforms.u_gpgpu_foldTuckAmount.value = S.gpgpu_foldTuckAmount;
-            uniforms.u_gpgpu_foldTuckReach.value = S.gpgpu_foldTuckReach;
-
-            uniforms.u_gpgpu_enableCylinder.value = S.gpgpu_enableCylinder;
-            uniforms.u_gpgpu_cylinderRadius.value = S.gpgpu_cylinderRadius;
-            uniforms.u_gpgpu_cylinderHeightScale.value = S.gpgpu_cylinderHeightScale;
-            const cylAxisMapGpgpu = { 'y': 0, 'x': 1, 'z': 2 };
-            uniforms.u_gpgpu_cylinderAxisAlignment.value = cylAxisMapGpgpu[S.gpgpu_cylinderAxisAlignment] || 0;
-            uniforms.u_gpgpu_cylinderArcAngle.value = S.gpgpu_cylinderArcAngle * (Math.PI / 180.0);
-            uniforms.u_gpgpu_cylinderArcOffset.value = S.gpgpu_cylinderArcOffset * (Math.PI / 180.0);
-
-            uniforms.u_gpgpu_enableSag.value = S.gpgpu_enableSag;
-            uniforms.u_gpgpu_sagAmount.value = S.gpgpu_sagAmount;
-            uniforms.u_gpgpu_sagFalloffSharpness.value = S.gpgpu_sagFalloffSharpness;
-            uniforms.u_gpgpu_sagAudioMod.value = S.gpgpu_sagAudioMod;
-            uniforms.u_gpgpu_enableDroop.value = S.gpgpu_enableDroop;
-            uniforms.u_gpgpu_droopAmount.value = S.gpgpu_droopAmount;
-            uniforms.u_gpgpu_droopAudioMod.value = S.gpgpu_droopAudioMod;
-            uniforms.u_gpgpu_droopFalloffSharpness.value = S.gpgpu_droopFalloffSharpness;
-            uniforms.u_gpgpu_droopSupportedWidthFactor.value = S.gpgpu_droopSupportedWidthFactor;
-            uniforms.u_gpgpu_droopSupportedDepthFactor.value = S.gpgpu_droopSupportedDepthFactor;
-            
-            uniforms.u_gpgpu_enablePeel.value = S.gpgpu_enablePeel;
-            uniforms.u_gpgpu_peelAmount.value = S.gpgpu_peelAmount;
-            uniforms.u_gpgpu_peelCurl.value = S.gpgpu_peelCurl;
-            uniforms.u_gpgpu_peelEnableAudio.value = S.gpgpu_peelEnableAudio;
-            uniforms.u_gpgpu_peelTextureAmount.value = S.gpgpu_peelTextureAmount;
-            uniforms.u_gpgpu_peelDrift.value = S.gpgpu_peelDrift;
+        // ** THE FIX IS HERE: The entire if(isLegacyMode) block has been removed **
+        
+        // --- GPGPU MODE UNIFORMS ---
+        if (S.gpgpu_enableCloth && this.clothEnableTime < 0) {
+            this.clothEnableTime = this.app.currentTime;
+        } else if (!S.gpgpu_enableCloth) {
+            this.clothEnableTime = -1;
         }
+
+        let blendFactor = 0.0;
+        if (this.clothEnableTime > 0) {
+            const elapsedTime = this.app.currentTime - this.clothEnableTime;
+            const blendDuration = S.gpgpu_clothBlendTime > 0 ? S.gpgpu_clothBlendTime : 0.01;
+            blendFactor = Math.min(elapsedTime / blendDuration, 1.0);
+        }
+        uniforms.u_gpgpu_clothBlendFactor.value = blendFactor;
+
+        uniforms.u_gpgpu_enableWaterRipple.value = S.gpgpu_enableWaterRipple;
+        uniforms.u_gpgpu_rippleSpeed.value = S.gpgpu_rippleSpeed;
+        uniforms.u_gpgpu_rippleStrength.value = S.gpgpu_rippleStrength;
+        uniforms.u_gpgpu_rippleFrequency.value = S.gpgpu_rippleFrequency;
+        uniforms.u_gpgpu_enableEqRipple.value = S.gpgpu_enableEqRipple;
+        uniforms.u_gpgpu_eqRippleStrength.value = S.gpgpu_eqRippleStrength;
+        const styleMap = { 'Left': 0, 'Center': 1, 'Full': 2 };
+        uniforms.u_gpgpu_eqRippleStyle.value = styleMap[S.gpgpu_eqRippleStyle] || 0;
+        uniforms.u_gpgpu_eqRippleBarCount.value = S.gpgpu_eqRippleBarCount;
+        uniforms.u_gpgpu_eqRippleBarWidth.value = S.gpgpu_eqRippleBarWidth;
+        uniforms.u_gpgpu_eqRippleRangeStart.value = S.gpgpu_eqRippleRangeStart;
+        uniforms.u_gpgpu_eqRippleRangeEnd.value = S.gpgpu_eqRippleRangeEnd;
+        uniforms.u_gpgpu_enableCloth.value = S.gpgpu_enableCloth;
+        uniforms.u_gpgpu_clothDamping.value = S.gpgpu_clothDamping;
+        uniforms.u_gpgpu_clothStiffness.value = S.gpgpu_clothStiffness;
+        uniforms.u_gpgpu_clothAudioForce.value = S.gpgpu_clothAudioForce;
+        uniforms.u_gpgpu_clothForceRadius.value = S.gpgpu_clothForceRadius;
+        uniforms.gpgpu_clothIterations.value = S.gpgpu_clothIterations;
+        const pinModeMap = { 'none': 0, 'corners': 1, 'top_edge': 2, 'center': 3 };
+        uniforms.gpgpu_clothPinMode.value = pinModeMap[S.gpgpu_clothPinMode] || 0;
+        uniforms.u_gpgpu_tetherStrength.value = S.gpgpu_tetherStrength;
+        uniforms.u_gpgpu_ambientWindStrength.value = S.gpgpu_ambientWindStrength;
+        uniforms.u_gpgpu_ambientWindSpeed.value = S.gpgpu_ambientWindSpeed;
+        uniforms.u_gpgpu_ambientWindScale.value = S.gpgpu_ambientWindScale;
+        uniforms.u_gpgpu_directionalWind.value.set(S.gpgpu_directionalWindX, S.gpgpu_directionalWindY, S.gpgpu_directionalWindZ);
+
+        uniforms.u_gpgpu_enableFold.value = S.gpgpu_enableFold;
+        uniforms.u_gpgpu_foldAngle.value = S.gpgpu_foldAngle * (Math.PI / 180.0);
+        uniforms.u_gpgpu_foldDepth.value = S.gpgpu_foldDepth;
+        uniforms.u_gpgpu_foldRoundness.value = S.gpgpu_foldRoundness;
+        uniforms.u_gpgpu_foldAudioMod.value = S.gpgpu_foldAudioMod * (Math.PI / 180.0);
+        uniforms.u_gpgpu_foldNudge.value = S.gpgpu_foldNudge;
+        uniforms.u_gpgpu_enableFoldCrease.value = S.gpgpu_enableFoldCrease;
+        uniforms.u_gpgpu_foldCreaseDepth.value = S.gpgpu_foldCreaseDepth;
+        uniforms.u_gpgpu_foldCreaseSharpness.value = S.gpgpu_foldCreaseSharpness;
+        uniforms.u_gpgpu_enableFoldTuck.value = S.gpgpu_enableFoldTuck;
+        uniforms.u_gpgpu_foldTuckAmount.value = S.gpgpu_foldTuckAmount;
+        uniforms.u_gpgpu_foldTuckReach.value = S.gpgpu_foldTuckReach;
+
+        uniforms.u_gpgpu_enableCylinder.value = S.gpgpu_enableCylinder;
+        uniforms.u_gpgpu_cylinderRadius.value = S.gpgpu_cylinderRadius;
+        uniforms.u_gpgpu_cylinderHeightScale.value = S.gpgpu_cylinderHeightScale;
+        const cylAxisMapGpgpu = { 'y': 0, 'x': 1, 'z': 2 };
+        uniforms.u_gpgpu_cylinderAxisAlignment.value = cylAxisMapGpgpu[S.gpgpu_cylinderAxisAlignment] || 0;
+        uniforms.u_gpgpu_cylinderArcAngle.value = S.gpgpu_cylinderArcAngle * (Math.PI / 180.0);
+        uniforms.u_gpgpu_cylinderArcOffset.value = S.gpgpu_cylinderArcOffset * (Math.PI / 180.0);
+
+        uniforms.u_gpgpu_enableSag.value = S.gpgpu_enableSag;
+        uniforms.u_gpgpu_sagAmount.value = S.gpgpu_sagAmount;
+        uniforms.u_gpgpu_sagFalloffSharpness.value = S.gpgpu_sagFalloffSharpness;
+        uniforms.u_gpgpu_sagAudioMod.value = S.gpgpu_sagAudioMod;
+        uniforms.u_gpgpu_enableDroop.value = S.gpgpu_enableDroop;
+        uniforms.u_gpgpu_droopAmount.value = S.gpgpu_droopAmount;
+        uniforms.u_gpgpu_droopAudioMod.value = S.gpgpu_droopAudioMod;
+        uniforms.u_gpgpu_droopFalloffSharpness.value = S.gpgpu_droopFalloffSharpness;
+        uniforms.u_gpgpu_droopSupportedWidthFactor.value = S.gpgpu_droopSupportedWidthFactor;
+        uniforms.u_gpgpu_droopSupportedDepthFactor.value = S.gpgpu_droopSupportedDepthFactor;
+        
+        uniforms.u_gpgpu_enablePeel.value = S.gpgpu_enablePeel;
+        uniforms.u_gpgpu_peelAmount.value = S.gpgpu_peelAmount;
+        uniforms.u_gpgpu_peelCurl.value = S.gpgpu_peelCurl;
+        uniforms.u_gpgpu_peelEnableAudio.value = S.gpgpu_peelEnableAudio;
+        uniforms.u_gpgpu_peelTextureAmount.value = S.gpgpu_peelTextureAmount;
+        uniforms.u_gpgpu_peelDrift.value = S.gpgpu_peelDrift;
+        
 
         // --- GLOBAL UNIFORMS (always updated) ---
         uniforms.u_time.value = this.app.currentTime;
@@ -334,6 +246,7 @@ export const ComputeManager = {
         this.gpuCompute.compute();
     },
 
+    // ** THE FIX IS HERE: All legacy uniform declarations have been removed **
     uniformsShaderCode: `
         #define texturePosition texturePosition 
         #define texturePreviousPosition texturePreviousPosition
@@ -344,45 +257,7 @@ export const ComputeManager = {
         uniform float u_audioLow;
         uniform sampler2D u_audioTexture; 
         uniform vec2 u_planeDimensions;
-        uniform bool u_isLegacyMode;
-        uniform bool u_enableAudioDeform;
-        uniform float u_deformationStrength;
-        uniform float u_enablePeel;
-        uniform float u_peelAmount;
-        uniform float u_peelCurl;
-        uniform bool u_peelEnableAudio;
-        uniform float u_peelTextureAmount;
-        uniform float u_peelDrift;
-        uniform float u_peelAudio;
-        uniform int u_warpMode;
-        uniform float u_sagAmount;
-        uniform float u_sagFalloffSharpness;
-        uniform float u_sagAudioMod;
-        uniform float u_droopAmount;
-        uniform float u_droopAudioMod;
-        uniform float u_droopFalloffSharpness;
-        uniform float u_droopSupportedWidthFactor;
-        uniform float u_droopSupportedDepthFactor;
-        uniform float u_cylinderRadius;
-        uniform float u_cylinderHeightScale;
-        uniform int u_cylinderAxisAlignment;
-        uniform float u_cylinderArcAngle;
-        uniform float u_cylinderArcOffset;
-        uniform float u_bendAngle;
-        uniform float u_bendAudioMod;
-        uniform float u_bendFalloffSharpness;
-        uniform int u_bendAxis;
-        uniform float u_foldAngle;
-        uniform float u_foldDepth;
-        uniform float u_foldRoundness;
-        uniform float u_foldAudioMod;
-        uniform float u_foldNudge;
-        uniform bool u_enableFoldCrease;
-        uniform float u_foldCreaseDepth;
-        uniform float u_foldCreaseSharpness;
-        uniform bool u_enableFoldTuck;
-        uniform float u_foldTuckAmount;
-        uniform float u_foldTuckReach;
+
         uniform bool u_gpgpu_enableWaterRipple;
         uniform float u_gpgpu_rippleSpeed;
         uniform float u_gpgpu_rippleStrength;
@@ -558,82 +433,70 @@ export const ComputeManager = {
             vec3 finalPos;
             vec3 initialPos = texture2D(u_initialPosition, uv).xyz;
 
-            if (u_isLegacyMode) {
-                vec3 pos = initialPos;
-                vec3 totalDisplacement = vec3(0.0);
-                if (u_warpMode == 1) { pos = calculateFold(pos, uv, u_audioLow, u_planeDimensions, u_foldAngle, u_foldDepth, u_foldRoundness, u_foldAudioMod, u_foldNudge, u_enableFoldCrease, u_foldCreaseDepth, u_foldCreaseSharpness, u_enableFoldTuck, u_foldTuckAmount, u_foldTuckReach, u_deformationStrength);
-                } else if (u_warpMode == 3) { pos = calculateBend(pos, uv, u_audioLow, u_planeDimensions, u_bendAngle, u_bendAudioMod, u_bendFalloffSharpness, u_bendAxis);
-                } else if (u_warpMode == 4) { pos = calculateCylinder(uv, u_audioLow, u_planeDimensions, u_cylinderRadius, u_cylinderHeightScale, u_cylinderAxisAlignment, u_cylinderArcAngle, u_cylinderArcOffset, u_deformationStrength);
-                } else {
-                    if (u_enableAudioDeform) { float noise = snoise(vec3(uv * 2.0, u_time * 0.1)); float audioDeform = u_audioLow * (1.0 + noise * 0.5); totalDisplacement += getDisplacementNormal() * audioDeform * u_deformationStrength; }
-                    if (u_warpMode == 2) { totalDisplacement += calculateSag(uv, u_audioLow, u_sagAmount, u_sagFalloffSharpness, u_sagAudioMod); } 
-                    else if (u_warpMode == 5) { totalDisplacement += calculateDroop(uv, u_audioLow, u_droopAmount, u_droopAudioMod, u_droopFalloffSharpness, u_droopSupportedWidthFactor, u_droopSupportedDepthFactor); }
-                }
-                if (u_enablePeel > 0.5) { float audio = u_peelEnableAudio ? u_peelAudio : 0.0; totalDisplacement += calculatePeel(uv, u_time, audio, u_peelAmount, u_peelCurl, u_peelDrift, u_peelTextureAmount); }
-                finalPos = pos + totalDisplacement;
-            } else { 
-                vec3 gpgpuPos = initialPos;
-                vec3 gpgpuDisplacement = vec3(0.0);
+            // ** THE FIX IS HERE: The entire legacy if/else block has been removed **
+            // We now operate only in GPGPU mode.
 
-                if (u_gpgpu_enableCylinder) {
-                     gpgpuPos = calculateCylinder(uv, u_audioLow, u_planeDimensions,
-                                                u_gpgpu_cylinderRadius, u_gpgpu_cylinderHeightScale, 
-                                                u_gpgpu_cylinderAxisAlignment, u_gpgpu_cylinderArcAngle, 
-                                                u_gpgpu_cylinderArcOffset, 0.0);
-                }
-                
-                if (u_gpgpu_enableFold) {
-                    gpgpuPos = calculateFold(gpgpuPos, uv, u_audioLow, u_planeDimensions, 
-                                            u_gpgpu_foldAngle, u_gpgpu_foldDepth, u_gpgpu_foldRoundness, 
-                                            u_gpgpu_foldAudioMod, u_gpgpu_foldNudge, u_gpgpu_enableFoldCrease, 
-                                            u_gpgpu_foldCreaseDepth, u_gpgpu_foldCreaseSharpness, 
-                                            u_gpgpu_enableFoldTuck, u_gpgpu_foldTuckAmount, u_gpgpu_foldTuckReach, 
-                                            0.0);
-                }
+            vec3 gpgpuPos = initialPos;
+            vec3 gpgpuDisplacement = vec3(0.0);
 
-                if (u_gpgpu_enableSag) {
-                    gpgpuDisplacement += calculateSag(uv, u_audioLow, u_gpgpu_sagAmount, u_gpgpu_sagFalloffSharpness, u_gpgpu_sagAudioMod);
-                }
-                if (u_gpgpu_enableDroop) {
-                    gpgpuDisplacement += calculateDroop(uv, u_audioLow, u_gpgpu_droopAmount, u_gpgpu_droopAudioMod, u_gpgpu_droopFalloffSharpness, u_gpgpu_droopSupportedWidthFactor, u_gpgpu_droopSupportedDepthFactor);
-                }
-                if (u_gpgpu_enableWaterRipple) { gpgpuDisplacement += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency); }
-                if (u_gpgpu_enableEqRipple) { gpgpuDisplacement += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleStyle, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd); }
-                if (u_gpgpu_enablePeel) {
-                    float audio = u_gpgpu_peelEnableAudio ? u_audioLow : 0.0;
-                    gpgpuDisplacement += calculatePeel(uv, u_time, audio, u_gpgpu_peelAmount, u_gpgpu_peelCurl, u_gpgpu_peelDrift, u_gpgpu_peelTextureAmount);
-                }
+            if (u_gpgpu_enableCylinder) {
+                    gpgpuPos = calculateCylinder(uv, u_audioLow, u_planeDimensions,
+                                            u_gpgpu_cylinderRadius, u_gpgpu_cylinderHeightScale, 
+                                            u_gpgpu_cylinderAxisAlignment, u_gpgpu_cylinderArcAngle, 
+                                            u_gpgpu_cylinderArcOffset, 0.0);
+            }
+            
+            if (u_gpgpu_enableFold) {
+                gpgpuPos = calculateFold(gpgpuPos, uv, u_audioLow, u_planeDimensions, 
+                                        u_gpgpu_foldAngle, u_gpgpu_foldDepth, u_gpgpu_foldRoundness, 
+                                        u_gpgpu_foldAudioMod, u_gpgpu_foldNudge, u_gpgpu_enableFoldCrease, 
+                                        u_gpgpu_foldCreaseDepth, u_gpgpu_foldCreaseSharpness, 
+                                        u_gpgpu_enableFoldTuck, u_gpgpu_foldTuckAmount, u_gpgpu_foldTuckReach, 
+                                        0.0);
+            }
 
-                finalPos = gpgpuPos + gpgpuDisplacement;
+            if (u_gpgpu_enableSag) {
+                gpgpuDisplacement += calculateSag(uv, u_audioLow, u_gpgpu_sagAmount, u_gpgpu_sagFalloffSharpness, u_gpgpu_sagAudioMod);
+            }
+            if (u_gpgpu_enableDroop) {
+                gpgpuDisplacement += calculateDroop(uv, u_audioLow, u_gpgpu_droopAmount, u_gpgpu_droopAudioMod, u_gpgpu_droopFalloffSharpness, u_gpgpu_droopSupportedWidthFactor, u_gpgpu_droopSupportedDepthFactor);
+            }
+            if (u_gpgpu_enableWaterRipple) { gpgpuDisplacement += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency); }
+            if (u_gpgpu_enableEqRipple) { gpgpuDisplacement += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleStyle, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd); }
+            if (u_gpgpu_enablePeel) {
+                float audio = u_gpgpu_peelEnableAudio ? u_audioLow : 0.0;
+                gpgpuDisplacement += calculatePeel(uv, u_time, audio, u_gpgpu_peelAmount, u_gpgpu_peelCurl, u_gpgpu_peelDrift, u_gpgpu_peelTextureAmount);
+            }
 
-                if (u_gpgpu_enableCloth) {
-                    vec3 currentPos = texture2D(texturePosition, uv).xyz;
-                    vec3 prevPos = texture2D(texturePreviousPosition, uv).xyz;
-                    vec3 velocity = (currentPos - prevPos) * u_gpgpu_clothDamping;
-                    vec3 totalAcceleration = vec3(0.0);
-                    vec3 noise_coord_1 = vec3(uv * u_gpgpu_ambientWindScale, u_time * u_gpgpu_ambientWindSpeed);
-                    vec3 noise_coord_2 = vec3(uv * u_gpgpu_ambientWindScale + 150.0, u_time * u_gpgpu_ambientWindSpeed);
-                    vec3 noise_coord_3 = vec3(uv * u_gpgpu_ambientWindScale + 300.0, u_time * u_gpgpu_ambientWindSpeed);
-                    vec3 ambientWind = vec3(snoise(noise_coord_1), snoise(noise_coord_2), snoise(noise_coord_3));
-                    vec3 windForce = (ambientWind * u_gpgpu_ambientWindStrength) + u_gpgpu_directionalWind;
-                    windForce *= u_gpgpu_clothBlendFactor;
-                    vec3 windTargetPos = initialPos + windForce;
-                    totalAcceleration += (windTargetPos - currentPos) * u_gpgpu_tetherStrength;
-                    float distFromCenter = distance(uv, vec2(0.5));
-                    if (distFromCenter < u_gpgpu_clothForceRadius) {
-                        float falloff = 1.0 - smoothstep(0.0, u_gpgpu_clothForceRadius, distFromCenter);
-                        vec3 audioAccel = vec3(0.0, 0.0, 1.0) * u_audioLow * u_gpgpu_clothAudioForce * falloff;
-                        totalAcceleration += audioAccel * u_gpgpu_clothBlendFactor;
-                    }
-                    finalPos = currentPos + velocity + totalAcceleration * u_delta * u_delta;
-                    float restLength = u_planeDimensions.x / resolution.x;
-                    for (int i = 0; i < gpgpu_clothIterations; i++) {
-                        satisfyConstraints(finalPos, uv, u_gpgpu_clothStiffness, restLength);
-                    }
-                    if (gpgpu_clothPinMode == 1) { if (uv.x < 0.01 && uv.y < 0.01 || uv.x > 0.99 && uv.y < 0.01 || uv.x < 0.01 && uv.y > 0.99 || uv.x > 0.99 && uv.y > 0.99) { finalPos = initialPos; }
-                    } else if (gpgpu_clothPinMode == 2) { if (uv.y > 0.99) { finalPos = initialPos; }
-                    } else if (gpgpu_clothPinMode == 3) { if (distance(uv, vec2(0.5)) < 0.05) { finalPos = initialPos; }
-                    }
+            finalPos = gpgpuPos + gpgpuDisplacement;
+
+            if (u_gpgpu_enableCloth) {
+                vec3 currentPos = texture2D(texturePosition, uv).xyz;
+                vec3 prevPos = texture2D(texturePreviousPosition, uv).xyz;
+                vec3 velocity = (currentPos - prevPos) * u_gpgpu_clothDamping;
+                vec3 totalAcceleration = vec3(0.0);
+                vec3 noise_coord_1 = vec3(uv * u_gpgpu_ambientWindScale, u_time * u_gpgpu_ambientWindSpeed);
+                vec3 noise_coord_2 = vec3(uv * u_gpgpu_ambientWindScale + 150.0, u_time * u_gpgpu_ambientWindSpeed);
+                vec3 noise_coord_3 = vec3(uv * u_gpgpu_ambientWindScale + 300.0, u_time * u_gpgpu_ambientWindSpeed);
+                vec3 ambientWind = vec3(snoise(noise_coord_1), snoise(noise_coord_2), snoise(noise_coord_3));
+                vec3 windForce = (ambientWind * u_gpgpu_ambientWindStrength) + u_gpgpu_directionalWind;
+                windForce *= u_gpgpu_clothBlendFactor;
+                vec3 windTargetPos = initialPos + windForce;
+                totalAcceleration += (windTargetPos - currentPos) * u_gpgpu_tetherStrength;
+                float distFromCenter = distance(uv, vec2(0.5));
+                if (distFromCenter < u_gpgpu_clothForceRadius) {
+                    float falloff = 1.0 - smoothstep(0.0, u_gpgpu_clothForceRadius, distFromCenter);
+                    vec3 audioAccel = vec3(0.0, 0.0, 1.0) * u_audioLow * u_gpgpu_clothAudioForce * falloff;
+                    totalAcceleration += audioAccel * u_gpgpu_clothBlendFactor;
+                }
+                finalPos = currentPos + velocity + totalAcceleration * u_delta * u_delta;
+                float restLength = u_planeDimensions.x / resolution.x;
+                for (int i = 0; i < gpgpu_clothIterations; i++) {
+                    satisfyConstraints(finalPos, uv, u_gpgpu_clothStiffness, restLength);
+                }
+                if (gpgpu_clothPinMode == 1) { if (uv.x < 0.01 && uv.y < 0.01 || uv.x > 0.99 && uv.y < 0.01 || uv.x < 0.01 && uv.y > 0.99 || uv.x > 0.99 && uv.y > 0.99) { finalPos = initialPos; }
+                } else if (gpgpu_clothPinMode == 2) { if (uv.y > 0.99) { finalPos = initialPos; }
+                } else if (gpgpu_clothPinMode == 3) { if (distance(uv, vec2(0.5)) < 0.05) { finalPos = initialPos; }
                 }
             }
             gl_FragColor = vec4(finalPos, 1.0);
