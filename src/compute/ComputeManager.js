@@ -163,8 +163,6 @@ export const ComputeManager = {
             u_gpgpu_droopFalloffSharpness: { value: 0.0 },
             u_gpgpu_droopSupportedWidthFactor: { value: 0.0 },
             u_gpgpu_droopSupportedDepthFactor: { value: 0.0 },
-
-            // ** THE FIX IS HERE: Add new uniforms for GPGPU Peel **
             u_gpgpu_enablePeel: { value: false },
             u_gpgpu_peelAmount: { value: 0.0 },
             u_gpgpu_peelCurl: { value: 0.0 },
@@ -317,7 +315,6 @@ export const ComputeManager = {
             uniforms.u_gpgpu_droopSupportedWidthFactor.value = S.gpgpu_droopSupportedWidthFactor;
             uniforms.u_gpgpu_droopSupportedDepthFactor.value = S.gpgpu_droopSupportedDepthFactor;
             
-            // ** THE FIX IS HERE: Update GPGPU Peel uniforms **
             uniforms.u_gpgpu_enablePeel.value = S.gpgpu_enablePeel;
             uniforms.u_gpgpu_peelAmount.value = S.gpgpu_peelAmount;
             uniforms.u_gpgpu_peelCurl.value = S.gpgpu_peelCurl;
@@ -443,7 +440,6 @@ export const ComputeManager = {
         uniform float u_gpgpu_droopSupportedWidthFactor;
         uniform float u_gpgpu_droopSupportedDepthFactor;
 
-        // ** THE FIX IS HERE: Add GLSL uniform declarations for GPGPU Peel **
         uniform bool u_gpgpu_enablePeel;
         uniform float u_gpgpu_peelAmount;
         uniform float u_gpgpu_peelCurl;
@@ -603,8 +599,6 @@ export const ComputeManager = {
                 }
                 if (u_gpgpu_enableWaterRipple) { gpgpuDisplacement += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency); }
                 if (u_gpgpu_enableEqRipple) { gpgpuDisplacement += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleStyle, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd); }
-                
-                // ** THE FIX IS HERE: Add the GPGPU Peel calculation **
                 if (u_gpgpu_enablePeel) {
                     float audio = u_gpgpu_peelEnableAudio ? u_audioLow : 0.0;
                     gpgpuDisplacement += calculatePeel(uv, u_time, audio, u_gpgpu_peelAmount, u_gpgpu_peelCurl, u_gpgpu_peelDrift, u_gpgpu_peelTextureAmount);

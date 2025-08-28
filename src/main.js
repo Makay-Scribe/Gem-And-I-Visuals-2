@@ -205,7 +205,6 @@ const App = {
         gpgpu_droopFalloffSharpness: 2.5,
         gpgpu_droopSupportedWidthFactor: 0.6,
         gpgpu_droopSupportedDepthFactor: 0.5,
-        // ** THE FIX IS HERE: Add default values for GPGPU Peel **
         gpgpu_enablePeel: false,
         gpgpu_peelAmount: 0.59,
         gpgpu_peelCurl: 0.83,

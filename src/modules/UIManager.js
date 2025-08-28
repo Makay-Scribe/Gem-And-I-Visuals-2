@@ -606,7 +606,7 @@ export const UIManager = {
             'gpgpu_enableCylinder',
             'gpgpu_enableSag',
             'gpgpu_enableDroop',
-            'gpgpu_enablePeel' // ** THE FIX IS HERE **
+            'gpgpu_enablePeel'
         ];
     
         if (S[toggledId]) {
