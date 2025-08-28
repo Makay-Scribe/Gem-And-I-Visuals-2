@@ -376,7 +376,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'legoNoiseScale', 'legoAnimationSpeed', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'legoNoiseScale', 'legoAnimationSpeed', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'legoDisplacementStrength'].includes(id)) {
                 precision = 2;
@@ -501,10 +501,11 @@ export const UIManager = {
         const gpgpuCylinderAccordion = document.getElementById('gpgpu_enableCylinder')?.closest('.accordion-item');
         const gpgpuSagAccordion = document.getElementById('gpgpu_enableSag')?.closest('.accordion-item');
         const gpgpuDroopAccordion = document.getElementById('gpgpu_enableDroop')?.closest('.accordion-item');
+        const gpgpuPeelAccordion = document.getElementById('gpgpu_enablePeel')?.closest('.accordion-item');
 
 
         legoControls.style.display = 'none';
-        [cubeWallAccordion, triWaveAccordion, waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, legacyDeformersContainer, deformationEngineToggle]
+        [cubeWallAccordion, triWaveAccordion, waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion, legacyDeformersContainer, deformationEngineToggle]
             .forEach(el => el?.classList.add('container-disabled'));
 
         switch (mode) {
@@ -518,7 +519,7 @@ export const UIManager = {
                 break;
             case 'continuous':
             case 'faceted':
-                [waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, legacyDeformersContainer, deformationEngineToggle]
+                [waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion, legacyDeformersContainer, deformationEngineToggle]
                     .forEach(el => el?.classList.remove('container-disabled'));
                 break;
         }
@@ -597,7 +598,6 @@ export const UIManager = {
 
     handleExclusiveGPGPUToggle(toggledId) {
         const S = this.app.vizSettings;
-        // ** THE FIX IS HERE: Add new toggles to the exclusive list **
         const exclusiveEffects = [
             'gpgpu_enableWaterRipple',
             'gpgpu_enableEqRipple',
@@ -605,7 +605,8 @@ export const UIManager = {
             'gpgpu_enableFold',
             'gpgpu_enableCylinder',
             'gpgpu_enableSag',
-            'gpgpu_enableDroop'
+            'gpgpu_enableDroop',
+            'gpgpu_enablePeel' // ** THE FIX IS HERE **
         ];
     
         if (S[toggledId]) {
@@ -770,8 +771,7 @@ export const UIManager = {
                     }
                 }
                 
-                // ** THE FIX IS HERE: Add the new toggles to the list for the handler **
-                const exclusiveGpgpuEffects = ['gpgpu_enableWaterRipple', 'gpgpu_enableEqRipple', 'gpgpu_enableCloth', 'gpgpu_enableFold', 'gpgpu_enableCylinder', 'gpgpu_enableSag', 'gpgpu_enableDroop'];
+                const exclusiveGpgpuEffects = ['gpgpu_enableWaterRipple', 'gpgpu_enableEqRipple', 'gpgpu_enableCloth', 'gpgpu_enableFold', 'gpgpu_enableCylinder', 'gpgpu_enableSag', 'gpgpu_enableDroop', 'gpgpu_enablePeel'];
                 if (exclusiveGpgpuEffects.includes(e.target.id)) {
                     this.handleExclusiveGPGPUToggle(e.target.id);
                 }

@@ -195,7 +195,6 @@ const App = {
         gpgpu_cylinderAxisAlignment: "y",
         gpgpu_cylinderArcAngle: 360,
         gpgpu_cylinderArcOffset: 0,
-        // ** THE FIX IS HERE: Add default values for GPGPU Sag and Droop **
         gpgpu_enableSag: false,
         gpgpu_sagAmount: 2.0,
         gpgpu_sagFalloffSharpness: 1.5,
@@ -206,6 +205,13 @@ const App = {
         gpgpu_droopFalloffSharpness: 2.5,
         gpgpu_droopSupportedWidthFactor: 0.6,
         gpgpu_droopSupportedDepthFactor: 0.5,
+        // ** THE FIX IS HERE: Add default values for GPGPU Peel **
+        gpgpu_enablePeel: false,
+        gpgpu_peelAmount: 0.59,
+        gpgpu_peelCurl: 0.83,
+        gpgpu_peelEnableAudio: true,
+        gpgpu_peelDrift: 0.09,
+        gpgpu_peelTextureAmount: 0.14,
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,

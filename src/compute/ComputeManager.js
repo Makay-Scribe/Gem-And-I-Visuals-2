@@ -153,8 +153,6 @@ export const ComputeManager = {
             u_gpgpu_cylinderAxisAlignment: { value: 0 },
             u_gpgpu_cylinderArcAngle: { value: 0.0 },
             u_gpgpu_cylinderArcOffset: { value: 0.0 },
-
-            // ** THE FIX IS HERE: Add new uniforms for GPGPU Sag and Droop **
             u_gpgpu_enableSag: { value: false },
             u_gpgpu_sagAmount: { value: 0.0 },
             u_gpgpu_sagFalloffSharpness: { value: 0.0 },
@@ -165,6 +163,14 @@ export const ComputeManager = {
             u_gpgpu_droopFalloffSharpness: { value: 0.0 },
             u_gpgpu_droopSupportedWidthFactor: { value: 0.0 },
             u_gpgpu_droopSupportedDepthFactor: { value: 0.0 },
+
+            // ** THE FIX IS HERE: Add new uniforms for GPGPU Peel **
+            u_gpgpu_enablePeel: { value: false },
+            u_gpgpu_peelAmount: { value: 0.0 },
+            u_gpgpu_peelCurl: { value: 0.0 },
+            u_gpgpu_peelEnableAudio: { value: true },
+            u_gpgpu_peelTextureAmount: { value: 0.0 },
+            u_gpgpu_peelDrift: { value: 0.0 },
         };
 
         this.positionVariable.material.uniforms = uniforms;
@@ -300,7 +306,6 @@ export const ComputeManager = {
             uniforms.u_gpgpu_cylinderArcAngle.value = S.gpgpu_cylinderArcAngle * (Math.PI / 180.0);
             uniforms.u_gpgpu_cylinderArcOffset.value = S.gpgpu_cylinderArcOffset * (Math.PI / 180.0);
 
-            // ** THE FIX IS HERE: Update GPGPU Sag and Droop uniforms **
             uniforms.u_gpgpu_enableSag.value = S.gpgpu_enableSag;
             uniforms.u_gpgpu_sagAmount.value = S.gpgpu_sagAmount;
             uniforms.u_gpgpu_sagFalloffSharpness.value = S.gpgpu_sagFalloffSharpness;
@@ -311,6 +316,14 @@ export const ComputeManager = {
             uniforms.u_gpgpu_droopFalloffSharpness.value = S.gpgpu_droopFalloffSharpness;
             uniforms.u_gpgpu_droopSupportedWidthFactor.value = S.gpgpu_droopSupportedWidthFactor;
             uniforms.u_gpgpu_droopSupportedDepthFactor.value = S.gpgpu_droopSupportedDepthFactor;
+            
+            // ** THE FIX IS HERE: Update GPGPU Peel uniforms **
+            uniforms.u_gpgpu_enablePeel.value = S.gpgpu_enablePeel;
+            uniforms.u_gpgpu_peelAmount.value = S.gpgpu_peelAmount;
+            uniforms.u_gpgpu_peelCurl.value = S.gpgpu_peelCurl;
+            uniforms.u_gpgpu_peelEnableAudio.value = S.gpgpu_peelEnableAudio;
+            uniforms.u_gpgpu_peelTextureAmount.value = S.gpgpu_peelTextureAmount;
+            uniforms.u_gpgpu_peelDrift.value = S.gpgpu_peelDrift;
         }
 
         // --- GLOBAL UNIFORMS (always updated) ---
@@ -419,7 +432,6 @@ export const ComputeManager = {
         uniform float u_gpgpu_cylinderArcAngle;
         uniform float u_gpgpu_cylinderArcOffset;
 
-        // ** THE FIX IS HERE: Add GLSL uniform declarations for GPGPU Sag and Droop **
         uniform bool u_gpgpu_enableSag;
         uniform float u_gpgpu_sagAmount;
         uniform float u_gpgpu_sagFalloffSharpness;
@@ -430,6 +442,14 @@ export const ComputeManager = {
         uniform float u_gpgpu_droopFalloffSharpness;
         uniform float u_gpgpu_droopSupportedWidthFactor;
         uniform float u_gpgpu_droopSupportedDepthFactor;
+
+        // ** THE FIX IS HERE: Add GLSL uniform declarations for GPGPU Peel **
+        uniform bool u_gpgpu_enablePeel;
+        uniform float u_gpgpu_peelAmount;
+        uniform float u_gpgpu_peelCurl;
+        uniform bool u_gpgpu_peelEnableAudio;
+        uniform float u_gpgpu_peelTextureAmount;
+        uniform float u_gpgpu_peelDrift;
     `,
 
     commonShaderCode: `
@@ -575,7 +595,6 @@ export const ComputeManager = {
                                             0.0);
                 }
 
-                // ** THE FIX IS HERE: Add Sag and Droop to the displacement calculation **
                 if (u_gpgpu_enableSag) {
                     gpgpuDisplacement += calculateSag(uv, u_audioLow, u_gpgpu_sagAmount, u_gpgpu_sagFalloffSharpness, u_gpgpu_sagAudioMod);
                 }
@@ -585,6 +604,12 @@ export const ComputeManager = {
                 if (u_gpgpu_enableWaterRipple) { gpgpuDisplacement += calculateWaterRipple(uv, u_time, u_audioLow, u_gpgpu_rippleSpeed, u_gpgpu_rippleStrength, u_gpgpu_rippleFrequency); }
                 if (u_gpgpu_enableEqRipple) { gpgpuDisplacement += calculateEqRipple(uv, u_audioTexture, u_gpgpu_eqRippleStrength, u_gpgpu_eqRippleStyle, u_gpgpu_eqRippleBarCount, u_gpgpu_eqRippleBarWidth, u_gpgpu_eqRippleRangeStart, u_gpgpu_eqRippleRangeEnd); }
                 
+                // ** THE FIX IS HERE: Add the GPGPU Peel calculation **
+                if (u_gpgpu_enablePeel) {
+                    float audio = u_gpgpu_peelEnableAudio ? u_audioLow : 0.0;
+                    gpgpuDisplacement += calculatePeel(uv, u_time, audio, u_gpgpu_peelAmount, u_gpgpu_peelCurl, u_gpgpu_peelDrift, u_gpgpu_peelTextureAmount);
+                }
+
                 finalPos = gpgpuPos + gpgpuDisplacement;
 
                 if (u_gpgpu_enableCloth) {
