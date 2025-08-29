@@ -63,7 +63,6 @@ export const ComputeManager = {
         this.gpuCompute.setVariableDependencies(this.positionVariable, [this.positionVariable, this.previousPositionVariable]);
         this.gpuCompute.setVariableDependencies(this.previousPositionVariable, [this.positionVariable]);
         
-        // ** THE FIX IS HERE: All legacy uniforms have been removed **
         const uniforms = {
             u_initialPosition: { value: this.initialPositionTexture },
             u_time: { value: 0 },
@@ -151,8 +150,6 @@ export const ComputeManager = {
         const S = this.app.vizSettings;
         const A = this.app.AudioProcessor;
         const uniforms = this.positionVariable.material.uniforms;
-
-        // ** THE FIX IS HERE: The entire if(isLegacyMode) block has been removed **
         
         // --- GPGPU MODE UNIFORMS ---
         if (S.gpgpu_enableCloth && this.clothEnableTime < 0) {
@@ -246,7 +243,6 @@ export const ComputeManager = {
         this.gpuCompute.compute();
     },
 
-    // ** THE FIX IS HERE: All legacy uniform declarations have been removed **
     uniformsShaderCode: `
         #define texturePosition texturePosition 
         #define texturePreviousPosition texturePreviousPosition
@@ -432,9 +428,6 @@ export const ComputeManager = {
             vec2 uv = gl_FragCoord.xy / resolution.xy;
             vec3 finalPos;
             vec3 initialPos = texture2D(u_initialPosition, uv).xyz;
-
-            // ** THE FIX IS HERE: The entire legacy if/else block has been removed **
-            // We now operate only in GPGPU mode.
 
             vec3 gpgpuPos = initialPos;
             vec3 gpgpuDisplacement = vec3(0.0);

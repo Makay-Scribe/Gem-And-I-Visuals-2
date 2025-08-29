@@ -404,11 +404,6 @@ export const UIManager = {
     
         if (!isInitial) this.refreshAccordion(document.getElementById('backgroundMode'));
     },
-    
-    // ** THE FIX IS HERE: This function is now removed **
-    /*
-    updateWarpControlsVisibility(isInitial = false) { ... }
-    */
 
     updateImageEffectsVisibility(isInitial = false) {
         const type = this.app.vizSettings.imageEffectType;
@@ -428,14 +423,8 @@ export const UIManager = {
         }
     },
 
-    // ** THE FIX IS HERE: This function is now removed **
-    /*
-    updateDeformationEngineControls(isInitial = false) { ... }
-    */
-
     updateUIVisibilityForMode(mode) {
         const legoControls = document.getElementById('triangleLegosControls');
-        const gpgpuEffectsAccordion = document.getElementById('gpgpuEffectsAccordion');
         
         const cubeWallAccordion = document.getElementById('gpgpu_enableCubeWall')?.closest('.accordion-item');
         const triWaveAccordion = document.getElementById('gpgpu_enableTriangleWave')?.closest('.accordion-item');
@@ -448,7 +437,6 @@ export const UIManager = {
         const gpgpuDroopAccordion = document.getElementById('gpgpu_enableDroop')?.closest('.accordion-item');
         const gpgpuPeelAccordion = document.getElementById('gpgpu_enablePeel')?.closest('.accordion-item');
 
-        // ** THE FIX IS HERE: Legacy containers are no longer referenced **
         legoControls.style.display = 'none';
         [cubeWallAccordion, triWaveAccordion, waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion]
             .forEach(el => el?.classList.add('container-disabled'));
@@ -601,8 +589,6 @@ export const UIManager = {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', (e) => this.handleFileSelect(e, id));
         });
-
-        // ** THE FIX IS HERE: Removed event listener for the now-deleted 'enableWarp' checkbox **
         
         const gpgpuDebugCheckbox = document.getElementById('enableGPGPUDebugger');
         if (gpgpuDebugCheckbox) {
@@ -619,8 +605,6 @@ export const UIManager = {
                 this.updateUIVisibilityForMode(e.target.value);
             });
         }
-        
-        // ** THE FIX IS HERE: Removed event listener for the now-deleted deformation engine toggle **
         
         // General input/select event listeners
         document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select:not(#gpgpuGeometryMode)').forEach(control => {
@@ -1069,8 +1053,6 @@ export const UIManager = {
             }
         });
     
-        // ** THE FIX IS HERE: Call to removed function is now also removed **
-        // this.updateWarpControlsVisibility();
         this.app.ImagePlaneManager.createDefaultLandscape();
     
         this.logSuccess("Landscape settings reset.");
