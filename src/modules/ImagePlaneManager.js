@@ -1,8 +1,7 @@
 import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import cubewallRenderVertexShader from '../shaders/cubewall_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
-import triangleLegoVertexShader from '../shaders/triangleLego.vert?raw';
-import triangleLegoFragmentShader from '../shaders/triangleLego.frag?raw';
+// REMOVED: triangleLego shader imports
 
 export const ImagePlaneManager = {
     app: null,
@@ -13,7 +12,7 @@ export const ImagePlaneManager = {
     
     landscapeContainer: null, 
     landscapeMaterial: null,
-    triangleLegoMaterial: null, // New custom shader material
+    // REMOVED: triangleLegoMaterial
     boundingBox: null, 
     planeDimensions: null, 
     planeResolution: null, 
@@ -134,7 +133,6 @@ export const ImagePlaneManager = {
         this.landscapeContainer.visible = true;
 
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
-        const isLegoMode = S.gpgpuGeometryMode === 'triangleLegos';
         if (this.landscape) this.landscape.visible = !isCubeMode;
         if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
         
@@ -191,16 +189,9 @@ export const ImagePlaneManager = {
         this.landscapeContainer.quaternion.slerp(finalTargetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
-        if (!isLegoMode) {
-            if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
-            this.updateDeformationUniforms();
-        } else if (this.triangleLegoMaterial) {
-            const U = this.triangleLegoMaterial.uniforms;
-            U.u_time.value = this.app.currentTime;
-            U.u_noiseScale.value = S.legoNoiseScale;
-            U.u_displacementStrength.value = S.legoDisplacementStrength;
-            U.u_animationSpeed.value = S.legoAnimationSpeed;
-        }
+        // ** THE FIX IS HERE: The '!isLegoMode' check has been removed as that mode no longer exists **
+        if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
+        this.updateDeformationUniforms();
         
         this.updateBoundingBox();
     },
@@ -208,7 +199,6 @@ export const ImagePlaneManager = {
     createDefaultLandscape() {
         this.updatePlaneDimensions();
 
-        // ** THE FIX IS HERE: Re-initialize the ComputeManager with the new dimensions **
         if (this.app.ComputeManager && this.app.ComputeManager.init) {
             this.app.ComputeManager.init(this.app,
                 this.planeDimensions.x,
@@ -255,25 +245,13 @@ export const ImagePlaneManager = {
             this.landscapeMaterial.dispose();
             this.landscapeMaterial = null;
         }
-        if (this.triangleLegoMaterial) {
-            this.triangleLegoMaterial.dispose();
-            this.triangleLegoMaterial = null;
-        }
+        // REMOVED: triangleLegoMaterial cleanup
     },
 
     _createPlaneMesh(mode) {
         let landGeom;
-        if (mode === 'triangleLegos') {
-            landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, 64, 64);
-            landGeom = landGeom.toNonIndexed(); // Faceted look is required
-            const count = landGeom.attributes.position.count;
-            const barycentric = new Float32Array(count * 3);
-            for (let i = 0; i < count; i++) {
-                barycentric[i * 3 + (i % 3)] = 1.0;
-            }
-            const attributeBuffer = new this.app.THREE.BufferAttribute(barycentric, 3);
-            landGeom.setAttribute('barycentric', attributeBuffer);
-        } else if (mode === 'faceted') {
+        
+        if (mode === 'faceted') {
             landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
             landGeom = landGeom.toNonIndexed();
             const uvGpgpuAttribute = landGeom.attributes.uv.clone();
@@ -296,16 +274,9 @@ export const ImagePlaneManager = {
             landGeom.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(uv_gpu, 2));
         }
 
-        let materialToUse;
-        if (mode === 'triangleLegos') {
-            this.createTriangleLegoMaterial();
-            materialToUse = this.triangleLegoMaterial;
-        } else {
-            this.createGPGPUMaterial();
-            materialToUse = this.landscapeMaterial;
-        }
+        this.createGPGPUMaterial();
 
-        this.landscape = new this.app.THREE.Mesh(landGeom, materialToUse);
+        this.landscape = new this.app.THREE.Mesh(landGeom, this.landscapeMaterial);
         this.landscape.frustumCulled = false;
         this.landscapeContainer.add(this.landscape);
     },
@@ -340,7 +311,7 @@ export const ImagePlaneManager = {
         if (!this.landscape && !this.instancedMesh) return;
         const S = this.app.vizSettings;
         
-        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'triangleLegos') {
+        if (S.gpgpuGeometryMode === 'geocube') {
             this.state.homeQuaternion.identity(); 
         } else {
             const tempObject = new this.app.THREE.Object3D();
@@ -350,20 +321,7 @@ export const ImagePlaneManager = {
         }
     },
     
-    createTriangleLegoMaterial() {
-        const S = this.app.vizSettings;
-        this.triangleLegoMaterial = new this.app.THREE.ShaderMaterial({
-            uniforms: {
-                u_time: { value: 0.0 },
-                u_noiseScale: { value: S.legoNoiseScale },
-                u_displacementStrength: { value: S.legoDisplacementStrength },
-                u_animationSpeed: { value: S.legoAnimationSpeed }
-            },
-            vertexShader: triangleLegoVertexShader,
-            fragmentShader: triangleLegoFragmentShader,
-            side: this.app.THREE.DoubleSide
-        });
-    },
+    // REMOVED: createTriangleLegoMaterial function
 
     createGPGPUMaterial() {
         const S = this.app.vizSettings;
@@ -389,12 +347,7 @@ export const ImagePlaneManager = {
                 u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
                 u_cameraPosition: { value: this.app.camera.position },
                 t_envMap: { value: this.app.hdrTexture },
-                u_gpgpu_enableTriangleWave: { value: S.gpgpu_enableTriangleWave },
-                u_gpgpu_triWaveColor1: { value: new this.app.THREE.Color(S.gpgpu_triWaveColor1) },
-                u_gpgpu_triWaveColor2: { value: new this.app.THREE.Color(S.gpgpu_triWaveColor2) },
-                u_gpgpu_triWaveAmplitude: { value: S.gpgpu_triWaveAmplitude },
-                u_gpgpu_triWaveFrequency: { value: S.gpgpu_triWaveFrequency },
-                u_gpgpu_triWaveSpeed: { value: S.gpgpu_triWaveSpeed },
+                // REMOVED: u_gpgpu_enableTriangleWave and related uniforms
                 u_gpgpu_enableCubeWall: { value: S.gpgpu_enableCubeWall },
                 u_gpgpu_cubeWallGridSize: { value: new this.app.THREE.Vector2(S.gpgpu_cubeWallGridSize, S.gpgpu_cubeWallGridSize) },
                 u_gpgpu_cubeWallMorph: { value: S.gpgpu_cubeWallMorph },
@@ -462,14 +415,7 @@ export const ImagePlaneManager = {
         U.u_ambientLightColor.value.set(S.ambientLightColor);
         U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
         
-        U.u_gpgpu_enableTriangleWave.value = S.gpgpu_enableTriangleWave;
-        if (S.gpgpu_enableTriangleWave) {
-            U.u_gpgpu_triWaveColor1.value.set(S.gpgpu_triWaveColor1);
-            U.u_gpgpu_triWaveColor2.value.set(S.gpgpu_triWaveColor2);
-            U.u_gpgpu_triWaveAmplitude.value = S.gpgpu_triWaveAmplitude;
-            U.u_gpgpu_triWaveFrequency.value = S.gpgpu_triWaveFrequency;
-            U.u_gpgpu_triWaveSpeed.value = S.gpgpu_triWaveSpeed;
-        }
+        // REMOVED: triangleWave uniform updates
 
         U.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
         U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;

@@ -149,20 +149,7 @@
                     <option value="continuous">Continuous</option>
                     <option value="faceted">Faceted</option>
                     <option value="geocube">GeoCube</option>
-                    <option value="triangleLegos">Triangle Legos</option>
                 </select>
-
-                <div id="triangleLegosControls" style="display: none;">
-                    <p class="sub-group-title">LEGO CONTROLS</p>
-                    <label>Noise Scale: <span id="legoNoiseScaleValue" class="range-value-display">0.5</span></label>
-                    <input type="range" id="legoNoiseScale" min="0.0" max="2.0" step="0.01" value="0.5">
-                    
-                    <label>Displacement Strength: <span id="legoDisplacementStrengthValue" class="range-value-display">2.0</span></label>
-                    <input type="range" id="legoDisplacementStrength" min="0.0" max="10.0" step="0.1" value="2.0">
-                    
-                    <label>Animation Speed: <span id="legoAnimationSpeedValue" class="range-value-display">0.1</span></label>
-                    <input type="range" id="legoAnimationSpeed" min="0.0" max="1.0" step="0.01" value="0.1">
-                </div>
 
                 <div class="accordion-item">
                     <div class="accordion-header-with-toggle">
@@ -436,31 +423,6 @@
                         
                         <label>Force Radius: <span id="gpgpu_clothForceRadiusValue" class="range-value-display"></span></label>
                         <input type="range" id="gpgpu_clothForceRadius" min="0.0" max="1.0" step="0.01" value="0.3">
-                    </div>
-                </div>
-
-                <div class="accordion-item">
-                     <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">Triangle Wave</span>
-                            <span class="header-engine-tag geometry-tag">Geometry</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enableTriangleWave" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <p class="sub-group-title">WAVE</p>
-                        <label>Amplitude: <span id="gpgpu_triWaveAmplitudeValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_triWaveAmplitude" min="0.0" max="20.0" step="0.1" value="5.0">
-                        <label>Frequency: <span id="gpgpu_triWaveFrequencyValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_triWaveFrequency" min="0.0" max="5.0" step="0.01" value="1.0">
-                        <label>Speed: <span id="gpgpu_triWaveSpeedValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_triWaveSpeed" min="0.0" max="2.0" step="0.01" value="0.5">
-                        
-                        <p class="sub-group-title">COLOR</p>
-                        <label for="gpgpu_triWaveColor1">Color A:</label>
-                        <input type="color" id="gpgpu_triWaveColor1" value="#ffffff">
-                        <label for="gpgpu_triWaveColor2">Color B:</label>
-                        <input type="color" id="gpgpu_triWaveColor2" value="#ffffff">
                     </div>
                 </div>
                 

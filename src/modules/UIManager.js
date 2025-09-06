@@ -374,9 +374,9 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'legoNoiseScale', 'legoAnimationSpeed', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount'].includes(id)) {
                 precision = 2;
-            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'legoDisplacementStrength'].includes(id)) {
+            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed'].includes(id)) {
                 precision = 2;
             } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod', 'gpgpu_eqRippleBarCount', 'gpgpu_foldAngle', 'gpgpu_foldAudioMod', 'gpgpu_cylinderArcAngle', 'gpgpu_cylinderArcOffset'].includes(id)) {
                 precision = 0;
@@ -424,10 +424,11 @@ export const UIManager = {
     },
 
     updateUIVisibilityForMode(mode) {
-        const legoControls = document.getElementById('triangleLegosControls');
+        // ** THE FIX IS HERE: The constant and the first line are removed **
+        const gpgpuEffectsAccordion = document.getElementById('gpgpuEffectsAccordion');
         
         const cubeWallAccordion = document.getElementById('gpgpu_enableCubeWall')?.closest('.accordion-item');
-        const triWaveAccordion = document.getElementById('gpgpu_enableTriangleWave')?.closest('.accordion-item');
+        // REMOVED: triWaveAccordion
         const waterRippleAccordion = document.getElementById('gpgpu_enableWaterRipple')?.closest('.accordion-item');
         const eqRippleAccordion = document.getElementById('gpgpu_enableEqRipple')?.closest('.accordion-item');
         const clothAccordion = document.getElementById('gpgpu_enableCloth')?.closest('.accordion-item');
@@ -437,22 +438,16 @@ export const UIManager = {
         const gpgpuDroopAccordion = document.getElementById('gpgpu_enableDroop')?.closest('.accordion-item');
         const gpgpuPeelAccordion = document.getElementById('gpgpu_enablePeel')?.closest('.accordion-item');
 
-        legoControls.style.display = 'none';
-        [cubeWallAccordion, triWaveAccordion, waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion]
+        [cubeWallAccordion, waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion]
             .forEach(el => el?.classList.add('container-disabled'));
 
         switch (mode) {
             case 'geocube':
                 if (cubeWallAccordion) cubeWallAccordion.classList.remove('container-disabled');
                 break;
-            case 'triangleLegos':
-                legoControls.style.display = 'block';
-                if (legoControls) legoControls.closest('#gpgpuEffectsAccordion').classList.remove('container-disabled');
-                if (triWaveAccordion) triWaveAccordion.classList.remove('container-disabled');
-                break;
+            // REMOVED: triangleLegos case
             case 'continuous':
             case 'faceted':
-                // For standard planes, enable all GPGPU effect accordions
                 [waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion]
                     .forEach(el => el?.classList.remove('container-disabled'));
                 break;
@@ -776,7 +771,6 @@ export const UIManager = {
             this.app.AudioProcessor.toggleFilePlayback();
         }
 
-        this.app.vizSettings.deformationEngine = 'gpgpu';
         this.app.vizSettings.gpgpu_enableCloth = true;
         this.app.vizSettings.enableShaderMouse = true;
 

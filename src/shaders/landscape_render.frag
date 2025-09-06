@@ -15,11 +15,6 @@ uniform vec3 u_cameraPosition;
 uniform float u_time;
 uniform bool gpgpu_cubeWallUseImageTexture;
 
-// TRIANGLE WAVE RENDER UNIFORMS
-uniform bool u_gpgpu_enableTriangleWave;
-uniform vec3 u_gpgpu_triWaveColor1;
-uniform vec3 u_gpgpu_triWaveColor2;
-
 // CUBEWALL UNIFORMS
 uniform bool u_gpgpu_enableCubeWall;
 uniform vec3 u_gpgpu_cubeWallSideColor;
@@ -31,7 +26,6 @@ uniform vec2 u_gpgpu_cubeWallGridSize;
 varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
-varying float vTriangleId;
 varying vec3 vLocalNormal;
 
 #define PI 3.14159265359
@@ -69,7 +63,6 @@ void main() {
     vec3 N = normalize(vWorldNormal);
 
     // --- BEVEL EFFECT (CONDITIONAL) ---
-    // ** THE FIX IS HERE: Only run bevel logic if the effect is enabled. **
     if (u_gpgpu_enableCubeWall) {
         bool isCubeFace = abs(vLocalNormal.z) > 0.9 || abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9;
         if (isCubeFace) {
@@ -79,16 +72,8 @@ void main() {
     }
 
     // --- ALBEDO (COLOR) LOGIC ---
-    if (u_gpgpu_enableTriangleWave) {
-        workingUV.y = 1.0 - workingUV.y;
-        albedo = texture2D(u_map, workingUV).rgb;
-        N = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
-        
-        float isEven = mod(vTriangleId, 2.0);
-        vec3 baseColor = mix(u_gpgpu_triWaveColor1, u_gpgpu_triWaveColor2, isEven);
-        albedo *= baseColor;
-
-    } else if (abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9) {
+    // ** THE FIX IS HERE: The `triangleWave` block has been removed. **
+    if (abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9) {
         albedo = u_gpgpu_cubeWallSideColor;
 
     } else if (abs(vLocalNormal.z) > 0.9) {
