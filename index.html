@@ -7,14 +7,10 @@
     <link rel="icon" href="data:;base64,=">
     <!-- Three.js and Addons -->
 
-    <!-- Butterchurn Libraries (Local) -->
-    <script src="butterchurn.min.js"></script>
-    <script src="butterchurnPresets.min.js"></script>
-    <script src="butterchurnPresetsMinimal.min.js"></script>
-    <script src="butterchurnPresetsNonMinimal.min.js"></script>
-    <script src="butterchurnPresetsExtra.min.js"></script>
-    <script src="butterchurnPresetsExtra2.min.js"></script>
-    <script src="butterchurnPresetsMD1.min.js"></script>
+    <!-- 
+      NOTE: All old butterchurn <script> tags for the v2 engine have been moved to the public folder.
+      They will be loaded dynamically by the ButterchurnManager when needed.
+    -->
     
 </head><body>
 
@@ -654,6 +650,13 @@
                 <!-- Container for Butterchurn specific controls -->
                 <div id="butterchurnControls" style="display: none;">
                     <hr>
+                    <!-- THE FIX IS HERE: New Dropdown for Engine Selection -->
+                    <p class="sub-group-title">BUTTERCHURN ENGINE</p>
+                    <select id="butterchurnEngineSelect">
+                        <option value="1" selected>Butterchurn 1 (Classic)</option>
+                        <option value="2">Butterchurn 2 (Community)</option>
+                    </select>
+
                     <p class="sub-group-title">BUTTERCHURN CONTROLS</p>
                     <label for="butterchurnSpeed">Speed:<span id="butterchurnSpeedValue" class="range-value-display">Normal</span></label>
                     <input type="range" id="butterchurnSpeed" min="1" max="10" step="1" value="10">

@@ -394,10 +394,15 @@ export const UIManager = {
         if (butterchurnControls) butterchurnControls.style.display = (mode === 'butterchurn') ? 'block' : 'none';
     
         if (mode === 'butterchurn') {
-            if (this.app.AudioProcessor.audioContext && !this.app.ButterchurnManager.visualizer) {
-                this.app.AudioProcessor.connectButterchurn();
+            const engineSelect = document.getElementById('butterchurnEngineSelect');
+            // THE FIX IS HERE: Logic to default to engine '1'
+            if (this.app.ButterchurnManager.activeEngine === null) {
+                const defaultEngine = '1';
+                if (engineSelect) {
+                    engineSelect.value = defaultEngine;
+                }
+                this.app.ButterchurnManager.switchEngine(defaultEngine);
             }
-            this.app.ButterchurnManager.activate();
         } else {
             this.app.ButterchurnManager.deactivate();
         }
@@ -424,11 +429,9 @@ export const UIManager = {
     },
 
     updateUIVisibilityForMode(mode) {
-        // ** THE FIX IS HERE: The constant and the first line are removed **
         const gpgpuEffectsAccordion = document.getElementById('gpgpuEffectsAccordion');
         
         const cubeWallAccordion = document.getElementById('gpgpu_enableCubeWall')?.closest('.accordion-item');
-        // REMOVED: triWaveAccordion
         const waterRippleAccordion = document.getElementById('gpgpu_enableWaterRipple')?.closest('.accordion-item');
         const eqRippleAccordion = document.getElementById('gpgpu_enableEqRipple')?.closest('.accordion-item');
         const clothAccordion = document.getElementById('gpgpu_enableCloth')?.closest('.accordion-item');
@@ -445,7 +448,6 @@ export const UIManager = {
             case 'geocube':
                 if (cubeWallAccordion) cubeWallAccordion.classList.remove('container-disabled');
                 break;
-            // REMOVED: triangleLegos case
             case 'continuous':
             case 'faceted':
                 [waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion]
@@ -603,7 +605,7 @@ export const UIManager = {
         
         // General input/select event listeners
         document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select:not(#gpgpuGeometryMode)').forEach(control => {
-            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion')) return;
+            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls')) return;
             
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -646,7 +648,7 @@ export const UIManager = {
 
         // Checkboxes (header toggles)
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin') return;
+             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.closest('#butterchurnControls')) return;
              
              checkbox.addEventListener('input', (e) => {
                  if (this.app.vizSettings[e.target.id] !== undefined) {
@@ -832,7 +834,15 @@ export const UIManager = {
         this.demoShaderIndex = (this.demoShaderIndex + 1) % this.demoShaderOrder.length;
     },
 
+    // --- BUTTERCHURN SPECIFIC UI LOGIC ---
     setupButterchurnEventListeners() {
+        const engineSelect = document.getElementById('butterchurnEngineSelect');
+        if (engineSelect) {
+            engineSelect.addEventListener('change', (e) => {
+                this.app.ButterchurnManager.switchEngine(e.target.value);
+            });
+        }
+
         const speedSlider = document.getElementById('butterchurnSpeed');
         if (speedSlider) speedSlider.addEventListener('input', (e) => { this.app.vizSettings.butterchurnSpeed = parseInt(e.target.value); this.updateRangeDisplay('butterchurnSpeed', e.target.value); });
         
@@ -857,21 +867,31 @@ export const UIManager = {
         document.getElementById('butterchurnPrevPreset').addEventListener('click', () => this.app.ButterchurnManager.prevPreset());
         document.getElementById('butterchurnRandomPreset').addEventListener('click', () => this.app.ButterchurnManager.randomPreset());
         document.getElementById('butterchurnNextPreset').addEventListener('click', () => this.app.ButterchurnManager.nextPreset());
+        
         document.getElementById('butterchurnSearchButton').addEventListener('click', () => this.filterButterchurnPresets());
         document.getElementById('butterchurnPresetSearch').addEventListener('keyup', (e) => { if (e.key === 'Enter') this.filterButterchurnPresets(); });
         document.getElementById('butterchurnPresetList').addEventListener('change', (e) => { const selectedIndex = parseInt(e.target.value); if (!isNaN(selectedIndex)) this.app.ButterchurnManager.loadPresetByIndex(selectedIndex); });
     },
 
-    filterButterchurnPresets() {
-        const searchTerm = document.getElementById('butterchurnPresetSearch').value.toLowerCase();
+    populateButterchurnPresetList(presetKeys) {
         const listElement = document.getElementById('butterchurnPresetList');
-        const allKeys = this.app.ButterchurnManager.presetKeys;
+        const searchBox = document.getElementById('butterchurnPresetSearch');
+        if (!listElement || !searchBox) return;
 
-        if (!allKeys || allKeys.length === 0) {
-            listElement.innerHTML = '<option disabled>No presets loaded.</option>';
-            return;
-        }
+        listElement.dataset.originalKeys = JSON.stringify(presetKeys);
+        searchBox.value = '';
+        
+        this.filterButterchurnPresets();
+    },
 
+    filterButterchurnPresets() {
+        const listElement = document.getElementById('butterchurnPresetList');
+        const searchBox = document.getElementById('butterchurnPresetSearch');
+        if (!listElement || !searchBox || !listElement.dataset.originalKeys) return;
+
+        const searchTerm = searchBox.value.toLowerCase();
+        const allKeys = JSON.parse(listElement.dataset.originalKeys);
+        
         listElement.innerHTML = '';
         const filteredKeys = searchTerm === '' ? allKeys : allKeys.filter(key => key.toLowerCase().includes(searchTerm));
 
@@ -888,13 +908,6 @@ export const UIManager = {
         }
         
         document.getElementById('butterchurnTotalPresets').textContent = filteredKeys.length;
-
-        const currentPresetIsVisible = filteredKeys.some(key => allKeys.indexOf(key) === this.app.ButterchurnManager.currentPresetIndex);
-        if (currentPresetIsVisible) {
-            listElement.value = this.app.ButterchurnManager.currentPresetIndex;
-        } else if (listElement.options.length > 0 && !listElement.options[0].disabled) {
-            listElement.selectedIndex = 0;
-        }
         this.refreshAccordion(listElement);
     },
 
@@ -903,6 +916,7 @@ export const UIManager = {
         const listElement = document.getElementById('butterchurnPresetList');
         if (listElement) listElement.value = index;
     },
+    // --- END OF BUTTERCHURN UI LOGIC ---
 
     handleFileSelect(event, id) {
         const file = event.target.files[0]; 

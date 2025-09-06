@@ -14,13 +14,13 @@ export const AudioProcessor = {
     testToneGain: null,
     testToneInterval: null,
     butterchurnGainNode: null,
-    muteNode: null,
+    // REMOVED: muteNode is no longer needed
     activeAudioSource: 'none',
 
     // --- Data Outputs ---
     frequencyData: null, 
-    smoothedFrequencyData: null, // ** NEW: Array to hold smoothed values
-    textureDataUint8: null,      // ** NEW: Array for the texture buffer
+    smoothedFrequencyData: null,
+    textureDataUint8: null,
     audioTexture: null, 
     energy: {
         low: 0.0,
@@ -29,7 +29,7 @@ export const AudioProcessor = {
         overall: 0.0,
     },
     triggers: {
-        beat: false, // Sharp, one-frame trigger
+        beat: false,
         beat2: false,
         beat4: false,
     },
@@ -37,14 +37,13 @@ export const AudioProcessor = {
     // --- Adaptive Beat Detection Internals ---
     _beatCount: 0,
     _beatTime: 0,
-    _onsetTimeout: 0.15, // Cooldown in seconds to prevent multiple triggers for one beat.
-    _energyHistory: [], // Stores the recent history of mid-range energy
-    _HISTORY_LENGTH: 60, // How many frames of history to keep (approx 1 second at 60fps)
-    _MINIMUM_BEAT_ENERGY: 0.15, // The "Noise Gate": energy must be above this to be considered a beat.
+    _onsetTimeout: 0.15,
+    _energyHistory: [],
+    _HISTORY_LENGTH: 60,
+    _MINIMUM_BEAT_ENERGY: 0.15,
 
     init(appInstance) {
         this.app = appInstance;
-        // Pre-fill the energy history with zeros
         for (let i = 0; i < this._HISTORY_LENGTH; i++) {
             this._energyHistory.push(0);
         }
@@ -63,21 +62,19 @@ export const AudioProcessor = {
             this.analyser = this.audioContext.createAnalyser();
             this.analyser.fftSize = 512;
             this.analyser.smoothingTimeConstant = this.app.vizSettings.audioSmoothing;
-            this.butterchurnGainNode = this.audioContext.createGain();
-            this.muteNode = this.audioContext.createGain();
-            this.muteNode.gain.value = 0;
-            this.muteNode.connect(this.audioContext.destination);
-            this.butterchurnGainNode.connect(this.muteNode);
             
+            // THE FIX IS HERE: Simplified the Butterchurn audio path
+            this.butterchurnGainNode = this.audioContext.createGain();
+            // The butterchurnGainNode is now just for analysis and doesn't need to connect to the destination.
+            // The main source will be connected to the destination directly for playback.
+
             const bufferLength = this.analyser.frequencyBinCount;
             this.frequencyData = new Uint8Array(bufferLength);
-            this.smoothedFrequencyData = new Float32Array(bufferLength); // Use Float32 for precision
-            this.textureDataUint8 = new Uint8Array(bufferLength); // Final buffer for texture
+            this.smoothedFrequencyData = new Float32Array(bufferLength);
+            this.textureDataUint8 = new Uint8Array(bufferLength);
             
-            // Reverted to direct THREE import here for DataTexture, assuming Three.js itself is the singleton.
-            // This is safer as DataTexture is a core Three.js class.
             this.audioTexture = new THREE.DataTexture(
-                this.textureDataUint8, // Use the new Uint8 buffer
+                this.textureDataUint8,
                 bufferLength,
                 1,
                 THREE.RedFormat,
@@ -94,9 +91,13 @@ export const AudioProcessor = {
     },
 
     _connectSourceToNodes(source) {
+        // Connect source to the two analysis nodes
         source.connect(this.analyser);
         source.connect(this.butterchurnGainNode);
-        if (this.activeAudioSource === 'file' || this.activeAudioSource === 'testTone') {
+
+        // THE FIX IS HERE: Consistently connect audible sources to the destination
+        // This ensures sound plays regardless of microphone or file input.
+        if (this.activeAudioSource !== 'mic') {
             source.connect(this.audioContext.destination);
         }
     },
@@ -157,7 +158,6 @@ export const AudioProcessor = {
         }
         if (this.audioElement.paused) {
             this.audioElement.play().catch(e => {
-                // This catch block prevents the harmless "not suitable" error from polluting the console.
                 console.warn("Audio playback failed to start automatically. User may need to click again.", e.message);
             });
         } else {
@@ -225,18 +225,14 @@ export const AudioProcessor = {
         this.analyser.getByteFrequencyData(this.frequencyData);
         if (this.app.UIManager && this.app.UIManager.eqCanvas) this.app.UIManager.updateEQ(this.frequencyData);
 
-        // ** THE FIX IS HERE **
         const smoothingFactor = this.app.vizSettings.gpgpu_eqRippleSmoothing;
         for (let i = 0; i < this.frequencyData.length; i++) {
-            // Apply exponential moving average
             this.smoothedFrequencyData[i] = this.smoothedFrequencyData[i] * smoothingFactor + this.frequencyData[i] * (1.0 - smoothingFactor);
-            // Copy the smoothed float value back to the Uint8 buffer for the texture
             this.textureDataUint8[i] = Math.round(this.smoothedFrequencyData[i]);
         }
         if (this.audioTexture) {
             this.audioTexture.needsUpdate = true;
         }
-        // ** END OF FIX **
 
 
         const n = this.analyser.frequencyBinCount;
@@ -249,7 +245,7 @@ export const AudioProcessor = {
 
         let lowSum = 0, midSum = 0, highSum = 0;
         for (let i = 0; i < n; i++) {
-            const val = this.frequencyData[i]; // Energy calculation still uses raw data
+            const val = this.frequencyData[i];
             if (i <= lowEnd) lowSum += val;
             if (i >= midStart && i <= midEnd) midSum += val;
             if (i >= highStart) highSum += val;
@@ -266,7 +262,7 @@ export const AudioProcessor = {
             historySum += this._energyHistory[i];
         }
         const averageEnergy = historySum / this._HISTORY_LENGTH;
-        const dynamicThreshold = averageEnergy * (this.app.vizSettings.joltSensitivity || 1.8); // Use default if not set
+        const dynamicThreshold = averageEnergy * (this.app.vizSettings.joltSensitivity || 1.8);
 
         if (currentMidEnergy > this._MINIMUM_BEAT_ENERGY &&
             currentMidEnergy > dynamicThreshold && 

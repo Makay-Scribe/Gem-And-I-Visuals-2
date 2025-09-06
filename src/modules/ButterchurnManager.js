@@ -1,101 +1,258 @@
+import butterchurn from 'butterchurn';
+
+const b2PresetImporters = import.meta.glob(
+  '../../node_modules/butterchurn-presets/presets/converted/**/*.json'
+);
+
 export const ButterchurnManager = {
-    app: null, // This will be set to the main App instance on init
-    visualizer: null, 
-    visualizerCanvas: null, 
-    presetKeys: [], 
-    presetCycleInterval: null, 
+    app: null,
+    
+    activeEngine: null,
+    visualizer: null,
+    visualizerCanvas: null,
+    
+    b1_presetKeys: [],
+    b1_presets: {},
+    b1_loadedScripts: [],
+    
+    b2_presetPaths: [],
+    b2_presetsCache: {},
+    
     currentPresetIndex: 0,
+    presetCycleInterval: null,
+    isSwitching: false,
+
+    _loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const cacheBustedSrc = `${src}?v=${Date.now()}`;
+            const script = document.createElement('script');
+            script.src = cacheBustedSrc;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Script load error for ${src}`));
+            document.head.appendChild(script);
+            this.b1_loadedScripts.push(script);
+        });
+    },
     
     init(appInstance) {
         this.app = appInstance;
-        this._waitForLibraries();
+        console.log("ButterchurnManager initialized. Waiting for engine selection.");
     },
 
-    _waitForLibraries() {
-        const checkInterval = setInterval(() => {
-            if (window.butterchurn && window.butterchurn.default && window.butterchurnPresets) {
-                clearInterval(checkInterval);
-                console.log("Butterchurn libraries and default export loaded.");
-                this.loadPresetListOnly();
-            }
-        }, 100);
-    },
-
-    _getPresetsFromSource(sourceName) {
-        if (window[sourceName] && typeof window[sourceName].getPresets === 'function') {
-            return window[sourceName].getPresets();
-        }
-        return {};
-    },
-
-    _getAllPresets() {
-        const base = this._getPresetsFromSource('butterchurnPresets');
-        const minimal = this._getPresetsFromSource('butterchurnPresetsMinimal');
-        const nonMinimal = this._getPresetsFromSource('butterchurnPresetsNonMinimal');
-        const extra1 = this._getPresetsFromSource('butterchurnPresetsExtra');
-        const extra2 = this._getPresetsFromSource('butterchurnPresetsExtra2');
-        const md1 = this._getPresetsFromSource('butterchurnPresetsMD1');
-        return { ...base, ...minimal, ...nonMinimal, ...extra1, ...extra2, ...md1 };
-    },
-
-    loadPresetListOnly() {
-        const allPresets = this._getAllPresets();
-        this.presetKeys = Object.keys(allPresets);
-        this.presetKeys.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    async switchEngine(engine) {
+        if (this.activeEngine === engine || this.isSwitching) return;
         
+        this.isSwitching = true;
+        if (this.app.UIManager) this.app.UIManager.logSuccess(`Switching to Butterchurn ${engine}...`);
+
+        await this.destroyVisualizer();
+        this.activeEngine = engine;
+
+        if (engine === '1') {
+            await this.loadB1Engine();
+        } else if (engine === '2') {
+            await this.loadB2Engine();
+        }
+
+        if (this.app.AudioProcessor.audioContext) {
+            this.connectAudio(this.app.AudioProcessor.audioContext, this.app.AudioProcessor.butterchurnGainNode);
+        }
+        
+        this.isSwitching = false;
+    },
+
+    async destroyVisualizer() {
+        if (this.app.butterchurnTexture) {
+            if (this.app.butterchurnMaterial) {
+                this.app.butterchurnMaterial.map = null;
+                this.app.butterchurnMaterial.needsUpdate = true;
+            }
+            this.app.butterchurnTexture.dispose();
+            this.app.butterchurnTexture = null;
+        }
+        if (this.visualizer) { this.visualizer = null; }
+        if (this.presetCycleInterval) { clearInterval(this.presetCycleInterval); }
+        this.currentPresetIndex = 0;
+        
+        this.b1_loadedScripts.forEach(script => script.remove());
+        this.b1_loadedScripts = [];
+
+        if (window.butterchurn) delete window.butterchurn;
+        if (window.butterchurnPresets) delete window.butterchurnPresets;
+        if (window.butterchurnPresetsMinimal) delete window.butterchurnPresetsMinimal;
+        if (window.butterchurnPresetsNonMinimal) delete window.butterchurnPresetsNonMinimal;
+        if (window.butterchurnPresetsExtra) delete window.butterchurnPresetsExtra;
+        if (window.butterchurnPresetsExtra2) delete window.butterchurnPresetsExtra2;
+        if (window.butterchurnPresetsMD1) delete window.butterchurnPresetsMD1;
+    },
+
+    async loadB1Engine() {
+        try {
+            const scriptPaths = [
+                '/butterchurn.min.js',
+                '/butterchurnPresets.min.js',
+                '/butterchurnPresetsMinimal.min.js',
+                '/butterchurnPresetsNonMinimal.min.js',
+                '/butterchurnPresetsExtra.min.js',
+                '/butterchurnPresetsExtra2.min.js',
+                '/butterchurnPresetsMD1.min.js'
+            ];
+            
+            for (const path of scriptPaths) {
+                await this._loadScript(path);
+            }
+
+            const base = window.butterchurnPresets?.getPresets() || {};
+            const minimal = window.butterchurnPresetsMinimal?.getPresets() || {};
+            const nonMinimal = window.butterchurnPresetsNonMinimal?.getPresets() || {};
+            const extra1 = window.butterchurnPresetsExtra?.getPresets() || {};
+            const extra2 = window.butterchurnPresetsExtra2?.getPresets() || {};
+            const md1 = window.butterchurnPresetsMD1?.getPresets() || {};
+            
+            this.b1_presets = { ...base, ...minimal, ...nonMinimal, ...extra1, ...extra2, ...md1 };
+            this.b1_presetKeys = Object.keys(this.b1_presets).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            
+            if (this.app.UIManager) {
+                this.app.UIManager.populateButterchurnPresetList(this.b1_presetKeys);
+            }
+        } catch (error) {
+            console.error("Failed to load Butterchurn 1 libraries:", error);
+            if (this.app.UIManager) this.app.UIManager.logError("Failed to load B1 libraries.");
+        }
+    },
+
+    async loadB2Engine() {
+        if (this.b2_presetPaths.length === 0) {
+            this.b2_presetPaths = Object.keys(b2PresetImporters).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        }
+        const presetNames = this.b2_presetPaths.map(path => path.substring(path.lastIndexOf('/') + 1).replace('.json', ''));
         if (this.app.UIManager) {
-            this.app.UIManager.filterButterchurnPresets();
+            this.app.UIManager.populateButterchurnPresetList(presetNames);
         }
     },
 
     connectAudio(audioContext, audioSourceNode) {
-        if (this.visualizer) { 
-            this.visualizer.connectAudio(audioSourceNode); 
-            return; 
-        }
+        if (this.visualizer) { this.visualizer.connectAudio(audioSourceNode); return; }
+        if (!this.activeEngine) return;
 
-        const bc = window.butterchurn?.default;
-
-        if (typeof bc?.createVisualizer !== 'function') {
-            if (this.app.UIManager) this.app.UIManager.logError("Butterchurn is not ready. Try again in a moment.");
-            console.error("Attempted to init Butterchurn, but `createVisualizer` is not a function.");
-            return;
-        }
-
-        console.log("Creating new Butterchurn visualizer instance (without texture).");
         this.visualizerCanvas = document.createElement('canvas'); 
         this.visualizerCanvas.width = 512; 
         this.visualizerCanvas.height = 512;
-        
-        // ** THE FIX IS HERE: Texture creation is REMOVED from this function. **
-        // It will now be created on-demand by the activate() method.
-        
-        this.visualizer = bc.createVisualizer(audioContext, this.visualizerCanvas, { width: 512, height: 512, pixelRatio: 1 });
-        this.visualizer.connectAudio(audioSourceNode);
-        
-        if (this.presetKeys.length > 0) {
-            if (this.currentPresetIndex < 0 || this.currentPresetIndex >= this.presetKeys.length) { 
-                this.currentPresetIndex = Math.floor(Math.random() * this.presetKeys.length); 
+
+        let visualizerFactory;
+        if (this.activeEngine === '1') {
+            const b1_engine = window.butterchurn?.default || window.butterchurn;
+
+            if (typeof b1_engine?.createVisualizer !== 'function') {
+                this.app.UIManager.logError('B1 Engine failed to initialize `window.butterchurn`.');
+                console.error("Final check for B1 engine failed. `window.butterchurn` content:", window.butterchurn);
+                return;
             }
-            this.loadPresetByIndex(this.currentPresetIndex);
-        } else { 
-            if (this.app.UIManager) this.app.UIManager.logError("No Butterchurn presets found."); 
+            visualizerFactory = b1_engine.createVisualizer;
+        } else { // Engine 2
+            visualizerFactory = butterchurn.createVisualizer;
         }
-        
+
+        this.visualizer = visualizerFactory(audioContext, this.visualizerCanvas, { width: 512, height: 512, pixelRatio: 1 });
+        this.visualizer.connectAudio(audioSourceNode);
+        this.activate();
+        this.loadInitialPreset();
         this.updateCycleInterval();
     },
 
-    // ** THE FIX IS HERE: New method to create and assign the texture on-demand. **
+    loadInitialPreset() {
+        const totalPresets = (this.activeEngine === '1') ? this.b1_presetKeys.length : this.b2_presetPaths.length;
+        if (totalPresets > 0) {
+            this.loadPresetByIndex(Math.floor(Math.random() * totalPresets));
+        }
+    },
+
+    async loadPresetByIndex(index) {
+        if (!this.visualizer) return;
+        this.currentPresetIndex = index;
+        
+        let preset;
+        let presetKey;
+
+        if (this.activeEngine === '1') {
+            presetKey = this.b1_presetKeys[index];
+            preset = this.b1_presets[presetKey];
+        } else { // Engine 2
+            const path = this.b2_presetPaths[index];
+            presetKey = path.substring(path.lastIndexOf('/') + 1).replace('.json', '');
+            if (this.b2_presetsCache[path]) {
+                preset = this.b2_presetsCache[path];
+            } else {
+                try {
+                    const importer = b2PresetImporters[path];
+                    const presetModule = await importer();
+                    preset = presetModule.default;
+                    this.b2_presetsCache[path] = preset;
+                } catch (e) {
+                    console.error(`Failed to load preset: ${path}`, e);
+                    if (this.app.UIManager) this.app.UIManager.logError(`Failed to load preset: ${presetKey}`);
+                    return;
+                }
+            }
+        }
+
+        if (preset) {
+            // THE FIX IS HERE: Suppress console warnings from buggy presets during loading.
+            const originalConsoleError = console.error;
+            const originalConsoleWarn = console.warn;
+            console.error = () => {};
+            console.warn = () => {};
+
+            try {
+                this.visualizer.loadPreset(preset, this.app.vizSettings.butterchurnBlendTime);
+            } finally {
+                // Always restore the original console functions, even if loadPreset fails.
+                console.error = originalConsoleError;
+                console.warn = originalConsoleWarn;
+            }
+
+            if (this.app.UIManager) {
+                this.app.UIManager.updateButterchurnPresetDisplay(presetKey, index);
+            }
+        }
+    },
+
+    nextPreset() {
+        const totalPresets = (this.activeEngine === '1') ? this.b1_presetKeys.length : this.b2_presetPaths.length;
+        if (totalPresets === 0) return;
+        this.loadPresetByIndex((this.currentPresetIndex + 1) % totalPresets);
+    },
+
+    prevPreset() {
+        const totalPresets = (this.activeEngine === '1') ? this.b1_presetKeys.length : this.b2_presetPaths.length;
+        if (totalPresets === 0) return;
+        this.loadPresetByIndex((this.currentPresetIndex - 1 + totalPresets) % totalPresets);
+    },
+
+    randomPreset() {
+        const totalPresets = (this.activeEngine === '1') ? this.b1_presetKeys.length : this.b2_presetPaths.length;
+        if (totalPresets < 2) return;
+        let newIndex = this.currentPresetIndex;
+        while (newIndex === this.currentPresetIndex) { 
+            newIndex = Math.floor(Math.random() * totalPresets); 
+        }
+        this.loadPresetByIndex(newIndex);
+    },
+
+    updateCycleInterval() {
+        if (this.presetCycleInterval) clearInterval(this.presetCycleInterval);
+        const totalPresets = (this.activeEngine === '1') ? this.b1_presetKeys.length : this.b2_presetPaths.length;
+        if (this.app.vizSettings.butterchurnEnableCycle && totalPresets > 0) {
+            this.presetCycleInterval = setInterval(() => this.randomPreset(), this.app.vizSettings.butterchurnCycleTime * 1000);
+        }
+    },
+
     activate() {
-        // Only create texture if we have a canvas and a material, and the texture doesn't already exist.
         if (this.visualizerCanvas && this.app.butterchurnMaterial && !this.app.butterchurnTexture) {
-            console.log("Activating Butterchurn texture.");
             this.app.butterchurnTexture = new this.app.THREE.CanvasTexture(this.visualizerCanvas);
             this.app.butterchurnTexture.minFilter = this.app.THREE.LinearFilter; 
             this.app.butterchurnTexture.magFilter = this.app.THREE.LinearFilter;
         }
-
-        // Always ensure the material is correctly configured when activated.
         if (this.app.butterchurnMaterial && this.app.butterchurnTexture) {
             this.app.butterchurnMaterial.map = this.app.butterchurnTexture;
             this.app.butterchurnMaterial.color.set(this.app.vizSettings.butterchurnTintColor);
@@ -104,67 +261,9 @@ export const ButterchurnManager = {
         }
     },
 
-    // ** THE FIX IS HERE: New method to dispose of the texture and free the GPU slot. **
     deactivate() {
-        if (this.app.butterchurnTexture) {
-            console.log("Deactivating and disposing of Butterchurn texture.");
-            // Remove from material
-            if (this.app.butterchurnMaterial) {
-                this.app.butterchurnMaterial.map = null;
-                this.app.butterchurnMaterial.needsUpdate = true;
-            }
-            // Dispose of the texture to free GPU memory and the texture unit
-            this.app.butterchurnTexture.dispose();
-            this.app.butterchurnTexture = null;
-        }
-    },
-
-    loadPresetByIndex(index) {
-        if (!this.presetKeys || this.presetKeys.length === 0 || index < 0 || index >= this.presetKeys.length) return;
-        
-        this.currentPresetIndex = index;
-        const presetKey = this.presetKeys[index];
-        
-        if (this.app.UIManager) {
-            this.app.UIManager.updateButterchurnPresetDisplay(presetKey, index);
-        }
-        
-        if (this.visualizer) {
-            const allPresets = this._getAllPresets();
-            const preset = allPresets[presetKey];
-            if (!preset) return;
-            this.visualizer.loadPreset(preset, this.app.vizSettings.butterchurnBlendTime);
-        }
-    },
-
-    nextPreset() {
-        if (this.presetKeys.length === 0) return;
-        let newIndex = (this.currentPresetIndex + 1) % this.presetKeys.length;
-        this.loadPresetByIndex(newIndex);
-    },
-
-    prevPreset() {
-        if (this.presetKeys.length === 0) return;
-        let newIndex = (this.currentPresetIndex - 1 + this.presetKeys.length) % this.presetKeys.length;
-        this.loadPresetByIndex(newIndex);
-    },
-
-    randomPreset() {
-        if (this.presetKeys.length === 0) return;
-        let newIndex = this.currentPresetIndex;
-        if (this.presetKeys.length > 1) { 
-            while (newIndex === this.currentPresetIndex) { 
-                newIndex = Math.floor(Math.random() * this.presetKeys.length); 
-            } 
-        }
-        this.loadPresetByIndex(newIndex);
-    },
-
-    updateCycleInterval() {
-        if (this.presetCycleInterval) clearInterval(this.presetCycleInterval);
-        if (this.app.vizSettings.butterchurnEnableCycle && this.presetKeys.length > 0) {
-            this.presetCycleInterval = setInterval(() => this.randomPreset(), this.app.vizSettings.butterchurnCycleTime * 1000);
-        }
+        this.destroyVisualizer();
+        this.activeEngine = null;
     },
 
     render() { 
