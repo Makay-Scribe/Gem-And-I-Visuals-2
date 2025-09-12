@@ -1,4 +1,5 @@
 import { Debugger } from './Debugger.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export const UIManager = {
     app: null,
@@ -9,6 +10,9 @@ export const UIManager = {
     audioStatusP: null, 
     debugDisplay: null,
     controlDOMElements: {},
+    particleModelMesh: null, 
+    gltfLoader: new GLTFLoader(),
+    isPouring: false, // Prevent multiple pours at once
 
     // --- Demo Mode Properties ---
     demoShaderInterval: null,
@@ -374,7 +378,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_size', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed'].includes(id)) {
                 precision = 2;
@@ -395,7 +399,6 @@ export const UIManager = {
     
         if (mode === 'butterchurn') {
             const engineSelect = document.getElementById('butterchurnEngineSelect');
-            // THE FIX IS HERE: Logic to default to engine '1'
             if (this.app.ButterchurnManager.activeEngine === null) {
                 const defaultEngine = '1';
                 if (engineSelect) {
@@ -429,34 +432,30 @@ export const UIManager = {
     },
 
     updateUIVisibilityForMode(mode) {
-        const gpgpuEffectsAccordion = document.getElementById('gpgpuEffectsAccordion');
+        const gpgpuAccordions = document.querySelectorAll('#gpgpuEffectsAccordion > .accordion-item');
         
-        const cubeWallAccordion = document.getElementById('gpgpu_enableCubeWall')?.closest('.accordion-item');
-        const waterRippleAccordion = document.getElementById('gpgpu_enableWaterRipple')?.closest('.accordion-item');
-        const eqRippleAccordion = document.getElementById('gpgpu_enableEqRipple')?.closest('.accordion-item');
-        const clothAccordion = document.getElementById('gpgpu_enableCloth')?.closest('.accordion-item');
-        const gpgpuFoldAccordion = document.getElementById('gpgpu_enableFold')?.closest('.accordion-item');
-        const gpgpuCylinderAccordion = document.getElementById('gpgpu_enableCylinder')?.closest('.accordion-item');
-        const gpgpuSagAccordion = document.getElementById('gpgpu_enableSag')?.closest('.accordion-item');
-        const gpgpuDroopAccordion = document.getElementById('gpgpu_enableDroop')?.closest('.accordion-item');
-        const gpgpuPeelAccordion = document.getElementById('gpgpu_enablePeel')?.closest('.accordion-item');
+        const visibilityMap = {
+            particles: ['Particle System'],
+            geocube: ['CubeWall'],
+            continuous: ['Peel', 'Water Ripple', 'EQ Ripple', 'Fold', 'Cylinder', 'Sag', 'Droop', 'Cloth Physics'],
+            faceted: ['Peel', 'Water Ripple', 'EQ Ripple', 'Fold', 'Cylinder', 'Sag', 'Droop', 'Cloth Physics']
+        };
 
-        [cubeWallAccordion, waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion]
-            .forEach(el => el?.classList.add('container-disabled'));
+        const activePanels = visibilityMap[mode] || [];
 
-        switch (mode) {
-            case 'geocube':
-                if (cubeWallAccordion) cubeWallAccordion.classList.remove('container-disabled');
-                break;
-            case 'continuous':
-            case 'faceted':
-                [waterRippleAccordion, eqRippleAccordion, clothAccordion, gpgpuFoldAccordion, gpgpuCylinderAccordion, gpgpuSagAccordion, gpgpuDroopAccordion, gpgpuPeelAccordion]
-                    .forEach(el => el?.classList.remove('container-disabled'));
-                break;
-        }
+        gpgpuAccordions.forEach(el => {
+            const titleEl = el.querySelector('.accordion-header .header-title');
+            if (titleEl) {
+                const title = titleEl.textContent.trim();
+                const shouldBeEnabled = activePanels.includes(title);
+                
+                el.classList.toggle('container-disabled', !shouldBeEnabled);
+            }
+        });
 
         this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
     },
+
 
     toggleLightSliders() { 
         const disabled = this.app.vizSettings.enableLightOrbit; 
@@ -475,6 +474,62 @@ export const UIManager = {
         }
     },
     
+    // ** NEW: Function to orchestrate the pouring animation **
+    doPourTransition() {
+        if (this.isPouring) {
+            this.logError("Pour transition already in progress.");
+            return;
+        }
+        if (!this.particleModelMesh) {
+            this.logError("Please load a target model first.");
+            return;
+        }
+
+        const CM = this.app.ComputeManager;
+        if (!CM.particleGpuCompute) return;
+
+        this.isPouring = true;
+        const uniforms = CM.particleVelocityVar.material.uniforms;
+        const planeDims = this.app.ImagePlaneManager.planeDimensions;
+
+        // 1. Set the starting state
+        uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
+        document.getElementById('particleMorphTarget').value = 'flat';
+        
+        this.app.vizSettings.particle_morphProgress = 1.0;
+        document.getElementById('particle_morphProgress').value = 1.0;
+        this.updateRangeDisplay('particle_morphProgress', 1.0);
+        
+        // 2. Define the pour source point (e.g., bottom-left corner)
+        uniforms.u_pourSourcePoint.value.set(-planeDims.x / 2, -planeDims.y / 2, 0);
+        uniforms.u_isPouring.value = true;
+        
+        // 3. Switch the final target to the model texture
+        uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
+        document.getElementById('particleMorphTarget').value = 'model';
+        
+        // 4. Animate the pour progress
+        const pourDuration = 3000; // 3 seconds
+        const startTime = this.app.clock.getElapsedTime();
+        
+        const animatePour = () => {
+            const elapsedTime = (this.app.clock.getElapsedTime() - startTime) * 1000;
+            const progress = Math.min(elapsedTime / pourDuration, 1.0);
+            
+            uniforms.u_pourProgress.value = progress;
+            
+            if (progress < 1.0) {
+                requestAnimationFrame(animatePour);
+            } else {
+                uniforms.u_isPouring.value = false;
+                this.isPouring = false;
+                this.logSuccess("Pour transition complete.");
+            }
+        };
+        
+        requestAnimationFrame(animatePour);
+    },
+
     loadUserShader(presetId) {
         const userFragmentShader = this.app.vizSettings.shaderToyGLSL;
         if (!userFragmentShader) {
@@ -581,7 +636,7 @@ export const UIManager = {
         });
         document.getElementById('landscapeResetButton').addEventListener('click', () => this.resetLandscapeSettings());
         
-        const fileInputIds = ['mainTextureInput', 'videoTextureInput', 'audioFileInput', 'gltfModelInput', 'hdriInput', 'iChannel0Input', 'iChannel1Input', 'iChannel2Input', 'iChannel3Input'];
+        const fileInputIds = ['mainTextureInput', 'videoTextureInput', 'audioFileInput', 'gltfModelInput', 'hdriInput', 'iChannel0Input', 'iChannel1Input', 'iChannel2Input', 'iChannel3Input', 'particleModelInput'];
         fileInputIds.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', (e) => this.handleFileSelect(e, id));
@@ -603,9 +658,8 @@ export const UIManager = {
             });
         }
         
-        // General input/select event listeners
-        document.querySelectorAll('input:not([type="file"]):not(#enableGPGPUDebugger), select:not(#gpgpuGeometryMode)').forEach(control => {
-            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls')) return;
+        document.querySelectorAll('input[type="range"], select').forEach(control => {
+            if (control.closest('#cameraOptions') || control.id === 'particleMorphTarget' || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls')) return;
             
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -646,7 +700,32 @@ export const UIManager = {
             });
         });
 
-        // Checkboxes (header toggles)
+        const particleMorphTargetSelect = document.getElementById('particleMorphTarget');
+        if (particleMorphTargetSelect) {
+            particleMorphTargetSelect.addEventListener('change', (e) => {
+                const CM = this.app.ComputeManager;
+                if (!CM.particleGpuCompute) return;
+                const uniforms = CM.particleVelocityVar.material.uniforms;
+
+                if (e.target.value === 'model') {
+                    if (this.particleModelMesh && CM.particleModelPositionTexture) {
+                        uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
+                    } else {
+                        this.logError("No model loaded to morph to!");
+                        e.target.value = 'flat'; 
+                    }
+                } else { 
+                    uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
+                }
+            });
+        }
+
+        const particlePourButton = document.getElementById('particlePourButton');
+        if (particlePourButton) {
+            particlePourButton.addEventListener('click', () => this.doPourTransition());
+        }
+
+
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.closest('#butterchurnControls')) return;
              
@@ -834,7 +913,6 @@ export const UIManager = {
         this.demoShaderIndex = (this.demoShaderIndex + 1) % this.demoShaderOrder.length;
     },
 
-    // --- BUTTERCHURN SPECIFIC UI LOGIC ---
     setupButterchurnEventListeners() {
         const engineSelect = document.getElementById('butterchurnEngineSelect');
         if (engineSelect) {
@@ -916,7 +994,6 @@ export const UIManager = {
         const listElement = document.getElementById('butterchurnPresetList');
         if (listElement) listElement.value = index;
     },
-    // --- END OF BUTTERCHURN UI LOGIC ---
 
     handleFileSelect(event, id) {
         const file = event.target.files[0]; 
@@ -947,12 +1024,36 @@ export const UIManager = {
                 const preset = { path: URL.createObjectURL(file), name: file.name, id: null, homeOffset: new this.app.THREE.Vector3() };
                 this.app.ModelManager.loadGLTFModel(preset); 
                 break;
+            case 'particleModelInput':
+                this.updateFileNameDisplay('particleModel', file.name);
+                const objectURL = URL.createObjectURL(file);
+                this.gltfLoader.load(objectURL, (gltf) => {
+                    let bestMesh = null;
+                    gltf.scene.traverse(child => { if (child.isMesh) { bestMesh = child; } });
+                    
+                    if (bestMesh) {
+                        this.particleModelMesh = bestMesh;
+                        const CM = this.app.ComputeManager;
+                        if (CM && CM.particleModelPositionTexture) {
+                            CM.bakeToTexture(this.particleModelMesh, CM.particleModelPositionTexture);
+                            this.logSuccess(`Baked ${file.name} to particle texture.`);
+                        }
+                    } else {
+                        this.logError('No mesh found in the loaded model.');
+                    }
+                    URL.revokeObjectURL(objectURL);
+                }, undefined, (error) => {
+                    this.logError(`Failed to load particle target: ${error}`);
+                    URL.revokeObjectURL(objectURL);
+                });
+                break;
         }
     },
     updateFileNameDisplay(type, name) {
        const idMap = {
             'image': 'imageFileName', 'video': 'videoFileName',
-            'audio': 'audioFileName', 'hdri': 'hdriFileName', 'gltf': 'gltfFileName'
+            'audio': 'audioFileName', 'hdri': 'hdriFileName', 'gltf': 'gltfFileName',
+            'particleModel': 'particleModelName'
         };
         const elementId = idMap[type];
         if (elementId) {

@@ -166,6 +166,15 @@ const App = {
         gpgpu_peelEnableAudio: true,
         gpgpu_peelDrift: 0.09,
         gpgpu_peelTextureAmount: 0.14,
+        // --- GPGPU PARTICLE SYSTEM SETTINGS ---
+        // ** THE FIX IS HERE: Quadrupled particle count **
+        particle_resolution: 1024,     // Increased from 512 for 4x more particles
+        particle_size: 0.8,
+        particle_flowScale: 0.1,
+        particle_flowSpeed: 0.2,
+        particle_flowStrength: 0.0,
+        particle_attractionStrength: 0.1,
+        particle_morphProgress: 1.0,
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,

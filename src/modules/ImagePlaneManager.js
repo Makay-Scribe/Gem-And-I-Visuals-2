@@ -1,18 +1,24 @@
 import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import cubewallRenderVertexShader from '../shaders/cubewall_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
-// REMOVED: triangleLego shader imports
+import particleRenderVertexShader from '../shaders/particle_render.vert?raw';
+import particleRenderFragmentShader from '../shaders/particle_render.frag?raw';
+import particleEmissiveFragmentShader from '../shaders/particle_emissive.frag?raw';
 
 export const ImagePlaneManager = {
     app: null,
-    // --- Plane Geometry ---
+    // --- Geometry ---
     landscape: null, 
-    // --- Instanced Cube Geometry ---
     instancedMesh: null,
+    particleSystem: null,
     
-    landscapeContainer: null, 
+    // --- Materials ---
     landscapeMaterial: null,
-    // REMOVED: triangleLegoMaterial
+    particlePBRMaterial: null,
+    particleEmissiveMaterial: null,
+
+    // --- State & Containers ---
+    landscapeContainer: null, 
     boundingBox: null, 
     planeDimensions: null, 
     planeResolution: null, 
@@ -58,7 +64,7 @@ export const ImagePlaneManager = {
         this.app = appInstance;
         this.boundingBox = new this.app.THREE.Box3();
         this.planeDimensions = new this.app.THREE.Vector2(40, 40);
-        this.planeResolution = new this.app.THREE.Vector2(128, 128); // GPGPU texture resolution
+        this.planeResolution = new this.app.THREE.Vector2(128, 128);
         this.spinAccumulator = new this.app.THREE.Quaternion();
 
         this.state.homePosition = new this.app.THREE.Vector3();
@@ -79,7 +85,7 @@ export const ImagePlaneManager = {
     },
 
     startAutopilot(presetId) {
-        if (!this.landscape && !this.instancedMesh) return;
+        if (!this.landscape && !this.instancedMesh && !this.particleSystem) return;
         const ap = this.autopilot;
         ap.active = true;
         ap.preset = presetId;
@@ -133,9 +139,18 @@ export const ImagePlaneManager = {
         this.landscapeContainer.visible = true;
 
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
-        if (this.landscape) this.landscape.visible = !isCubeMode;
+        const isParticleMode = S.gpgpuGeometryMode === 'particles';
+        if (this.landscape) this.landscape.visible = !isCubeMode && !isParticleMode;
         if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
+        if (this.particleSystem) this.particleSystem.visible = isParticleMode;
         
+        if (isParticleMode && this.particleSystem) {
+            const targetMaterial = S.particle_morphProgress === 1.0 ? this.particlePBRMaterial : this.particleEmissiveMaterial;
+            if (this.particleSystem.material !== targetMaterial) {
+                this.particleSystem.material = targetMaterial;
+            }
+        }
+
         const state = this.state;
         const ap = this.autopilot;
         const now = this.app.currentTime;
@@ -198,26 +213,30 @@ export const ImagePlaneManager = {
 
     createDefaultLandscape() {
         this.updatePlaneDimensions();
-
-        if (this.app.ComputeManager && this.app.ComputeManager.init) {
-            this.app.ComputeManager.init(this.app,
-                this.planeDimensions.x,
-                this.planeDimensions.y,
-                this.planeResolution.x,
-                this.planeResolution.y
-            );
-        }
+        
+        const S = this.app.vizSettings;
+        const CM = this.app.ComputeManager;
 
         this._cleanupMeshes(); 
+        if (S.gpgpuGeometryMode !== 'particles' && CM.particleGpuCompute) {
+            CM.disposeParticleSystem();
+        }
 
-        const S = this.app.vizSettings;
-
-        if (S.gpgpuGeometryMode === 'geocube') {
+        if (S.gpgpuGeometryMode === 'particles') {
+            this._createParticleSystem();
+            this.app.CubeWallManager.setActive(false);
+        } else if (S.gpgpuGeometryMode === 'geocube') {
             this._createInstancedCubeMesh();
             this.app.CubeWallManager.setActive(true);
-        } else {
+        } else { 
             this._createPlaneMesh(S.gpgpuGeometryMode);
             this.app.CubeWallManager.setActive(false);
+        }
+
+        if (S.gpgpuGeometryMode !== 'particles') {
+            if (CM && CM.init) {
+                CM.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
+            }
         }
 
         this.applyAndStoreHomeOrientation();
@@ -240,39 +259,71 @@ export const ImagePlaneManager = {
             this.landscapeContainer.remove(this.instancedMesh);
             this.instancedMesh = null;
         }
+        if (this.particleSystem) {
+            this.particleSystem.geometry.dispose();
+            this.landscapeContainer.remove(this.particleSystem);
+            this.particleSystem = null;
+        }
 
         if (this.landscapeMaterial) {
             this.landscapeMaterial.dispose();
             this.landscapeMaterial = null;
         }
-        // REMOVED: triangleLegoMaterial cleanup
+        if (this.particlePBRMaterial) {
+            this.particlePBRMaterial.dispose();
+            this.particlePBRMaterial = null;
+        }
+        if (this.particleEmissiveMaterial) {
+            this.particleEmissiveMaterial.dispose();
+            this.particleEmissiveMaterial = null;
+        }
+    },
+
+    _createParticleSystem() {
+        if (this.app.ComputeManager) {
+            this.app.ComputeManager.initParticleSystem();
+        }
+
+        const S = this.app.vizSettings;
+        const resolution = S.particle_resolution;
+        const count = resolution * resolution;
+
+        const geometry = new this.app.THREE.BufferGeometry();
+        
+        geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
+
+        const uvs = new Float32Array(count * 2);
+        for (let y = 0; y < resolution; y++) {
+            for (let x = 0; x < resolution; x++) {
+                const i = (y * resolution + x) * 2;
+                uvs[i + 0] = x / (resolution - 1);
+                uvs[i + 1] = y / (resolution - 1);
+            }
+        }
+        geometry.setAttribute('uv', new this.app.THREE.BufferAttribute(uvs, 2));
+
+        this._createParticlePBRMaterial();
+        this._createParticleEmissiveMaterial();
+
+        this.particleSystem = new this.app.THREE.Points(geometry, this.particleEmissiveMaterial);
+        this.particleSystem.frustumCulled = false;
+        this.landscapeContainer.add(this.particleSystem);
     },
 
     _createPlaneMesh(mode) {
-        let landGeom;
-        
+        let landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
+
         if (mode === 'faceted') {
-            landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
             landGeom = landGeom.toNonIndexed();
-            const uvGpgpuAttribute = landGeom.attributes.uv.clone();
-            const uvArray = uvGpgpuAttribute.array;
-            for (let i = 1; i < uvArray.length; i += 2) {
-                uvArray[i] = 1.0 - uvArray[i];
-            }
-            landGeom.setAttribute('uv_gpgpu', uvGpgpuAttribute);
-        } else { // continuous
-            landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
-            const uvCount = this.planeResolution.x * this.planeResolution.y;
-            const uv_gpu = new Float32Array(uvCount * 2);
-            for (let i = 0; i < this.planeResolution.y; i++) {
-                for (let j = 0; j < this.planeResolution.x; j++) {
-                    const idx = (i * this.planeResolution.x + j);
-                    uv_gpu[idx * 2] = j / (this.planeResolution.x - 1); 
-                    uv_gpu[idx * 2 + 1] = 1.0 - (i / (this.planeResolution.y - 1));
-                }
-            }
-            landGeom.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(uv_gpu, 2));
         }
+        
+        const gpgpuUvs = new Float32Array(landGeom.attributes.position.count * 2);
+        const originalUvs = landGeom.attributes.uv.array;
+        for (let i = 0; i < gpgpuUvs.length / 2; i++) {
+            gpgpuUvs[i * 2] = originalUvs[i * 2];
+            gpgpuUvs[i * 2 + 1] = 1.0 - originalUvs[i * 2 + 1];
+        }
+        landGeom.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
 
         this.createGPGPUMaterial();
 
@@ -308,10 +359,10 @@ export const ImagePlaneManager = {
     },
 
     applyAndStoreHomeOrientation() {
-        if (!this.landscape && !this.instancedMesh) return;
+        if (!this.landscape && !this.instancedMesh && !this.particleSystem) return;
         const S = this.app.vizSettings;
         
-        if (S.gpgpuGeometryMode === 'geocube') {
+        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles') {
             this.state.homeQuaternion.identity(); 
         } else {
             const tempObject = new this.app.THREE.Object3D();
@@ -321,42 +372,86 @@ export const ImagePlaneManager = {
         }
     },
     
-    // REMOVED: createTriangleLegoMaterial function
-
-    createGPGPUMaterial() {
+    _createParticlePBRMaterial() {
         const S = this.app.vizSettings;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
-
-        const positionRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
         
-        const vertexShader = S.gpgpuGeometryMode === 'geocube' ? cubewallRenderVertexShader : landscapeRenderVertexShader;
-
-        this.landscapeMaterial = new this.app.THREE.ShaderMaterial({
+        this.particlePBRMaterial = new this.app.THREE.ShaderMaterial({
             uniforms: {
                 u_map: { value: textureToUse },
-                u_positionTexture: { value: positionRenderTarget.texture },
-                u_initialPosition: { value: this.app.ComputeManager.initialPositionTexture }, // ** NEW UNIFORM **
+                u_positionTexture: { value: null },
+                particle_size: { value: S.particle_size },
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
-                u_time: { value: 0.0 },
-                u_planeDimensions: { value: this.planeDimensions },
-                u_planeResolution: { value: this.planeResolution },
                 u_lightColor: { value: new this.app.THREE.Color(S.lightColor) },
                 u_ambientLightColor: { value: new this.app.THREE.Color(S.ambientLightColor) },
                 u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
                 u_cameraPosition: { value: this.app.camera.position },
                 t_envMap: { value: this.app.hdrTexture },
-                // REMOVED: u_gpgpu_enableTriangleWave and related uniforms
-                u_gpgpu_enableCubeWall: { value: S.gpgpu_enableCubeWall },
-                u_gpgpu_cubeWallGridSize: { value: new this.app.THREE.Vector2(S.gpgpu_cubeWallGridSize, S.gpgpu_cubeWallGridSize) },
-                u_gpgpu_cubeWallMorph: { value: S.gpgpu_cubeWallMorph },
-                u_gpgpu_cubeWallSideColor: { value: new this.app.THREE.Color(S.gpgpu_cubeWallSideColor) },
-                gpgpu_cubeWallUseImageTexture: { value: S.gpgpu_cubeWallUseImageTexture },
-                u_gpgpu_cubeWallBevelWidth: { value: S.gpgpu_cubeWallBevelWidth },
-                u_gpgpu_cubeWallBevelIntensity: { value: S.gpgpu_cubeWallBevelIntensity },
+                u_time: { value: 0.0 }, 
             },
+            vertexShader: particleRenderVertexShader,
+            fragmentShader: particleRenderFragmentShader
+        });
+    },
+
+    _createParticleEmissiveMaterial() {
+        const S = this.app.vizSettings;
+        const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
+        if(!this.currentTexture) textureToUse.needsUpdate = true;
+        
+        this.particleEmissiveMaterial = new this.app.THREE.ShaderMaterial({
+            uniforms: {
+                u_map: { value: textureToUse },
+                u_positionTexture: { value: null },
+                particle_size: { value: S.particle_size },
+                u_lightColor: { value: new this.app.THREE.Color(S.lightColor) },
+                u_ambientLightColor: { value: new this.app.THREE.Color(S.ambientLightColor) },
+                u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
+                u_time: { value: 0.0 }, 
+            },
+            vertexShader: particleRenderVertexShader,
+            fragmentShader: particleEmissiveFragmentShader,
+            transparent: true,
+            depthWrite: false
+        });
+    },
+
+    createGPGPUMaterial() {
+        const S = this.app.vizSettings;
+        const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
+        if(!this.currentTexture) textureToUse.needsUpdate = true;
+        
+        const vertexShader = S.gpgpuGeometryMode === 'geocube' ? cubewallRenderVertexShader : landscapeRenderVertexShader;
+        const positionRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+        const uniforms = {
+            u_map: { value: textureToUse },
+            u_positionTexture: { value: positionRenderTarget.texture },
+            u_initialPosition: { value: this.app.ComputeManager.initialPositionTexture },
+            u_metalness: { value: S.metalness },
+            u_roughness: { value: S.roughness },
+            u_envMapIntensity: { value: S.reflectionStrength },
+            u_time: { value: 0.0 },
+            u_planeDimensions: { value: this.planeDimensions },
+            u_planeResolution: { value: this.planeResolution },
+            u_lightColor: { value: new this.app.THREE.Color(S.lightColor) },
+            u_ambientLightColor: { value: new this.app.THREE.Color(S.ambientLightColor) },
+            u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
+            u_cameraPosition: { value: this.app.camera.position },
+            t_envMap: { value: this.app.hdrTexture },
+            u_gpgpu_enableCubeWall: { value: S.gpgpu_enableCubeWall },
+            u_gpgpu_cubeWallGridSize: { value: new this.app.THREE.Vector2(S.gpgpu_cubeWallGridSize, S.gpgpu_cubeWallGridSize) },
+            u_gpgpu_cubeWallMorph: { value: S.gpgpu_cubeWallMorph },
+            u_gpgpu_cubeWallSideColor: { value: new this.app.THREE.Color(S.gpgpu_cubeWallSideColor) },
+            gpgpu_cubeWallUseImageTexture: { value: S.gpgpu_cubeWallUseImageTexture },
+            u_gpgpu_cubeWallBevelWidth: { value: S.gpgpu_cubeWallBevelWidth },
+            u_gpgpu_cubeWallBevelIntensity: { value: S.gpgpu_cubeWallBevelIntensity },
+        };
+
+        this.landscapeMaterial = new this.app.THREE.ShaderMaterial({
+            uniforms: uniforms,
             vertexShader: vertexShader,
             fragmentShader: landscapeRenderFragmentShader,
             side: this.app.THREE.DoubleSide,
@@ -369,13 +464,16 @@ export const ImagePlaneManager = {
             texture.wrapS = texture.wrapT = this.app.THREE.ClampToEdgeWrapping;
             texture.colorSpace = this.app.vizSettings.enablePBRColor ? this.app.THREE.SRGBColorSpace : this.app.THREE.NoColorSpace;
             texture.anisotropy = this.app.renderer.capabilities.getMaxAnisotropy();
+            
+            // ** THE FIX IS HERE: Revert to flipY = false. This is the simplest universal fix. **
             texture.flipY = false;
             texture.needsUpdate = true;
-            if (this.landscapeMaterial && this.landscapeMaterial.uniforms.u_map) {
-                if (this.landscapeMaterial.uniforms.u_map.value) { this.landscapeMaterial.uniforms.u_map.value.dispose(); }
-                this.landscapeMaterial.uniforms.u_map.value = texture;
-                this.currentTexture = texture;
-            }
+            
+            if (this.landscapeMaterial) this.landscapeMaterial.uniforms.u_map.value = texture;
+            if (this.particlePBRMaterial) this.particlePBRMaterial.uniforms.u_map.value = texture;
+            if (this.particleEmissiveMaterial) this.particleEmissiveMaterial.uniforms.u_map.value = texture;
+            
+            this.currentTexture = texture;
         };
 
         if (file.type.startsWith('video/')) {
@@ -395,37 +493,64 @@ export const ImagePlaneManager = {
     },
 
     updateDeformationUniforms() {
-        if (!this.landscapeMaterial) return;
         const S = this.app.vizSettings;
-        const U = this.landscapeMaterial.uniforms;
         
-        U.u_time.value = this.app.currentTime;
+        if (S.gpgpuGeometryMode === 'particles') {
+            const CM = this.app.ComputeManager;
+            if (!CM || !CM.particleGpuCompute) return;
 
-        const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
-        U.u_positionTexture.value = positionTarget.texture;
-        
-        U.u_metalness.value = S.metalness;
-        U.u_roughness.value = S.roughness;
-        U.u_envMapIntensity.value = S.reflectionStrength;
-        U.t_envMap.value = this.app.hdrTexture; 
-        U.u_cameraPosition.value = this.app.camera.position;
-
-        U.u_lightColor.value.set(S.lightColor);
-        U.u_ambientLightColor.value.set(S.ambientLightColor);
-        U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-        
-        // REMOVED: triangleWave uniform updates
-
-        U.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
-        U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;
-        U.u_gpgpu_cubeWallSideColor.value.set(S.gpgpu_cubeWallSideColor);
-        U.gpgpu_cubeWallUseImageTexture.value = S.gpgpu_cubeWallUseImageTexture;
-        U.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
-        U.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;
+            const posTarget = CM.particleGpuCompute.getCurrentRenderTarget(CM.particlePositionVar);
+            
+            if(this.particlePBRMaterial) {
+                const U_PBR = this.particlePBRMaterial.uniforms;
+                U_PBR.u_positionTexture.value = posTarget.texture;
+                U_PBR.particle_size.value = S.particle_size;
+                U_PBR.u_metalness.value = S.metalness;
+                U_PBR.u_roughness.value = S.roughness;
+                U_PBR.u_envMapIntensity.value = S.reflectionStrength;
+                U_PBR.t_envMap.value = this.app.hdrTexture; 
+                U_PBR.u_cameraPosition.value = this.app.camera.position;
+                U_PBR.u_lightColor.value.set(S.lightColor);
+                U_PBR.u_ambientLightColor.value.set(S.ambientLightColor);
+                U_PBR.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+            }
+            if(this.particleEmissiveMaterial) {
+                const U_EM = this.particleEmissiveMaterial.uniforms;
+                U_EM.u_positionTexture.value = posTarget.texture;
+                U_EM.particle_size.value = S.particle_size;
+                U_EM.u_lightColor.value.set(S.lightColor);
+                U_EM.u_ambientLightColor.value.set(S.ambientLightColor);
+                U_EM.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+            }
+        } else { 
+            if (!this.landscapeMaterial) return;
+            const U = this.landscapeMaterial.uniforms;
+            const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+            U.u_positionTexture.value = positionTarget.texture;
+            
+            U.u_time.value = this.app.currentTime;
+            U.u_metalness.value = S.metalness;
+            U.u_roughness.value = S.roughness;
+            U.u_envMapIntensity.value = S.reflectionStrength;
+            U.t_envMap.value = this.app.hdrTexture; 
+            U.u_cameraPosition.value = this.app.camera.position;
+            U.u_lightColor.value.set(S.lightColor);
+            U.u_ambientLightColor.value.set(S.ambientLightColor);
+            U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+            
+            U.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
+            U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;
+            U.u_gpgpu_cubeWallSideColor.value.set(S.gpgpu_cubeWallSideColor);
+            U.gpgpu_cubeWallUseImageTexture.value = S.gpgpu_cubeWallUseImageTexture;
+            U.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
+            U.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;
+        }
     },
 
     updateBoundingBox() {
-        const mesh = this.app.vizSettings.gpgpuGeometryMode === 'geocube' ? this.instancedMesh : this.landscape;
+        const mesh = this.app.vizSettings.gpgpuGeometryMode === 'geocube' ? this.instancedMesh : 
+                     this.app.vizSettings.gpgpuGeometryMode === 'particles' ? this.particleSystem : 
+                     this.landscape;
         if (!mesh) return;
         this.landscapeContainer.updateWorldMatrix(true, false);
         this.boundingBox.setFromObject(this.landscapeContainer, true);
