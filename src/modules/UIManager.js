@@ -12,7 +12,7 @@ export const UIManager = {
     controlDOMElements: {},
     particleModelMesh: null, 
     gltfLoader: new GLTFLoader(),
-    isPouring: false, // Prevent multiple pours at once
+    isPouring: false,
 
     // --- Demo Mode Properties ---
     demoShaderInterval: null,
@@ -474,7 +474,6 @@ export const UIManager = {
         }
     },
     
-    // ** NEW: Function to orchestrate the pouring animation **
     doPourTransition() {
         if (this.isPouring) {
             this.logError("Pour transition already in progress.");
@@ -513,6 +512,7 @@ export const UIManager = {
         const startTime = this.app.clock.getElapsedTime();
         
         const animatePour = () => {
+            if (!this.isPouring) return; // Allow for cancellation
             const elapsedTime = (this.app.clock.getElapsedTime() - startTime) * 1000;
             const progress = Math.min(elapsedTime / pourDuration, 1.0);
             

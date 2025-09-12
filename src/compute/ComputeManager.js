@@ -26,7 +26,7 @@ export const ComputeManager = {
     initialPositionTexture: null,
     clothEnableTime: -1, 
 
-    // ** NEW: Isolated GPGPU System for Particles **
+    // --- Isolated GPGPU System for Particles ---
     particleGpuCompute: null,
     particlePositionVar: null,
     particleVelocityVar: null,
@@ -198,7 +198,7 @@ export const ComputeManager = {
         const dtPosition = this.particleGpuCompute.createTexture();
         const dtVelocity = this.particleGpuCompute.createTexture();
         this.particleFlatPositionTexture = this.particleGpuCompute.createTexture();
-        this.particleModelPositionTexture = this.particleGpuCompute.createTexture(); // ** NEW **
+        this.particleModelPositionTexture = this.particleGpuCompute.createTexture(); 
 
         const posArray = dtPosition.image.data;
         const velArray = dtVelocity.image.data;
@@ -241,6 +241,11 @@ export const ComputeManager = {
         velocityUniforms['particle_flowStrength'] = { value: S.particle_flowStrength };
         velocityUniforms['particle_morphProgress'] = { value: S.particle_morphProgress };
         velocityUniforms['particle_attractionStrength'] = { value: S.particle_attractionStrength };
+        
+        // ** THE FIX IS HERE: Add the missing pouring uniforms **
+        velocityUniforms['u_isPouring'] = { value: false };
+        velocityUniforms['u_pourProgress'] = { value: 0.0 };
+        velocityUniforms['u_pourSourcePoint'] = { value: new this.app.THREE.Vector3() };
 
         const positionUniforms = this.particlePositionVar.material.uniforms;
         positionUniforms['u_delta'] = { value: 0.0 };
@@ -254,7 +259,6 @@ export const ComputeManager = {
         }
     },
 
-    // ** NEW: Function to bake a model's vertices into a texture **
     bakeToTexture(mesh, targetTexture) {
         if (!mesh || !targetTexture) {
             console.error("Bake failed: mesh or target texture is missing.");
@@ -270,7 +274,6 @@ export const ComputeManager = {
         const size = new this.app.THREE.Vector3();
         box.getSize(size);
 
-        // Scale the model to fit within the landscape's dimensions
         const planeDims = this.app.ImagePlaneManager.planeDimensions;
         const scale = Math.min(planeDims.x / size.x, planeDims.y / size.y) * 0.9;
         
@@ -279,11 +282,9 @@ export const ComputeManager = {
         box.getCenter(center);
         
         for (let i = 0; i < particleCount; i++) {
-            // Repeat the model's vertices if there are more particles than vertices
             const targetVertexIndex = i % vertexCount;
             const j = targetVertexIndex * 3;
             
-            // Center and scale the vertex, then write it to the texture
             texArray[i * 4 + 0] = (targetVertices[j + 0] - center.x) * scale;
             texArray[i * 4 + 1] = (targetVertices[j + 1] - center.y) * scale;
             texArray[i * 4 + 2] = (targetVertices[j + 2] - center.z) * scale;
@@ -311,12 +312,11 @@ export const ComputeManager = {
     },
 
     update(delta) {
-        if (!this.gpuCompute) return;
-
         const S = this.app.vizSettings;
         const A = this.app.AudioProcessor;
         
-        if (S.gpgpuGeometryMode !== 'particles') {
+        // --- UPDATE ORIGINAL GPGPU SYSTEM ---
+        if (this.gpuCompute && S.gpgpuGeometryMode !== 'particles') {
             const uniforms = this.positionVariable.material.uniforms;
             
             if (S.gpgpu_enableCloth && this.clothEnableTime < 0) {
