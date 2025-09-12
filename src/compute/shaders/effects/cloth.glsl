@@ -1,6 +1,6 @@
 // Function to satisfy spring constraints between neighboring particles.
 // This is the core of the Verlet integration for the cloth simulation.
-void satisfyConstraints(inout vec3 p, vec2 uv, float stiffnessPerIteration, float restLength, float restLengthDiagonal) {
+void satisfyConstraints(inout vec3 p, vec2 uv, float stiffnessPerIteration, float restLengthX, float restLengthY, float restLengthDiag) {
     vec2 texelSize = 1.0 / resolution.xy;
     vec3 delta;
     float deltaLength;
@@ -9,45 +9,45 @@ void satisfyConstraints(inout vec3 p, vec2 uv, float stiffnessPerIteration, floa
     // Right
     delta = texture(texturePosition, uv + vec2(texelSize.x, 0.0)).xyz - p;
     deltaLength = length(delta);
-    if (deltaLength > 0.0) p += delta * 0.5 * stiffnessPerIteration * ((deltaLength - restLength) / deltaLength);
+    if (deltaLength > 0.0) p += delta * 0.5 * stiffnessPerIteration * ((deltaLength - restLengthX) / deltaLength);
     
     // Left
     delta = texture(texturePosition, uv - vec2(texelSize.x, 0.0)).xyz - p;
     deltaLength = length(delta);
-    if (deltaLength > 0.0) p += delta * 0.5 * stiffnessPerIteration * ((deltaLength - restLength) / deltaLength);
+    if (deltaLength > 0.0) p += delta * 0.5 * stiffnessPerIteration * ((deltaLength - restLengthX) / deltaLength);
     
     // Up
     delta = texture(texturePosition, uv + vec2(0.0, texelSize.y)).xyz - p;
     deltaLength = length(delta);
-    if (deltaLength > 0.0) p += delta * 0.5 * stiffnessPerIteration * ((deltaLength - restLength) / deltaLength);
+    if (deltaLength > 0.0) p += delta * 0.5 * stiffnessPerIteration * ((deltaLength - restLengthY) / deltaLength);
 
     // Down
     delta = texture(texturePosition, uv - vec2(0.0, texelSize.y)).xyz - p;
     deltaLength = length(delta);
-    if (deltaLength > 0.0) p += delta * 0.5 * stiffnessPerIteration * ((deltaLength - restLength) / deltaLength);
+    if (deltaLength > 0.0) p += delta * 0.5 * stiffnessPerIteration * ((deltaLength - restLengthY) / deltaLength);
 
     // --- DIAGONAL NEIGHBORS (Reduced Stiffness for a softer feel) ---
-    float diagonalStiffness = stiffnessPerIteration * 0.5; // FIX 1: Diagonals are half as stiff
+    float diagonalStiffness = stiffnessPerIteration * 0.7; // Diagonals are slightly less stiff
 
     // Up-Right
     delta = texture(texturePosition, uv + texelSize).xyz - p;
     deltaLength = length(delta);
-    if (deltaLength > 0.0) p += delta * 0.5 * diagonalStiffness * ((deltaLength - restLengthDiagonal) / deltaLength);
+    if (deltaLength > 0.0) p += delta * 0.5 * diagonalStiffness * ((deltaLength - restLengthDiag) / deltaLength);
 
     // Up-Left
     delta = texture(texturePosition, uv + vec2(-texelSize.x, texelSize.y)).xyz - p;
     deltaLength = length(delta);
-    if (deltaLength > 0.0) p += delta * 0.5 * diagonalStiffness * ((deltaLength - restLengthDiagonal) / deltaLength);
+    if (deltaLength > 0.0) p += delta * 0.5 * diagonalStiffness * ((deltaLength - restLengthDiag) / deltaLength);
 
     // Down-Right
     delta = texture(texturePosition, uv + vec2(texelSize.x, -texelSize.y)).xyz - p;
     deltaLength = length(delta);
-    if (deltaLength > 0.0) p += delta * 0.5 * diagonalStiffness * ((deltaLength - restLengthDiagonal) / deltaLength);
+    if (deltaLength > 0.0) p += delta * 0.5 * diagonalStiffness * ((deltaLength - restLengthDiag) / deltaLength);
 
     // Down-Left
     delta = texture(texturePosition, uv - texelSize).xyz - p;
     deltaLength = length(delta);
-    if (deltaLength > 0.0) p += delta * 0.5 * diagonalStiffness * ((deltaLength - restLengthDiagonal) / deltaLength);
+    if (deltaLength > 0.0) p += delta * 0.5 * diagonalStiffness * ((deltaLength - restLengthDiag) / deltaLength);
 }
 
 // Main function to calculate the cloth physics for a single frame
@@ -68,9 +68,8 @@ vec3 calculateCloth(vec3 currentPos, vec3 initialPos, vec2 uv, float audio) {
 
     // 2. Tether Force
     if (u_gpgpu_tetherStrength > 0.0) {
-        // FIX 2: Weaken the tether towards the edges to prevent flickering and allow for natural flutter.
-        float distFromCenter = distance(uv, vec2(0.5)); // 0.0 at center, ~0.7 at corners
-        float tetherFalloff = 1.0 - smoothstep(0.4, 0.7, distFromCenter); // Start weakening tether past the halfway point
+        float distFromCenter = distance(uv, vec2(0.5));
+        float tetherFalloff = 1.0 - smoothstep(0.4, 0.7, distFromCenter);
         
         vec3 windTargetPos = initialPos + windForce;
         totalAcceleration += (windTargetPos - currentPos) * u_gpgpu_tetherStrength * tetherFalloff;
@@ -90,14 +89,17 @@ vec3 calculateCloth(vec3 currentPos, vec3 initialPos, vec2 uv, float audio) {
     vec3 newPos = currentPos + velocity + totalAcceleration * u_delta * u_delta;
 
     // --- Constraints ---
-    float restLength = u_planeDimensions.x / resolution.x;
-    float restLengthDiagonal = restLength * sqrt(2.0);
+    // ** THE FIX IS HERE: Calculate separate rest lengths for X and Y axes **
+    float restLengthX = u_planeDimensions.x / resolution.x;
+    float restLengthY = u_planeDimensions.y / resolution.y;
+    float restLengthDiag = length(vec2(restLengthX, restLengthY)); // Correct diagonal length
+
     int iterations = int(gpgpu_clothIterations);
 
     if (iterations > 0) {
         float stiffnessPerIteration = u_gpgpu_clothStiffness / float(iterations);
         for (int i = 0; i < iterations; i++) {
-            satisfyConstraints(newPos, uv, stiffnessPerIteration, restLength, restLengthDiagonal);
+            satisfyConstraints(newPos, uv, stiffnessPerIteration, restLengthX, restLengthY, restLengthDiag);
         }
     }
     

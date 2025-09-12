@@ -189,8 +189,8 @@ export const ImagePlaneManager = {
         this.landscapeContainer.quaternion.slerp(finalTargetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
-        // ** THE FIX IS HERE: The '!isLegoMode' check has been removed as that mode no longer exists **
         if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
+        
         this.updateDeformationUniforms();
         
         this.updateBoundingBox();
@@ -336,6 +336,7 @@ export const ImagePlaneManager = {
             uniforms: {
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: positionRenderTarget.texture },
+                u_initialPosition: { value: this.app.ComputeManager.initialPositionTexture }, // ** NEW UNIFORM **
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
@@ -400,10 +401,8 @@ export const ImagePlaneManager = {
         
         U.u_time.value = this.app.currentTime;
 
-        if (S.gpgpuGeometryMode !== 'geocube') {
-             const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
-             U.u_positionTexture.value = positionTarget.texture;
-        }
+        const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+        U.u_positionTexture.value = positionTarget.texture;
         
         U.u_metalness.value = S.metalness;
         U.u_roughness.value = S.roughness;
