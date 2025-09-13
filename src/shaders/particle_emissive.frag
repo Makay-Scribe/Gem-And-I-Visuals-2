@@ -17,7 +17,8 @@ void main() {
     // --- Step 1: Make the point circular ---
     // Calculate distance from the center of the point (0.5, 0.5)
     float dist = distance(gl_PointCoord, vec2(0.5));
-    // Create a smooth falloff to the edge for anti-aliasing
+    // Create a smooth falloff to the edge for anti-aliasing.
+    // This makes the alpha go from 1.0 to 0.0 smoothly between a distance of 0.45 and 0.5.
     float alpha = 1.0 - smoothstep(0.45, 0.5, dist);
 
     // If the pixel is fully outside the circle, or has zero alpha, discard it.

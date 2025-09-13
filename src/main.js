@@ -14,6 +14,7 @@ import { ComputeManager } from './compute/ComputeManager.js';
 import { GPGPUDebugger } from './modules/GPGPUDebugger.js';
 import { CubeWallManager } from './modules/CubeWallManager.js';
 import { DirectorManager } from './modules/DirectorManager.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const App = {
     THREE: THREE, 
@@ -167,12 +168,13 @@ const App = {
         gpgpu_peelDrift: 0.09,
         gpgpu_peelTextureAmount: 0.14,
         // --- GPGPU PARTICLE SYSTEM SETTINGS ---
-        // ** THE FIX IS HERE: Quadrupled particle count **
-        particle_resolution: 1024,     // Increased from 512 for 4x more particles
-        particle_size: 0.8,
+        particle_resolution: 512,
+        // ** THE FIX IS HERE: Updated default sizes to your desired values **
+        particle_base_size: 0.5,
+        particle_min_size: 0.1,
         particle_flowScale: 0.1,
         particle_flowSpeed: 0.2,
-        particle_flowStrength: 0.0,
+        particle_flowStrength: 0.20,
         particle_attractionStrength: 0.1,
         particle_morphProgress: 1.0,
         // --- CUBEWALL SETTINGS ---
@@ -240,6 +242,48 @@ const App = {
         }
     },
 
+    async preloadParticleTarget() {
+        if (!this.ComputeManager || !this.ComputeManager.particleGpuCompute) {
+            console.log("Particle system not active on init, skipping default model bake.");
+            return;
+        }
+
+        console.log("Preloading default particle target model (Rose.glb)...");
+        const loader = new GLTFLoader();
+        try {
+            const gltf = await loader.loadAsync('/3dmodel/converted/Rose.glb');
+            let bestMesh = null;
+            gltf.scene.traverse(child => {
+                if (child.isMesh) {
+                    bestMesh = child;
+                }
+            });
+
+            if (bestMesh) {
+                this.UIManager.particleModelMesh = bestMesh;
+                this.ComputeManager.bakeToTexture(bestMesh, this.ComputeManager.particleModelPositionTexture);
+
+                this.UIManager.logSuccess("Baked Rose.glb to particle texture.");
+                this.UIManager.updateFileNameDisplay('particleModel', 'Rose.glb');
+
+                const particleMorphTargetSelect = document.getElementById('particleMorphTarget');
+                if (particleMorphTargetSelect) {
+                    particleMorphTargetSelect.value = 'model';
+                }
+                const CM = this.ComputeManager;
+                if (CM && CM.particleGpuCompute) {
+                    const uniforms = CM.particleVelocityVar.material.uniforms;
+                    uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
+                }
+            } else {
+                throw new Error("No mesh found in Rose.glb");
+            }
+        } catch (error) {
+            console.error("Failed to preload and bake default particle target:", error);
+            this.UIManager.logError("Failed to load Rose.glb for particles.");
+        }
+    },
+
     onWindowResize() {
         if (!this.camera || !this.renderer) return;
 
@@ -279,7 +323,7 @@ const App = {
                 activeManager.state.manualControlReleaseTime = this.currentTime;
                 activeManager.state.manualControlTimeoutId = null;
             }
-        }, 250); // This delay can be adjusted if needed
+        }, 250);
     },
 
     onMouseWheel(event) {
@@ -358,7 +402,7 @@ const App = {
         MI.isDragging = false;
     },
 
-    init() {
+    async init() {
         this.vizSettings = JSON.parse(JSON.stringify(this.defaultVisualizerSettings));
         
         window.onerror = (message, source, lineno, colno, error) => {
@@ -433,30 +477,29 @@ const App = {
         this.BackgroundManager.render(); 
         this.GPGPUDebugger.update(); 
         
-        setTimeout(() => {
-            this.preloadDevAssets();
-            
-            const defaultShaderId = 'presetBg6';
-            const defaultShaderCode = this.shaderPresets[defaultShaderId];
-            if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
-                console.log("Loading default background shader preset...");
-                const shaderToyGLSLEl = document.getElementById('shaderToyGLSL');
-                if (shaderToyGLSLEl) {
-                    shaderToyGLSLEl.value = defaultShaderCode;
-                    this.vizSettings.shaderToyGLSL = defaultShaderCode;
-                    if (this.UIManager) {
-                        setTimeout(() => this.UIManager.loadUserShader(defaultShaderId), 100); 
-                    }
+        await this.preloadDevAssets();
+        await this.preloadParticleTarget();
+        
+        const defaultShaderId = 'presetBg6';
+        const defaultShaderCode = this.shaderPresets[defaultShaderId];
+        if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
+            console.log("Loading default background shader preset...");
+            const shaderToyGLSLEl = document.getElementById('shaderToyGLSL');
+            if (shaderToyGLSLEl) {
+                shaderToyGLSLEl.value = defaultShaderCode;
+                this.vizSettings.shaderToyGLSL = defaultShaderCode;
+                if (this.UIManager) {
+                    this.UIManager.loadUserShader(defaultShaderId); 
                 }
             }
+        }
 
-            console.log("Loading default 3D model preset...");
-            const modelPreset = this.modelPresets['modelPreset5'];
-            if (modelPreset && this.ModelManager) {
-                this.ModelManager.loadGLTFModel(modelPreset);
-                if (this.UIManager) this.UIManager.updateFileNameDisplay('gltf', modelPreset.name);
-            }
-        }, 100);
+        console.log("Loading default 3D model preset...");
+        const modelPreset = this.modelPresets['modelPreset5'];
+        if (modelPreset && this.ModelManager) {
+            this.ModelManager.loadGLTFModel(modelPreset);
+            if (this.UIManager) this.UIManager.updateFileNameDisplay('gltf', modelPreset.name);
+        }
 
         window.addEventListener('resize', this.onWindowResize.bind(this));
         
@@ -567,14 +610,10 @@ const App = {
 
         this.UIManager.syncManualSlidersFromState();
 
-        this.renderer.clear(true, true, true);
-        
+        this.renderer.clear();
         this.BackgroundManager.render();
-        
         this.renderer.clearDepth();
-
         this.renderer.render(this.scene, this.camera);
-        
         this.GPGPUDebugger.render();
     }
 };

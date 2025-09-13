@@ -3,7 +3,6 @@ import cubewallRenderVertexShader from '../shaders/cubewall_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
 import particleRenderVertexShader from '../shaders/particle_render.vert?raw';
 import particleRenderFragmentShader from '../shaders/particle_render.frag?raw';
-import particleEmissiveFragmentShader from '../shaders/particle_emissive.frag?raw';
 
 export const ImagePlaneManager = {
     app: null,
@@ -15,7 +14,6 @@ export const ImagePlaneManager = {
     // --- Materials ---
     landscapeMaterial: null,
     particlePBRMaterial: null,
-    particleEmissiveMaterial: null,
 
     // --- State & Containers ---
     landscapeContainer: null, 
@@ -144,13 +142,6 @@ export const ImagePlaneManager = {
         if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
         if (this.particleSystem) this.particleSystem.visible = isParticleMode;
         
-        if (isParticleMode && this.particleSystem) {
-            const targetMaterial = S.particle_morphProgress === 1.0 ? this.particlePBRMaterial : this.particleEmissiveMaterial;
-            if (this.particleSystem.material !== targetMaterial) {
-                this.particleSystem.material = targetMaterial;
-            }
-        }
-
         const state = this.state;
         const ap = this.autopilot;
         const now = this.app.currentTime;
@@ -273,10 +264,6 @@ export const ImagePlaneManager = {
             this.particlePBRMaterial.dispose();
             this.particlePBRMaterial = null;
         }
-        if (this.particleEmissiveMaterial) {
-            this.particleEmissiveMaterial.dispose();
-            this.particleEmissiveMaterial = null;
-        }
     },
 
     _createParticleSystem() {
@@ -303,9 +290,8 @@ export const ImagePlaneManager = {
         geometry.setAttribute('uv', new this.app.THREE.BufferAttribute(uvs, 2));
 
         this._createParticlePBRMaterial();
-        this._createParticleEmissiveMaterial();
 
-        this.particleSystem = new this.app.THREE.Points(geometry, this.particleEmissiveMaterial);
+        this.particleSystem = new this.app.THREE.Points(geometry, this.particlePBRMaterial);
         this.particleSystem.frustumCulled = false;
         this.landscapeContainer.add(this.particleSystem);
     },
@@ -381,7 +367,9 @@ export const ImagePlaneManager = {
             uniforms: {
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: null },
-                particle_size: { value: S.particle_size },
+                u_velocityTexture: { value: null },
+                particle_base_size: { value: S.particle_base_size },
+                particle_min_size: { value: S.particle_min_size },
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
@@ -390,30 +378,12 @@ export const ImagePlaneManager = {
                 u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
                 u_cameraPosition: { value: this.app.camera.position },
                 t_envMap: { value: this.app.hdrTexture },
-                u_time: { value: 0.0 }, 
+                u_time: { value: 0.0 },
+                // ** THE FIX IS HERE: Add the morph progress uniform **
+                u_morphProgress: { value: 1.0 },
             },
             vertexShader: particleRenderVertexShader,
-            fragmentShader: particleRenderFragmentShader
-        });
-    },
-
-    _createParticleEmissiveMaterial() {
-        const S = this.app.vizSettings;
-        const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
-        if(!this.currentTexture) textureToUse.needsUpdate = true;
-        
-        this.particleEmissiveMaterial = new this.app.THREE.ShaderMaterial({
-            uniforms: {
-                u_map: { value: textureToUse },
-                u_positionTexture: { value: null },
-                particle_size: { value: S.particle_size },
-                u_lightColor: { value: new this.app.THREE.Color(S.lightColor) },
-                u_ambientLightColor: { value: new this.app.THREE.Color(S.ambientLightColor) },
-                u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
-                u_time: { value: 0.0 }, 
-            },
-            vertexShader: particleRenderVertexShader,
-            fragmentShader: particleEmissiveFragmentShader,
+            fragmentShader: particleRenderFragmentShader,
             transparent: true,
             depthWrite: false
         });
@@ -465,13 +435,11 @@ export const ImagePlaneManager = {
             texture.colorSpace = this.app.vizSettings.enablePBRColor ? this.app.THREE.SRGBColorSpace : this.app.THREE.NoColorSpace;
             texture.anisotropy = this.app.renderer.capabilities.getMaxAnisotropy();
             
-            // ** THE FIX IS HERE: Revert to flipY = false. This is the simplest universal fix. **
             texture.flipY = false;
             texture.needsUpdate = true;
             
             if (this.landscapeMaterial) this.landscapeMaterial.uniforms.u_map.value = texture;
             if (this.particlePBRMaterial) this.particlePBRMaterial.uniforms.u_map.value = texture;
-            if (this.particleEmissiveMaterial) this.particleEmissiveMaterial.uniforms.u_map.value = texture;
             
             this.currentTexture = texture;
         };
@@ -500,11 +468,18 @@ export const ImagePlaneManager = {
             if (!CM || !CM.particleGpuCompute) return;
 
             const posTarget = CM.particleGpuCompute.getCurrentRenderTarget(CM.particlePositionVar);
+            const velTarget = CM.particleGpuCompute.getCurrentRenderTarget(CM.particleVelocityVar);
             
             if(this.particlePBRMaterial) {
                 const U_PBR = this.particlePBRMaterial.uniforms;
                 U_PBR.u_positionTexture.value = posTarget.texture;
-                U_PBR.particle_size.value = S.particle_size;
+                U_PBR.u_velocityTexture.value = velTarget.texture;
+
+                U_PBR.particle_base_size.value = S.particle_base_size;
+                U_PBR.particle_min_size.value = S.particle_min_size;
+                // ** THE FIX IS HERE: Update the morph progress uniform **
+                U_PBR.u_morphProgress.value = S.particle_morphProgress;
+
                 U_PBR.u_metalness.value = S.metalness;
                 U_PBR.u_roughness.value = S.roughness;
                 U_PBR.u_envMapIntensity.value = S.reflectionStrength;
@@ -513,14 +488,6 @@ export const ImagePlaneManager = {
                 U_PBR.u_lightColor.value.set(S.lightColor);
                 U_PBR.u_ambientLightColor.value.set(S.ambientLightColor);
                 U_PBR.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-            }
-            if(this.particleEmissiveMaterial) {
-                const U_EM = this.particleEmissiveMaterial.uniforms;
-                U_EM.u_positionTexture.value = posTarget.texture;
-                U_EM.particle_size.value = S.particle_size;
-                U_EM.u_lightColor.value.set(S.lightColor);
-                U_EM.u_ambientLightColor.value.set(S.ambientLightColor);
-                U_EM.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
             }
         } else { 
             if (!this.landscapeMaterial) return;

@@ -1,4 +1,5 @@
 import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
+import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
 // --- Import all our GLSL files as raw text strings ---
 import commonShader from './shaders/common.glsl?raw';
@@ -242,7 +243,6 @@ export const ComputeManager = {
         velocityUniforms['particle_morphProgress'] = { value: S.particle_morphProgress };
         velocityUniforms['particle_attractionStrength'] = { value: S.particle_attractionStrength };
         
-        // ** THE FIX IS HERE: Add the missing pouring uniforms **
         velocityUniforms['u_isPouring'] = { value: false };
         velocityUniforms['u_pourProgress'] = { value: 0.0 };
         velocityUniforms['u_pourSourcePoint'] = { value: new this.app.THREE.Vector3() };
@@ -264,35 +264,49 @@ export const ComputeManager = {
             console.error("Bake failed: mesh or target texture is missing.");
             return;
         }
-        
+    
+        // ** THE FIX IS HERE: Overhauled baking logic with MeshSurfaceSampler **
+    
+        // 1. Initialize the sampler on the mesh
+        const sampler = new MeshSurfaceSampler(mesh).build();
+    
+        // 2. Get necessary data and prepare for sampling
         const texArray = targetTexture.image.data;
         const particleCount = texArray.length / 4;
-        const vertexCount = mesh.geometry.attributes.position.count;
         
+        // 3. Prepare for scaling the sampled points to fit our scene
         mesh.geometry.computeBoundingBox();
         const box = mesh.geometry.boundingBox;
         const size = new this.app.THREE.Vector3();
         box.getSize(size);
+        const center = new this.app.THREE.Vector3();
+        box.getCenter(center);
 
         const planeDims = this.app.ImagePlaneManager.planeDimensions;
         const scale = Math.min(planeDims.x / size.x, planeDims.y / size.y) * 0.9;
-        
-        const targetVertices = mesh.geometry.attributes.position.array;
-        const center = new this.app.THREE.Vector3();
-        box.getCenter(center);
-        
+    
+        // 4. Create temporary vectors to hold sample data
+        const _position = new this.app.THREE.Vector3();
+    
+        // 5. Loop through each particle and give it a unique position
         for (let i = 0; i < particleCount; i++) {
-            const targetVertexIndex = i % vertexCount;
-            const j = targetVertexIndex * 3;
-            
-            texArray[i * 4 + 0] = (targetVertices[j + 0] - center.x) * scale;
-            texArray[i * 4 + 1] = (targetVertices[j + 1] - center.y) * scale;
-            texArray[i * 4 + 2] = (targetVertices[j + 2] - center.z) * scale;
-            texArray[i * 4 + 3] = 1.0;
+            // Get a new, random sample from the mesh surface
+            sampler.sample(_position);
+    
+            // Center and scale the sampled position
+            _position.sub(center).multiplyScalar(scale);
+    
+            // Write the final position data into the texture array
+            const k = i * 4;
+            texArray[k + 0] = _position.x;
+            texArray[k + 1] = _position.y;
+            texArray[k + 2] = _position.z;
+            texArray[k + 3] = 1.0;
         }
-        
+    
+        // 6. Flag the texture for update
         targetTexture.needsUpdate = true;
-        console.log(`Baked ${vertexCount} vertices to texture for ${particleCount} particles.`);
+        console.log(`Baked ${particleCount} unique points to texture using MeshSurfaceSampler.`);
     },
 
     disposeParticleSystem() {

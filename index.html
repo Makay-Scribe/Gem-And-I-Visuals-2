@@ -157,12 +157,15 @@
                     </div>
                     <div class="accordion-content">
                         <p class="sub-group-title">DISPLAY</p>
-                        <label>Particle Size: <span id="particle_sizeValue" class="range-value-display"></span></label>
-                        <input type="range" id="particle_size" min="0.1" max="10.0" step="0.01" value="1.5">
+                        <!-- ** THE FIX IS HERE: Renamed the label and input ID for clarity ** -->
+                        <label>Base Size (Flat): <span id="particle_base_sizeValue" class="range-value-display"></span></label>
+                        <input type="range" id="particle_base_size" min="0.1" max="5.0" step="0.01" value="0.5">
+                        <label>Min Size (Active): <span id="particle_min_sizeValue" class="range-value-display"></span></label>
+                        <input type="range" id="particle_min_size" min="0.01" max="2.0" step="0.01" value="0.1">
                         
                         <p class="sub-group-title">FLOW FIELD (TURBULENCE)</p>
                         <label>Flow Strength: <span id="particle_flowStrengthValue" class="range-value-display"></span></label>
-                        <input type="range" id="particle_flowStrength" min="0.0" max="10.0" step="0.01" value="0.0">
+                        <input type="range" id="particle_flowStrength" min="0.0" max="10.0" step="0.01" value="0.20">
                         <label>Flow Speed: <span id="particle_flowSpeedValue" class="range-value-display"></span></label>
                         <input type="range" id="particle_flowSpeed" min="0.0" max="1.0" step="0.01" value="0.2">
                         <label>Flow Scale: <span id="particle_flowScaleValue" class="range-value-display"></span></label>
@@ -184,7 +187,6 @@
                         <label>Attraction: <span id="particle_attractionStrengthValue" class="range-value-display"></span></label>
                         <input type="range" id="particle_attractionStrength" min="0.0" max="1.0" step="0.01" value="0.1">
                         
-                        <!-- ** THE FIX IS HERE: New button for the pouring transition ** -->
                         <button id="particlePourButton">Run Pour Transition</button>
 
                     </div>
@@ -515,19 +517,19 @@
             <button class="accordion-header" data-header-id="model">3D Model</button>
             <div class="accordion-content">
                 <p class="sub-group-title">MODEL PRESETS</p>
-                <div class="model-preset-grid">
-                    <button id="modelPreset1">1</button>
-                    <button id="modelPreset2">2</button>
-                    <button id="modelPreset3">3</button>
-                    <button id="modelPreset4">4</button>
-                    <button id="modelPreset5">5</button>
-                    <button id="modelPreset6">6</button>
-                    <button id="modelPreset7">7</button>
-                    <button id="modelPreset8">8</button>
-                    <button id="modelPreset9">9</button>
-                    <button id="modelPreset10">10</button>
-                    <button id="modelPreset11">11</button>
-                    <button id="modelPreset12">12</button>
+                <div class="model-preset-list">
+                    <div class="model-preset-row"><span class="preset-name">1. Banana Gun</span><div class="button-group"><button id="modelPreset1">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset1">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">2. Bee</span><div class="button-group"><button id="modelPreset2">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset2">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">3. D. Planet</span><div class="button-group"><button id="modelPreset3">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset3">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">4. Flying Bee</span><div class="button-group"><button id="modelPreset4">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset4">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">5. Pterodactyl</span><div class="button-group"><button id="modelPreset5">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset5">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">6. Martial Arts</span><div class="button-group"><button id="modelPreset6">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset6">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">7. Retro UFO</span><div class="button-group"><button id="modelPreset7">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset7">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">8. Rose</span><div class="button-group"><button id="modelPreset8">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset8">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">9. Fish School</span><div class="button-group"><button id="modelPreset9">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset9">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">10. Dirigible</span><div class="button-group"><button id="modelPreset10">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset10">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">11. Shark</span><div class="button-group"><button id="modelPreset11">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset11">Bake</button></div></div>
+                    <div class="model-preset-row"><span class="preset-name">12. Astronaut</span><div class="button-group"><button id="modelPreset12">Load</button><button class="bake-preset-btn" data-preset-id="modelPreset12">Bake</button></div></div>
                 </div>
 
                 <p class="sub-group-title">ASSETS</p>
@@ -600,6 +602,7 @@
                         <input type="range" id="roughness" min="0.0" max="1.0" step="0.01" value="1.0">
                     </div>
                 </div>
+
             </div>
         </div>
 
@@ -693,7 +696,6 @@
                 <!-- Container for Butterchurn specific controls -->
                 <div id="butterchurnControls" style="display: none;">
                     <hr>
-                    <!-- THE FIX IS HERE: New Dropdown for Engine Selection -->
                     <p class="sub-group-title">BUTTERCHURN ENGINE</p>
                     <select id="butterchurnEngineSelect">
                         <option value="1" selected>Butterchurn 1 (Classic)</option>

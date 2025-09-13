@@ -811,9 +811,9 @@ export const UIManager = {
         }
         
         Object.keys(this.app.modelPresets).forEach(presetId => {
-            const btn = document.getElementById(presetId);
-            if(btn) {
-                btn.addEventListener('click', () => {
+            const loadBtn = document.getElementById(presetId);
+            if(loadBtn) {
+                loadBtn.addEventListener('click', () => {
                     const preset = this.app.modelPresets[presetId];
                     if (preset.homeOffset && !(preset.homeOffset instanceof this.app.THREE.Vector3)) {
                         preset.homeOffset = new this.app.THREE.Vector3(preset.homeOffset.x, preset.homeOffset.y, preset.homeOffset.z);
@@ -821,6 +821,43 @@ export const UIManager = {
                     if (preset) this.app.ModelManager.loadGLTFModel(preset);
                 });
             }
+        });
+
+        document.querySelectorAll('.bake-preset-btn').forEach(bakeBtn => {
+            bakeBtn.addEventListener('click', () => {
+                const presetId = bakeBtn.dataset.presetId;
+                const preset = this.app.modelPresets[presetId];
+                if (!preset) {
+                    this.logError(`Preset ${presetId} not found.`);
+                    return;
+                }
+                
+                this.logSuccess(`Baking ${preset.name}...`);
+                this.gltfLoader.load(preset.path, 
+                    (gltf) => {
+                        let bestMesh = null;
+                        gltf.scene.traverse(child => { if (child.isMesh) bestMesh = child; });
+
+                        if (bestMesh) {
+                            this.particleModelMesh = bestMesh;
+                            const CM = this.app.ComputeManager;
+                            if (CM && CM.particleModelPositionTexture) {
+                                CM.bakeToTexture(this.particleModelMesh, CM.particleModelPositionTexture);
+                                this.logSuccess(`Baked ${preset.name}. Ready to transition.`);
+                                this.updateFileNameDisplay('particleModel', preset.name);
+
+                            }
+                        } else {
+                            this.logError(`No mesh found in ${preset.name}.`);
+                        }
+                    }, 
+                    undefined, 
+                    (error) => {
+                        this.logError(`Failed to load ${preset.name} for baking.`);
+                        console.error(error);
+                    }
+                );
+            });
         });
 
 

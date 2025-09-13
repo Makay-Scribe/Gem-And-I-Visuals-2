@@ -25,16 +25,21 @@ float GeometrySchlickGGX(float NdotV, float roughness) { float r = (roughness + 
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) { float NdotV = max(dot(N, V), 0.0); float NdotL = max(dot(N, L), 0.0); float ggx2 = GeometrySchlickGGX(NdotV, roughness); float ggx1 = GeometrySchlickGGX(NdotL, roughness); return ggx1 * ggx2; }
 
 void main() {
-    // The final color of the particle is sampled from the main image/video texture
+    // --- Step 1: Make the point circular ---
+    float dist = distance(gl_PointCoord, vec2(0.5));
+    float alpha = 1.0 - smoothstep(0.45, 0.5, dist);
+    if (alpha <= 0.0) {
+        discard;
+    }
+
+    // --- Step 2: Calculate PBR Color (Existing Logic) ---
     vec3 albedo = texture(u_map, vUv).rgb;
     
-    // Normalize vectors used for lighting calculation
     vec3 N = normalize(vNormal);
     vec3 V = normalize(u_cameraPosition - vWorldPosition);
     vec3 L = normalize(u_lightDirection);
     vec3 H = normalize(V + L);
 
-    // Standard PBR lighting calculation
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo, u_metalness);
     vec3 Lo = vec3(0.0);
@@ -56,9 +61,9 @@ void main() {
     
     vec3 color = Lo + ambient + u_ambientLightColor * albedo;
 
-    // Basic tone mapping and gamma correction
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
 
-    gl_FragColor = vec4(color, 1.0);
+    // ** THE FIX IS HERE: Use the calculated alpha for transparency **
+    gl_FragColor = vec4(color, alpha);
 }

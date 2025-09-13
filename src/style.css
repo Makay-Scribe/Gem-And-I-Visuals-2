@@ -586,6 +586,53 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--sub-header-hover-bg);
 }
 
+/* ** THE FIX IS HERE: New styles for the model preset list ** */
+.model-preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 4px;
+}
+.model-preset-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--input-bg);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+.model-preset-row .preset-name {
+    font-size: 9px;
+    color: var(--label-color);
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.model-preset-row .button-group {
+    display: flex;
+    gap: 3px;
+    flex-shrink: 0;
+}
+.model-preset-row button {
+    width: 50px;
+    font-size: 9px;
+    min-height: 18px;
+    padding: 2px;
+    margin-bottom: 0;
+    background-color: var(--button-secondary-bg);
+}
+.model-preset-row button:hover {
+    background-color: var(--button-secondary-hover-bg);
+}
+/* Style the bake button differently */
+.model-preset-row .bake-preset-btn {
+    background-color: var(--reset-button-bg);
+}
+.model-preset-row .bake-preset-btn:hover {
+    background-color: var(--reset-button-hover-bg);
+}
+
 
 /* Reset Button Style */
 #landscapeResetButton {
