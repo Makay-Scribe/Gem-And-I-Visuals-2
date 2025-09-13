@@ -185,6 +185,21 @@
                             <option value="flat" selected>Flat Plane</option>
                             <option value="model">3D Model</option>
                         </select>
+
+                        <label for="particleColorMode">Color Mode</label>
+                        <select id="particleColorMode">
+                            <option value="default" selected>Default</option>
+                            <option value="chrome">Chrome</option>
+                            <option value="model">Model Color</option>
+                        </select>
+
+                        <label for="particleTwinkleMode">Twinkle FX</label>
+                        <select id="particleTwinkleMode">
+                            <option value="off" selected>Off</option>
+                            <option value="low">50%</option>
+                            <option value="high">100%</option>
+                        </select>
+
                         <label>Morph Progress: <span id="particle_morphProgressValue" class="range-value-display"></span></label>
                         <input type="range" id="particle_morphProgress" min="0.0" max="1.0" step="0.01" value="1.0">
                         <label>Attraction: <span id="particle_attractionStrengthValue" class="range-value-display"></span></label>

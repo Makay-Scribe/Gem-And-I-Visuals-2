@@ -365,6 +365,7 @@ export const ImagePlaneManager = {
     
     _createParticlePBRMaterial() {
         const S = this.app.vizSettings;
+        const CM = this.app.ComputeManager;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
         
@@ -375,9 +376,13 @@ export const ImagePlaneManager = {
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: null },
                 u_velocityTexture: { value: null },
+                u_particleModelUVTexture: { value: CM.particleModelUVTexture },
+                u_particleModelTexture: { value: null }, // Will be assigned by UIManager
+                u_particleColorMix: { value: 0.0 }, 
+                u_particleColorMode: { value: 0 }, 
                 particle_base_size: { value: finalBaseSize },
                 particle_min_size: { value: S.particle_min_size },
-                u_particle_size_mix: { value: S.particle_size_mix }, // NEW
+                u_particle_size_mix: { value: S.particle_size_mix },
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
@@ -484,8 +489,12 @@ export const ImagePlaneManager = {
 
                 U_PBR.particle_base_size.value = this.calculatedParticleBaseSize * S.particle_base_size;
                 U_PBR.particle_min_size.value = S.particle_min_size;
-                U_PBR.u_particle_size_mix.value = S.particle_size_mix; // NEW
+                U_PBR.u_particle_size_mix.value = S.particle_size_mix; 
                 U_PBR.u_pixelRatio.value = window.devicePixelRatio;
+
+                const colorModeMap = { 'default': 0, 'chrome': 1, 'model': 2 };
+                U_PBR.u_particleColorMode.value = colorModeMap[S.particleColorMode] || 0;
+                // We will control u_particleColorMix from UIManager for smooth transitions
 
                 U_PBR.u_metalness.value = S.metalness;
                 U_PBR.u_roughness.value = S.roughness;

@@ -11,6 +11,12 @@ uniform vec3 u_ambientLightColor;
 uniform vec3 u_lightDirection;
 uniform vec3 u_cameraPosition;
 
+// Color Mode Uniforms
+uniform sampler2D u_particleModelUVTexture;   // ** NEW: Baked UVs of the target model **
+uniform sampler2D u_particleModelTexture;     // ** NEW: The actual texture of the target model **
+uniform float u_particleColorMix;             // 0.0 = u_map color, 1.0 = model color
+uniform int u_particleColorMode;              // 0=default, 1=chrome, 2=model
+
 // Varyings from the vertex shader
 varying vec2 vUv;
 varying vec3 vWorldPosition;
@@ -32,23 +38,39 @@ void main() {
         discard;
     }
 
-    // --- Step 2: Calculate PBR Color (Existing Logic) ---
-    vec3 albedo = texture(u_map, vUv).rgb;
+    // --- Step 2: Determine Albedo and PBR properties based on mode ---
+    vec3 albedo;
+    float workingMetalness = u_metalness;
+    float workingRoughness = u_roughness;
+
+    if (u_particleColorMode == 1) { // Chrome Mode
+        albedo = vec3(1.0);
+        workingMetalness = 1.0;
+        workingRoughness = 0.1;
+    } else if (u_particleColorMode == 2) { // Model Color Mode
+        vec3 defaultColor = texture(u_map, vUv).rgb;
+        vec2 modelUV = texture(u_particleModelUVTexture, vUv).rg;
+        vec3 modelColor = texture(u_particleModelTexture, modelUV).rgb;
+        albedo = mix(defaultColor, modelColor, u_particleColorMix);
+    } else { // Default Mode
+        albedo = texture(u_map, vUv).rgb;
+    }
     
+    // --- Step 3: Calculate PBR Lighting ---
     vec3 N = normalize(vNormal);
     vec3 V = normalize(u_cameraPosition - vWorldPosition);
     vec3 L = normalize(u_lightDirection);
     vec3 H = normalize(V + L);
 
     vec3 F0 = vec3(0.04);
-    F0 = mix(F0, albedo, u_metalness);
+    F0 = mix(F0, albedo, workingMetalness);
     vec3 Lo = vec3(0.0);
-    float NDF = DistributionGGX(N, H, u_roughness);
-    float G = GeometrySmith(N, V, L, u_roughness);
+    float NDF = DistributionGGX(N, H, workingRoughness);
+    float G = GeometrySmith(N, V, L, workingRoughness);
     vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
     vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - u_metalness;
+    kD *= 1.0 - workingMetalness;
     float NdotL = max(dot(N, L), 0.0);
     vec3 numerator = NDF * G * F;
     float denominator = 4.0 * max(dot(N, V), 0.0) * NdotL + 0.001;
@@ -64,6 +86,5 @@ void main() {
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
 
-    // ** THE FIX IS HERE: Use the calculated alpha for transparency **
     gl_FragColor = vec4(color, alpha);
 }

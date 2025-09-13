@@ -33,6 +33,7 @@ export const ComputeManager = {
     particleVelocityVar: null,
     particleFlatPositionTexture: null,
     particleModelPositionTexture: null, 
+    particleModelUVTexture: null,
 
     WIDTH: 0,
     HEIGHT: 0,
@@ -200,6 +201,7 @@ export const ComputeManager = {
         const dtVelocity = this.particleGpuCompute.createTexture();
         this.particleFlatPositionTexture = this.particleGpuCompute.createTexture();
         this.particleModelPositionTexture = this.particleGpuCompute.createTexture(); 
+        this.particleModelUVTexture = this.particleGpuCompute.createTexture();
 
         const posArray = dtPosition.image.data;
         const velArray = dtVelocity.image.data;
@@ -259,22 +261,24 @@ export const ComputeManager = {
         }
     },
 
-    bakeToTexture(mesh, targetTexture) {
-        if (!mesh || !targetTexture) {
-            console.error("Bake failed: mesh or target texture is missing.");
+    bakeToTexture(mesh, targetPositionTexture) {
+        if (!mesh || !targetPositionTexture) {
+            console.error("Bake failed: mesh or target position texture is missing.");
             return;
         }
     
-        // ** THE FIX IS HERE: Overhauled baking logic with MeshSurfaceSampler **
+        const targetUVTexture = this.particleModelUVTexture;
+        if (!targetUVTexture) {
+            console.error("Bake failed: particleModelUVTexture is missing.");
+            return;
+        }
     
-        // 1. Initialize the sampler on the mesh
-        const sampler = new MeshSurfaceSampler(mesh).build();
+        const sampler = new MeshSurfaceSampler(mesh).setWeightAttribute('color').build();
     
-        // 2. Get necessary data and prepare for sampling
-        const texArray = targetTexture.image.data;
-        const particleCount = texArray.length / 4;
+        const posArray = targetPositionTexture.image.data;
+        const uvArray = targetUVTexture.image.data;
+        const particleCount = posArray.length / 4;
         
-        // 3. Prepare for scaling the sampled points to fit our scene
         mesh.geometry.computeBoundingBox();
         const box = mesh.geometry.boundingBox;
         const size = new this.app.THREE.Vector3();
@@ -285,28 +289,35 @@ export const ComputeManager = {
         const planeDims = this.app.ImagePlaneManager.planeDimensions;
         const scale = Math.min(planeDims.x / size.x, planeDims.y / size.y) * 0.9;
     
-        // 4. Create temporary vectors to hold sample data
         const _position = new this.app.THREE.Vector3();
+        const _normal = new this.app.THREE.Vector3();
+        const _uv = new this.app.THREE.Vector2();
     
-        // 5. Loop through each particle and give it a unique position
-        for (let i = 0; i < particleCount; i++) {
-            // Get a new, random sample from the mesh surface
-            sampler.sample(_position);
-    
-            // Center and scale the sampled position
-            _position.sub(center).multiplyScalar(scale);
-    
-            // Write the final position data into the texture array
-            const k = i * 4;
-            texArray[k + 0] = _position.x;
-            texArray[k + 1] = _position.y;
-            texArray[k + 2] = _position.z;
-            texArray[k + 3] = 1.0;
+        const hasUVs = mesh.geometry.attributes.uv !== undefined;
+        if (!hasUVs) {
+            console.warn(`Baking to texture: Mesh "${mesh.name}" has no UV coordinates. Model color will not work.`);
         }
     
-        // 6. Flag the texture for update
-        targetTexture.needsUpdate = true;
-        console.log(`Baked ${particleCount} unique points to texture using MeshSurfaceSampler.`);
+        for (let i = 0; i < particleCount; i++) {
+            sampler.sample(_position, _normal, null, _uv);
+    
+            _position.sub(center).multiplyScalar(scale);
+    
+            const k = i * 4;
+            posArray[k + 0] = _position.x;
+            posArray[k + 1] = _position.y;
+            posArray[k + 2] = _position.z;
+            posArray[k + 3] = 1.0;
+
+            uvArray[k + 0] = hasUVs ? _uv.x : 0.0;
+            uvArray[k + 1] = hasUVs ? _uv.y : 0.0;
+            uvArray[k + 2] = 0.0; 
+            uvArray[k + 3] = 1.0; 
+        }
+    
+        targetPositionTexture.needsUpdate = true;
+        targetUVTexture.needsUpdate = true;
+        console.log(`Baked ${particleCount} points (position & UVs) to textures.`);
     },
 
     disposeParticleSystem() {
@@ -318,8 +329,10 @@ export const ComputeManager = {
             
             if (this.particleFlatPositionTexture) this.particleFlatPositionTexture.dispose();
             if (this.particleModelPositionTexture) this.particleModelPositionTexture.dispose();
+            if (this.particleModelUVTexture) this.particleModelUVTexture.dispose();
             this.particleFlatPositionTexture = null; 
             this.particleModelPositionTexture = null;
+            this.particleModelUVTexture = null;
 
             console.log("Particle GPGPU system disposed.");
         }

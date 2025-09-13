@@ -11,6 +11,7 @@ export const UIManager = {
     debugDisplay: null,
     controlDOMElements: {},
     particleModelMesh: null, 
+    particleModelTexture: null,
     gltfLoader: new GLTFLoader(),
     isPouring: false,
 
@@ -483,7 +484,9 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const D = this.app.defaultVisualizerSettings;
         const CM = this.app.ComputeManager;
-        const targetState = S.particle_target === 'flat' ? 'model' : 'flat';
+        
+        const currentState = S.particle_target;
+        const targetState = currentState === 'flat' ? 'model' : 'flat';
 
         if (targetState === 'model' && !this.particleModelMesh) {
             this.logError("Please bake a target model first.");
@@ -508,10 +511,14 @@ export const UIManager = {
         const modelRestState = { morph: 0.7, flow: 0.25, attract: 0.1, scale: 0.1, speed: 0.1, sizeMix: 1.0 };
         const flatRestState = { morph: 1.0, flow: D.particle_flowStrength, attract: D.particle_attractionStrength, scale: D.particle_flowScale, speed: D.particle_flowSpeed, sizeMix: 0.0 };
 
+        const startStateConfig = (currentState === 'flat') ? flatRestState : modelRestState;
+        const endStateConfig = (targetState === 'model') ? modelRestState : flatRestState;
+
         const animate = () => {
             if (!this.isPouring) return;
 
             const elapsedTime = (this.app.clock.getElapsedTime() - START_TIME) * 1000;
+            const U_PBR = this.app.ImagePlaneManager.particlePBRMaterial.uniforms;
             
             if (elapsedTime < TRAVEL_DURATION) {
                 // --- STAGE 1: TRAVELING ---
@@ -522,24 +529,32 @@ export const UIManager = {
                 S.particle_morphProgress = ease;
                 S.particle_flowStrength = peak * 1.5;
                 S.particle_attractionStrength = peak * 0.2;
-                S.particle_flowScale = this.app.THREE.MathUtils.lerp(flatRestState.scale, modelRestState.scale, ease);
-                S.particle_flowSpeed = this.app.THREE.MathUtils.lerp(flatRestState.speed, modelRestState.speed, ease);
-                S.particle_size_mix = ease;
+
+                S.particle_flowScale = this.app.THREE.MathUtils.lerp(startStateConfig.scale, endStateConfig.scale, ease);
+                S.particle_flowSpeed = this.app.THREE.MathUtils.lerp(startStateConfig.speed, endStateConfig.speed, ease);
+                S.particle_size_mix = this.app.THREE.MathUtils.lerp(startStateConfig.sizeMix, endStateConfig.sizeMix, ease);
+
+                const colorMixProgress = (targetState === 'model') ? ease : 1.0 - ease;
+                if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = colorMixProgress;
 
             } else {
                 // --- STAGE 2: SETTLING ---
                 const progress = (elapsedTime - TRAVEL_DURATION) / SETTLE_DURATION;
                 const ease = Math.min(progress, 1.0);
-
-                if (targetState === 'model') {
-                    S.particle_morphProgress = this.app.THREE.MathUtils.lerp(1.0, modelRestState.morph, ease);
-                    S.particle_flowStrength = this.app.THREE.MathUtils.lerp(0.0, modelRestState.flow, ease);
-                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, modelRestState.attract, ease);
-                } else { 
-                    S.particle_morphProgress = 1.0;
-                    S.particle_flowStrength = this.app.THREE.MathUtils.lerp(0.0, flatRestState.flow, ease);
-                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, flatRestState.attract, ease);
-                }
+                
+                const settlingFromState = { morph: 1.0, flow: 0.0, attract: 0.0 };
+                
+                S.particle_morphProgress = this.app.THREE.MathUtils.lerp(settlingFromState.morph, endStateConfig.morph, ease);
+                S.particle_flowStrength = this.app.THREE.MathUtils.lerp(settlingFromState.flow, endStateConfig.flow, ease);
+                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(settlingFromState.attract, endStateConfig.attract, ease);
+                
+                S.particle_size_mix = endStateConfig.sizeMix;
+                if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = (targetState === 'model') ? 1.0 : 0.0;
+            }
+            
+            // If chrome mode is selected, override the color mix to ensure it's not blending.
+            if (S.particleColorMode === 'chrome') {
+                if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = 0.0;
             }
 
             // --- UNIVERSAL UI UPDATE ---
@@ -559,14 +574,18 @@ export const UIManager = {
 
             // --- LOOP OR END ---
             if (elapsedTime < TOTAL_DURATION) {
-                requestAnimationFrame(animate);
+                requestAnimationFrame(animate.bind(this));
             } else {
                 this.isPouring = false;
+                S.particle_morphProgress = endStateConfig.morph;
+                S.particle_flowStrength = endStateConfig.flow;
+                S.particle_attractionStrength = endStateConfig.attract;
+                if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = (targetState === 'model' && S.particleColorMode === 'model') ? 1.0 : 0.0;
                 this.logSuccess("Transition complete.");
             }
         };
         
-        requestAnimationFrame(animate);
+        requestAnimationFrame(animate.bind(this));
     },
 
 
@@ -699,7 +718,7 @@ export const UIManager = {
         }
         
         document.querySelectorAll('input[type="range"], select').forEach(control => {
-            if (control.closest('#cameraOptions') || control.id === 'particleMorphTarget' || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls')) return;
+            if (control.closest('#cameraOptions') || control.id === 'particleMorphTarget' || control.id === 'particleColorMode' || control.id === 'particleTwinkleMode' || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls')) return;
             
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -769,6 +788,19 @@ export const UIManager = {
             particlePourButton.addEventListener('click', () => this.doPourTransition());
         }
 
+        const particleColorModeSelect = document.getElementById('particleColorMode');
+        if(particleColorModeSelect) {
+            particleColorModeSelect.addEventListener('change', (e) => {
+                this.app.vizSettings.particleColorMode = e.target.value;
+            });
+        }
+
+        const particleTwinkleModeSelect = document.getElementById('particleTwinkleMode');
+        if(particleTwinkleModeSelect) {
+            particleTwinkleModeSelect.addEventListener('change', (e) => {
+                this.app.vizSettings.particleTwinkleMode = e.target.value;
+            });
+        }
 
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.closest('#butterchurnControls')) return;
@@ -884,6 +916,18 @@ export const UIManager = {
 
                         if (bestMesh) {
                             this.particleModelMesh = bestMesh;
+                            
+                            // ** NEW: Find and store the model's texture map **
+                            if (bestMesh.material && bestMesh.material.map) {
+                                this.particleModelTexture = bestMesh.material.map;
+                                if (this.app.ImagePlaneManager.particlePBRMaterial) {
+                                    this.app.ImagePlaneManager.particlePBRMaterial.uniforms.u_particleModelTexture.value = this.particleModelTexture;
+                                }
+                            } else {
+                                this.logError(`Model "${preset.name}" has no texture map. Cannot use Model Color mode.`);
+                                this.particleModelTexture = null; 
+                            }
+                            
                             const CM = this.app.ComputeManager;
                             if (CM && CM.particleModelPositionTexture) {
                                 CM.bakeToTexture(this.particleModelMesh, CM.particleModelPositionTexture);
@@ -1114,6 +1158,17 @@ export const UIManager = {
                     
                     if (bestMesh) {
                         this.particleModelMesh = bestMesh;
+
+                        if (bestMesh.material && bestMesh.material.map) {
+                            this.particleModelTexture = bestMesh.material.map;
+                            if (this.app.ImagePlaneManager.particlePBRMaterial) {
+                                this.app.ImagePlaneManager.particlePBRMaterial.uniforms.u_particleModelTexture.value = this.particleModelTexture;
+                            }
+                        } else {
+                            this.logError(`Model "${file.name}" has no texture map.`);
+                            this.particleModelTexture = null; 
+                        }
+
                         const CM = this.app.ComputeManager;
                         if (CM && CM.particleModelPositionTexture) {
                             CM.bakeToTexture(this.particleModelMesh, CM.particleModelPositionTexture);

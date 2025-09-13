@@ -178,6 +178,8 @@ const App = {
         particle_attractionStrength: 0.1,
         particle_morphProgress: 1.0,
         particle_target: 'flat', 
+        particleColorMode: 'default',
+        particleTwinkleMode: 'off',
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,
