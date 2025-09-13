@@ -42,8 +42,8 @@ const App = {
         'modelPreset8': { id: 'modelPreset8', name: 'Rose', path: '/3dmodel/converted/Rose.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
         'modelPreset9': { id: 'modelPreset9', name: 'School of Fish', path: '/3dmodel/converted/School of fish.glb', homeOffset: new THREE.Vector3(-5, 0, -10) },
         'modelPreset10': { id: 'modelPreset10', name: 'Steampunk Dirigible', path: '/3dmodel/converted/Steampunk Dirigible with Ship.glb', homeOffset: new THREE.Vector3(3, 0, -10) },
-        'modelPreset11': { id: 'modelPreset11', name: 'Swimming Shark', path: '/3dmodel/converted/Swimming shark.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
-        'modelPreset12': { id: 'modelPreset12', name: 'Walking Astronaut', path: '/3dmodel/converted/Walking astronaut.glb', homeOffset: new THREE.Vector3(0, -3, -10) },
+        'modelPreset11': { id: 'modelPreset11', name: 'Swimming shark', path: '/3dmodel/converted/Swimming shark.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
+        'modelPreset12': { id: 'modelPreset12', name: 'Walking astronaut', path: '/3dmodel/converted/Walking astronaut.glb', homeOffset: new THREE.Vector3(0, -3, -10) },
     },
     shaderAudioValue: 0.0,
     hdrTexture: null, audioTexture: null,
@@ -169,14 +169,14 @@ const App = {
         gpgpu_peelTextureAmount: 0.14,
         // --- GPGPU PARTICLE SYSTEM SETTINGS ---
         particle_resolution: 512,
-        // ** THE FIX IS HERE: Updated default sizes to your desired values **
-        particle_base_size: 0.5,
-        particle_min_size: 0.1,
+        particle_base_size: 3.0,
+        particle_min_size: 0.0,
         particle_flowScale: 0.1,
         particle_flowSpeed: 0.2,
         particle_flowStrength: 0.20,
         particle_attractionStrength: 0.1,
         particle_morphProgress: 1.0,
+        particle_target: 'flat', // 'flat' or 'model'
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,
@@ -286,19 +286,23 @@ const App = {
 
     onWindowResize() {
         if (!this.camera || !this.renderer) return;
-
+    
         const canvas = this.renderer.domElement;
+        const pixelRatio = window.devicePixelRatio;
+    
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
-        
-        const needResize = canvas.width !== width || canvas.height !== height;
-        if (needResize) {
+    
+        const targetWidth = Math.floor(width * pixelRatio);
+        const targetHeight = Math.floor(height * pixelRatio);
+    
+        if (this.renderer.domElement.width !== targetWidth || this.renderer.domElement.height !== targetHeight) {
             this.renderer.setSize(width, height, false);
         }
-        
+    
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
-
+    
         this.BackgroundManager.onWindowResize(); 
         if (this.GPGPUDebugger && this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
         if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
@@ -420,10 +424,6 @@ const App = {
         };
 
         this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('glCanvas'), antialias: true, powerPreference: "high-performance" });
-        this.renderer.setPixelRatio(window.devicePixelRatio); 
-        
-        const canvas = this.renderer.domElement;
-        this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
         
         this.renderer.autoClear = false;
 
@@ -502,6 +502,7 @@ const App = {
         }
 
         window.addEventListener('resize', this.onWindowResize.bind(this));
+        this.onWindowResize(); 
         
         window.addEventListener('mousemove', (event) => {
             if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
@@ -513,6 +514,7 @@ const App = {
             }
         });
         
+        const canvas = this.renderer.domElement;
         canvas.addEventListener('mousedown', (event) => {
              if (event.target !== canvas) return;
              if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {

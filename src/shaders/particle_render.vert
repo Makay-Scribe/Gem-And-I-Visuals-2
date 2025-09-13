@@ -3,6 +3,8 @@ uniform sampler2D u_velocityTexture;
 uniform float particle_base_size;
 uniform float particle_min_size;
 uniform float u_morphProgress;
+uniform float u_particleTargetIsModel; // 0.0 for flat, 1.0 for model
+uniform float u_pixelRatio; // NEW: The browser's zoom/pixel density
 
 varying vec2 vUv;
 varying vec3 vWorldPosition;
@@ -26,17 +28,12 @@ void main() {
     
     gl_Position = projectionMatrix * mvPosition;
     
-    // ** THE FIX IS HERE: Corrected state-based sizing logic **
-    float speed = length(velocity);
-    
-    // Determine if the particle is in an "active" state (either moving or morphed)
-    // A speed greater than a tiny threshold (0.01) means it's moving.
-    // A morph progress less than 1.0 means it's not fully in its flat state.
-    bool isActive = speed > 0.01 || u_morphProgress < 1.0;
-    
-    // If it's active, use the min_size. Otherwise, use the base_size.
+    // --- FINAL, ROBUST SIZING LOGIC ---
+    bool isActive = u_morphProgress < 0.99 || u_particleTargetIsModel > 0.5;
     float targetSize = isActive ? particle_min_size : particle_base_size;
     
-    // Apply the final perspective-correct sizing.
-    gl_PointSize = targetSize * (300.0 / length(mvPosition.xyz));
+    // Apply perspective scaling AND zoom/pixel ratio correction
+    // By multiplying by u_pixelRatio, we ensure the final size in screen-space
+    // is correct, regardless of browser zoom.
+    gl_PointSize = targetSize * (300.0 / -mvPosition.z) * u_pixelRatio;
 }

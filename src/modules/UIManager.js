@@ -476,59 +476,113 @@ export const UIManager = {
     
     doPourTransition() {
         if (this.isPouring) {
-            this.logError("Pour transition already in progress.");
-            return;
-        }
-        if (!this.particleModelMesh) {
-            this.logError("Please load a target model first.");
+            this.logError("Transition already in progress.");
             return;
         }
 
+        const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
-        if (!CM.particleGpuCompute) return;
+        const targetState = S.particle_target === 'flat' ? 'model' : 'flat';
+
+        if (targetState === 'model' && !this.particleModelMesh) {
+            this.logError("Please bake a target model first.");
+            return;
+        }
 
         this.isPouring = true;
-        const uniforms = CM.particleVelocityVar.material.uniforms;
-        const planeDims = this.app.ImagePlaneManager.planeDimensions;
+        this.logSuccess(`Transitioning to ${targetState}...`);
 
-        // 1. Set the starting state
-        uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
-        document.getElementById('particleMorphTarget').value = 'flat';
+        S.particle_target = targetState;
+        document.getElementById('particleMorphTarget').value = targetState;
+        const targetTexture = (targetState === 'model') ? CM.particleModelPositionTexture : CM.particleFlatPositionTexture;
+        if (CM.particleVelocityVar) {
+            CM.particleVelocityVar.material.uniforms.u_targetPositionMap.value = targetTexture;
+        }
+
+        const TRAVEL_DURATION = 15000;
+        const SETTLE_DURATION = 5000;
+        const SIZE_CHANGE_DURATION = 5000;
+        const TOTAL_DURATION = TRAVEL_DURATION + SETTLE_DURATION;
+        const START_TIME = this.app.clock.getElapsedTime();
         
-        this.app.vizSettings.particle_morphProgress = 1.0;
-        document.getElementById('particle_morphProgress').value = 1.0;
-        this.updateRangeDisplay('particle_morphProgress', 1.0);
-        
-        // 2. Define the pour source point (e.g., bottom-left corner)
-        uniforms.u_pourSourcePoint.value.set(-planeDims.x / 2, -planeDims.y / 2, 0);
-        uniforms.u_isPouring.value = true;
-        
-        // 3. Switch the final target to the model texture
-        uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
-        document.getElementById('particleMorphTarget').value = 'model';
-        
-        // 4. Animate the pour progress
-        const pourDuration = 3000; // 3 seconds
-        const startTime = this.app.clock.getElapsedTime();
-        
-        const animatePour = () => {
-            if (!this.isPouring) return; // Allow for cancellation
-            const elapsedTime = (this.app.clock.getElapsedTime() - startTime) * 1000;
-            const progress = Math.min(elapsedTime / pourDuration, 1.0);
+        const modelRestState = { morph: 0.7, flow: 0.25, attract: 0.1, scale: 0.1, speed: 0.1 };
+        const flatRestState = { morph: 1.0, flow: 0.2, attract: 0.1, scale: 0.1, speed: 0.2 };
+
+        const initialMinSize = S.particle_min_size;
+
+        const animate = () => {
+            if (!this.isPouring) return;
+
+            const elapsedTime = (this.app.clock.getElapsedTime() - START_TIME) * 1000;
             
-            uniforms.u_pourProgress.value = progress;
+            // --- Animate Particle Size ---
+            if (targetState === 'model') {
+                // Shrinking at the beginning of the travel phase
+                const sizeProgress = Math.min(elapsedTime / SIZE_CHANGE_DURATION, 1.0);
+                S.particle_min_size = this.app.THREE.MathUtils.lerp(this.app.defaultVisualizerSettings.particle_min_size, 0.0, sizeProgress);
+            } else { // Transitioning back to flat
+                // Growing at the end of the travel phase
+                const sizeProgress = Math.max(0.0, (elapsedTime - (TRAVEL_DURATION - SIZE_CHANGE_DURATION)) / SIZE_CHANGE_DURATION);
+                 S.particle_min_size = this.app.THREE.MathUtils.lerp(0.0, this.app.defaultVisualizerSettings.particle_min_size, sizeProgress);
+            }
             
-            if (progress < 1.0) {
-                requestAnimationFrame(animatePour);
+
+            if (elapsedTime < TRAVEL_DURATION) {
+                // --- STAGE 1: TRAVELING ---
+                const progress = elapsedTime / TRAVEL_DURATION;
+                const ease = 0.5 - 0.5 * Math.cos(progress * Math.PI);
+                const peak = Math.sin(progress * Math.PI);
+
+                S.particle_morphProgress = ease;
+                S.particle_flowStrength = peak * 1.5;
+                S.particle_attractionStrength = peak * 0.2;
+                S.particle_flowScale = this.app.THREE.MathUtils.lerp(flatRestState.scale, modelRestState.scale, ease);
+                S.particle_flowSpeed = this.app.THREE.MathUtils.lerp(flatRestState.speed, modelRestState.speed, ease);
+
             } else {
-                uniforms.u_isPouring.value = false;
+                // --- STAGE 2: SETTLING ---
+                const progress = (elapsedTime - TRAVEL_DURATION) / SETTLE_DURATION;
+                const ease = Math.min(progress, 1.0);
+
+                if (targetState === 'model') {
+                    S.particle_morphProgress = this.app.THREE.MathUtils.lerp(1.0, modelRestState.morph, ease);
+                    S.particle_flowStrength = this.app.THREE.MathUtils.lerp(0.0, modelRestState.flow, ease);
+                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, modelRestState.attract, ease);
+                } else { 
+                    S.particle_morphProgress = 1.0;
+                    S.particle_flowStrength = this.app.THREE.MathUtils.lerp(0.0, flatRestState.flow, ease);
+                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, flatRestState.attract, ease);
+                }
+            }
+
+            // --- UNIVERSAL UI UPDATE ---
+            this.updateRangeDisplay('particle_min_size', S.particle_min_size);
+            this.updateRangeDisplay('particle_morphProgress', S.particle_morphProgress);
+            this.updateRangeDisplay('particle_flowStrength', S.particle_flowStrength);
+            this.updateRangeDisplay('particle_attractionStrength', S.particle_attractionStrength);
+            this.updateRangeDisplay('particle_flowScale', S.particle_flowScale);
+            this.updateRangeDisplay('particle_flowSpeed', S.particle_flowSpeed);
+
+            document.getElementById('particle_min_size').value = S.particle_min_size;
+            document.getElementById('particle_morphProgress').value = S.particle_morphProgress;
+            document.getElementById('particle_flowStrength').value = S.particle_flowStrength;
+            document.getElementById('particle_attractionStrength').value = S.particle_attractionStrength;
+            document.getElementById('particle_flowScale').value = S.particle_flowScale;
+            document.getElementById('particle_flowSpeed').value = S.particle_flowSpeed;
+
+            // --- LOOP OR END ---
+            if (elapsedTime < TOTAL_DURATION) {
+                requestAnimationFrame(animate);
+            } else {
                 this.isPouring = false;
-                this.logSuccess("Pour transition complete.");
+                this.logSuccess("Transition complete.");
+                // Final state is already set by the end of the settle phase.
             }
         };
         
-        requestAnimationFrame(animatePour);
+        requestAnimationFrame(animate);
     },
+
 
     loadUserShader(presetId) {
         const userFragmentShader = this.app.vizSettings.shaderToyGLSL;
@@ -704,8 +758,11 @@ export const UIManager = {
         if (particleMorphTargetSelect) {
             particleMorphTargetSelect.addEventListener('change', (e) => {
                 const CM = this.app.ComputeManager;
+                const S = this.app.vizSettings;
                 if (!CM.particleGpuCompute) return;
                 const uniforms = CM.particleVelocityVar.material.uniforms;
+
+                S.particle_target = e.target.value;
 
                 if (e.target.value === 'model') {
                     if (this.particleModelMesh && CM.particleModelPositionTexture) {
@@ -713,6 +770,7 @@ export const UIManager = {
                     } else {
                         this.logError("No model loaded to morph to!");
                         e.target.value = 'flat'; 
+                        S.particle_target = 'flat';
                     }
                 } else { 
                     uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
