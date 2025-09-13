@@ -171,12 +171,13 @@ const App = {
         particle_resolution: 512,
         particle_base_size: 3.0,
         particle_min_size: 0.0,
+        particle_size_mix: 0.0, // 0 = base size, 1 = min size
         particle_flowScale: 0.1,
         particle_flowSpeed: 0.2,
         particle_flowStrength: 0.20,
         particle_attractionStrength: 0.1,
         particle_morphProgress: 1.0,
-        particle_target: 'flat', // 'flat' or 'model'
+        particle_target: 'flat', 
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,

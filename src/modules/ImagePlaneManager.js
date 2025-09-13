@@ -377,6 +377,7 @@ export const ImagePlaneManager = {
                 u_velocityTexture: { value: null },
                 particle_base_size: { value: finalBaseSize },
                 particle_min_size: { value: S.particle_min_size },
+                u_particle_size_mix: { value: S.particle_size_mix }, // NEW
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
@@ -386,8 +387,6 @@ export const ImagePlaneManager = {
                 u_cameraPosition: { value: this.app.camera.position },
                 t_envMap: { value: this.app.hdrTexture },
                 u_time: { value: 0.0 },
-                u_morphProgress: { value: 1.0 },
-                u_particleTargetIsModel: { value: 0.0 },
                 u_pixelRatio: { value: window.devicePixelRatio },
             },
             vertexShader: particleRenderVertexShader,
@@ -485,9 +484,8 @@ export const ImagePlaneManager = {
 
                 U_PBR.particle_base_size.value = this.calculatedParticleBaseSize * S.particle_base_size;
                 U_PBR.particle_min_size.value = S.particle_min_size;
-                U_PBR.u_morphProgress.value = S.particle_morphProgress;
-                U_PBR.u_particleTargetIsModel.value = (S.particle_target === 'model') ? 1.0 : 0.0;
-                U_PBR.u_pixelRatio.value = window.devicePixelRatio; // NEW: Update pixel ratio
+                U_PBR.u_particle_size_mix.value = S.particle_size_mix; // NEW
+                U_PBR.u_pixelRatio.value = window.devicePixelRatio;
 
                 U_PBR.u_metalness.value = S.metalness;
                 U_PBR.u_roughness.value = S.roughness;

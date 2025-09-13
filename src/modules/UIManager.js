@@ -378,7 +378,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_size', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed'].includes(id)) {
                 precision = 2;
@@ -481,6 +481,7 @@ export const UIManager = {
         }
 
         const S = this.app.vizSettings;
+        const D = this.app.defaultVisualizerSettings;
         const CM = this.app.ComputeManager;
         const targetState = S.particle_target === 'flat' ? 'model' : 'flat';
 
@@ -501,32 +502,17 @@ export const UIManager = {
 
         const TRAVEL_DURATION = 15000;
         const SETTLE_DURATION = 5000;
-        const SIZE_CHANGE_DURATION = 5000;
         const TOTAL_DURATION = TRAVEL_DURATION + SETTLE_DURATION;
         const START_TIME = this.app.clock.getElapsedTime();
         
-        const modelRestState = { morph: 0.7, flow: 0.25, attract: 0.1, scale: 0.1, speed: 0.1 };
-        const flatRestState = { morph: 1.0, flow: 0.2, attract: 0.1, scale: 0.1, speed: 0.2 };
-
-        const initialMinSize = S.particle_min_size;
+        const modelRestState = { morph: 0.7, flow: 0.25, attract: 0.1, scale: 0.1, speed: 0.1, sizeMix: 1.0 };
+        const flatRestState = { morph: 1.0, flow: D.particle_flowStrength, attract: D.particle_attractionStrength, scale: D.particle_flowScale, speed: D.particle_flowSpeed, sizeMix: 0.0 };
 
         const animate = () => {
             if (!this.isPouring) return;
 
             const elapsedTime = (this.app.clock.getElapsedTime() - START_TIME) * 1000;
             
-            // --- Animate Particle Size ---
-            if (targetState === 'model') {
-                // Shrinking at the beginning of the travel phase
-                const sizeProgress = Math.min(elapsedTime / SIZE_CHANGE_DURATION, 1.0);
-                S.particle_min_size = this.app.THREE.MathUtils.lerp(this.app.defaultVisualizerSettings.particle_min_size, 0.0, sizeProgress);
-            } else { // Transitioning back to flat
-                // Growing at the end of the travel phase
-                const sizeProgress = Math.max(0.0, (elapsedTime - (TRAVEL_DURATION - SIZE_CHANGE_DURATION)) / SIZE_CHANGE_DURATION);
-                 S.particle_min_size = this.app.THREE.MathUtils.lerp(0.0, this.app.defaultVisualizerSettings.particle_min_size, sizeProgress);
-            }
-            
-
             if (elapsedTime < TRAVEL_DURATION) {
                 // --- STAGE 1: TRAVELING ---
                 const progress = elapsedTime / TRAVEL_DURATION;
@@ -538,6 +524,7 @@ export const UIManager = {
                 S.particle_attractionStrength = peak * 0.2;
                 S.particle_flowScale = this.app.THREE.MathUtils.lerp(flatRestState.scale, modelRestState.scale, ease);
                 S.particle_flowSpeed = this.app.THREE.MathUtils.lerp(flatRestState.speed, modelRestState.speed, ease);
+                S.particle_size_mix = ease;
 
             } else {
                 // --- STAGE 2: SETTLING ---
@@ -556,14 +543,14 @@ export const UIManager = {
             }
 
             // --- UNIVERSAL UI UPDATE ---
-            this.updateRangeDisplay('particle_min_size', S.particle_min_size);
+            this.updateRangeDisplay('particle_size_mix', S.particle_size_mix);
             this.updateRangeDisplay('particle_morphProgress', S.particle_morphProgress);
             this.updateRangeDisplay('particle_flowStrength', S.particle_flowStrength);
             this.updateRangeDisplay('particle_attractionStrength', S.particle_attractionStrength);
             this.updateRangeDisplay('particle_flowScale', S.particle_flowScale);
             this.updateRangeDisplay('particle_flowSpeed', S.particle_flowSpeed);
 
-            document.getElementById('particle_min_size').value = S.particle_min_size;
+            document.getElementById('particle_size_mix').value = S.particle_size_mix;
             document.getElementById('particle_morphProgress').value = S.particle_morphProgress;
             document.getElementById('particle_flowStrength').value = S.particle_flowStrength;
             document.getElementById('particle_attractionStrength').value = S.particle_attractionStrength;
@@ -576,7 +563,6 @@ export const UIManager = {
             } else {
                 this.isPouring = false;
                 this.logSuccess("Transition complete.");
-                // Final state is already set by the end of the settle phase.
             }
         };
         

@@ -2,9 +2,8 @@ uniform sampler2D u_positionTexture;
 uniform sampler2D u_velocityTexture;
 uniform float particle_base_size;
 uniform float particle_min_size;
-uniform float u_morphProgress;
-uniform float u_particleTargetIsModel; // 0.0 for flat, 1.0 for model
-uniform float u_pixelRatio; // NEW: The browser's zoom/pixel density
+uniform float u_particle_size_mix; // 0.0 = base size, 1.0 = min size
+uniform float u_pixelRatio;
 
 varying vec2 vUv;
 varying vec3 vWorldPosition;
@@ -28,12 +27,10 @@ void main() {
     
     gl_Position = projectionMatrix * mvPosition;
     
-    // --- FINAL, ROBUST SIZING LOGIC ---
-    bool isActive = u_morphProgress < 0.99 || u_particleTargetIsModel > 0.5;
-    float targetSize = isActive ? particle_min_size : particle_base_size;
+    // --- SIMPLIFIED SIZING LOGIC ---
+    // Smoothly interpolate between the base size and the min size using the mix uniform.
+    float targetSize = mix(particle_base_size, particle_min_size, u_particle_size_mix);
     
-    // Apply perspective scaling AND zoom/pixel ratio correction
-    // By multiplying by u_pixelRatio, we ensure the final size in screen-space
-    // is correct, regardless of browser zoom.
+    // Apply perspective scaling and zoom/pixel ratio correction.
     gl_PointSize = targetSize * (300.0 / -mvPosition.z) * u_pixelRatio;
 }
