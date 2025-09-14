@@ -273,7 +273,7 @@ export const ComputeManager = {
             return;
         }
     
-        const sampler = new MeshSurfaceSampler(mesh).setWeightAttribute('color').build();
+        const sampler = new MeshSurfaceSampler(mesh).build();
     
         const posArray = targetPositionTexture.image.data;
         const uvArray = targetUVTexture.image.data;
@@ -299,7 +299,7 @@ export const ComputeManager = {
         }
     
         for (let i = 0; i < particleCount; i++) {
-            sampler.sample(_position, _normal, null, _uv);
+            sampler.sample(_position, _normal, undefined, _uv);
     
             _position.sub(center).multiplyScalar(scale);
     

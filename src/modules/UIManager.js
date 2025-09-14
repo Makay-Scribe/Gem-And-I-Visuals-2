@@ -492,6 +492,11 @@ export const UIManager = {
             this.logError("Please bake a target model first.");
             return;
         }
+        
+        if (targetState === 'model' && S.particleColorMode === 'model' && !this.particleModelTexture) {
+            this.logError("Cannot use Model Color: Baked model has no texture map.");
+            return;
+        }
 
         this.isPouring = true;
         this.logSuccess(`Transitioning to ${targetState}...`);
@@ -552,9 +557,13 @@ export const UIManager = {
                 if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = (targetState === 'model') ? 1.0 : 0.0;
             }
             
-            // If chrome mode is selected, override the color mix to ensure it's not blending.
             if (S.particleColorMode === 'chrome') {
                 if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = 0.0;
+                U_PBR.u_metalness.value = 1.0;
+                U_PBR.u_roughness.value = 0.1;
+            } else {
+                U_PBR.u_metalness.value = S.metalness;
+                U_PBR.u_roughness.value = S.roughness;
             }
 
             // --- UNIVERSAL UI UPDATE ---
@@ -917,7 +926,6 @@ export const UIManager = {
                         if (bestMesh) {
                             this.particleModelMesh = bestMesh;
                             
-                            // ** NEW: Find and store the model's texture map **
                             if (bestMesh.material && bestMesh.material.map) {
                                 this.particleModelTexture = bestMesh.material.map;
                                 if (this.app.ImagePlaneManager.particlePBRMaterial) {

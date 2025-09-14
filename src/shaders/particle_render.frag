@@ -12,10 +12,10 @@ uniform vec3 u_lightDirection;
 uniform vec3 u_cameraPosition;
 
 // Color Mode Uniforms
-uniform sampler2D u_particleModelUVTexture;   // ** NEW: Baked UVs of the target model **
-uniform sampler2D u_particleModelTexture;     // ** NEW: The actual texture of the target model **
-uniform float u_particleColorMix;             // 0.0 = u_map color, 1.0 = model color
-uniform int u_particleColorMode;              // 0=default, 1=chrome, 2=model
+uniform sampler2D u_particleModelUVTexture;
+uniform sampler2D u_particleModelTexture;
+uniform float u_particleColorMix;
+uniform int u_particleColorMode;
 
 // Varyings from the vertex shader
 varying vec2 vUv;
@@ -38,15 +38,11 @@ void main() {
         discard;
     }
 
-    // --- Step 2: Determine Albedo and PBR properties based on mode ---
+    // --- Step 2: Determine Albedo (base color) based on mode ---
     vec3 albedo;
-    float workingMetalness = u_metalness;
-    float workingRoughness = u_roughness;
-
+    
     if (u_particleColorMode == 1) { // Chrome Mode
         albedo = vec3(1.0);
-        workingMetalness = 1.0;
-        workingRoughness = 0.1;
     } else if (u_particleColorMode == 2) { // Model Color Mode
         vec3 defaultColor = texture(u_map, vUv).rgb;
         vec2 modelUV = texture(u_particleModelUVTexture, vUv).rg;
@@ -63,14 +59,14 @@ void main() {
     vec3 H = normalize(V + L);
 
     vec3 F0 = vec3(0.04);
-    F0 = mix(F0, albedo, workingMetalness);
+    F0 = mix(F0, albedo, u_metalness); // Use the global u_metalness uniform
     vec3 Lo = vec3(0.0);
-    float NDF = DistributionGGX(N, H, workingRoughness);
-    float G = GeometrySmith(N, V, L, workingRoughness);
+    float NDF = DistributionGGX(N, H, u_roughness); // Use the global u_roughness uniform
+    float G = GeometrySmith(N, V, L, u_roughness);
     vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
     vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - workingMetalness;
+    kD *= 1.0 - u_metalness;
     float NdotL = max(dot(N, L), 0.0);
     vec3 numerator = NDF * G * F;
     float denominator = 4.0 * max(dot(N, V), 0.0) * NdotL + 0.001;

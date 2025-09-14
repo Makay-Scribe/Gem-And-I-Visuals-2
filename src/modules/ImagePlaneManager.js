@@ -494,10 +494,17 @@ export const ImagePlaneManager = {
 
                 const colorModeMap = { 'default': 0, 'chrome': 1, 'model': 2 };
                 U_PBR.u_particleColorMode.value = colorModeMap[S.particleColorMode] || 0;
-                // We will control u_particleColorMix from UIManager for smooth transitions
-
-                U_PBR.u_metalness.value = S.metalness;
-                U_PBR.u_roughness.value = S.roughness;
+                
+                // PBR properties are now controlled by UIManager during transitions,
+                // but we set the default state here.
+                if (S.particleColorMode === 'chrome') {
+                    U_PBR.u_metalness.value = 1.0;
+                    U_PBR.u_roughness.value = 0.1;
+                } else {
+                    U_PBR.u_metalness.value = S.metalness;
+                    U_PBR.u_roughness.value = S.roughness;
+                }
+                
                 U_PBR.u_envMapIntensity.value = S.reflectionStrength;
                 U_PBR.t_envMap.value = this.app.hdrTexture; 
                 U_PBR.u_cameraPosition.value = this.app.camera.position;
