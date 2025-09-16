@@ -21,6 +21,8 @@ uniform int u_particleColorMode;
 varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vNormal;
+// ** THE FIX IS HERE: Receive the correct GPGPU coordinate from the vertex shader. **
+varying vec2 vGpgpuUV;
 
 #define PI 3.14159265359
 
@@ -44,11 +46,23 @@ void main() {
     if (u_particleColorMode == 1) { // Chrome Mode
         albedo = vec3(1.0);
     } else if (u_particleColorMode == 2) { // Model Color Mode
+        // ** THE FIX IS HERE: This is the core logic change. **
+        // 1. We get the default color using the particle's original grid position (`vUv`). This is our "Image Wrap" color.
         vec3 defaultColor = texture(u_map, vUv).rgb;
-        vec2 modelUV = texture(u_particleModelUVTexture, vUv).rg;
+        
+        // 2. We look up the baked UV coordinate for this particle from our baked UV texture,
+        //    using the CORRECT lookup coordinate (`vGpgpuUV`).
+        vec2 modelUV = texture(u_particleModelUVTexture, vGpgpuUV).rg;
+        
+        // 3. We use that baked UV coordinate to sample the actual model's texture map.
         vec3 modelColor = texture(u_particleModelTexture, modelUV).rgb;
+        
+        // 4. We mix between the two colors. The `u_particleColorMix` uniform will be used
+        //    for smooth transitions between Default and Model Color modes.
         albedo = mix(defaultColor, modelColor, u_particleColorMix);
-    } else { // Default Mode
+
+    } else { // Default Mode (Image Wrap)
+        // Use the particle's original grid position (`vUv`) to sample the main texture.
         albedo = texture(u_map, vUv).rgb;
     }
     

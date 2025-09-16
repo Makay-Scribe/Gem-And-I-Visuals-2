@@ -8,11 +8,24 @@ uniform float u_pixelRatio;
 varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vNormal;
+// ** THE FIX IS HERE: Add a new varying to pass the GPGPU UV coordinate **
+varying vec2 vGpgpuUV;
 
 void main() {
+    // This 'uv' comes from the geometry buffer attribute. It represents the particle's
+    // original position on the flat 2D grid (e.g., top-left, center, etc.).
     vUv = uv;
 
+    // This is the coordinate we must use to look up data in our GPGPU textures.
+    // We flip the Y-axis because WebGL's texture coordinates (0,0 at top-left) are
+    // inverted compared to the typical buffer geometry UVs (0,0 at bottom-left).
     vec2 gpgpu_uv = vec2(uv.x, 1.0 - uv.y);
+    
+    // ** THE FIX IS HERE: Pass the correct GPGPU coordinate to the fragment shader. **
+    // Now, the fragment shader will know BOTH the particle's original grid position (vUv)
+    // AND its correct lookup coordinate for baked data (vGpgpuUV).
+    vGpgpuUV = gpgpu_uv;
+
     vec3 pos_center = texture(u_positionTexture, gpgpu_uv).xyz;
     vec3 velocity = texture(u_velocityTexture, gpgpu_uv).xyz;
 
