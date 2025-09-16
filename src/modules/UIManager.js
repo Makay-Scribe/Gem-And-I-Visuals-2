@@ -13,7 +13,7 @@ export const UIManager = {
     particleModelMesh: null, 
     particleModelTexture: null,
     gltfLoader: new GLTFLoader(),
-    isPouring: false,
+    transitionAnimation: null, // Animation state management
 
     // --- Demo Mode Properties ---
     demoShaderInterval: null,
@@ -379,7 +379,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size', 'particle_twinkleIntensity'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed'].includes(id)) {
                 precision = 2;
@@ -474,129 +474,6 @@ export const UIManager = {
             parent = parent.parentElement.closest('.accordion-content.open');
         }
     },
-    
-    doPourTransition() {
-        if (this.isPouring) {
-            this.logError("Transition already in progress.");
-            return;
-        }
-
-        const S = this.app.vizSettings;
-        const D = this.app.defaultVisualizerSettings;
-        const CM = this.app.ComputeManager;
-        
-        const currentState = S.particle_target;
-        const targetState = currentState === 'flat' ? 'model' : 'flat';
-
-        if (targetState === 'model' && !this.particleModelMesh) {
-            this.logError("Please bake a target model first.");
-            return;
-        }
-        
-        if (targetState === 'model' && S.particleColorMode === 'model' && !this.particleModelTexture) {
-            this.logError("Cannot use Model Color: Baked model has no texture map.");
-            return;
-        }
-
-        this.isPouring = true;
-        this.logSuccess(`Transitioning to ${targetState}...`);
-
-        S.particle_target = targetState;
-        document.getElementById('particleMorphTarget').value = targetState;
-        const targetTexture = (targetState === 'model') ? CM.particleModelPositionTexture : CM.particleFlatPositionTexture;
-        if (CM.particleVelocityVar) {
-            CM.particleVelocityVar.material.uniforms.u_targetPositionMap.value = targetTexture;
-        }
-
-        const TRAVEL_DURATION = 15000;
-        const SETTLE_DURATION = 5000;
-        const TOTAL_DURATION = TRAVEL_DURATION + SETTLE_DURATION;
-        const START_TIME = this.app.clock.getElapsedTime();
-        
-        const modelRestState = { morph: 0.7, flow: 0.25, attract: 0.1, scale: 0.1, speed: 0.1, sizeMix: 1.0 };
-        const flatRestState = { morph: 1.0, flow: D.particle_flowStrength, attract: D.particle_attractionStrength, scale: D.particle_flowScale, speed: D.particle_flowSpeed, sizeMix: 0.0 };
-
-        const startStateConfig = (currentState === 'flat') ? flatRestState : modelRestState;
-        const endStateConfig = (targetState === 'model') ? modelRestState : flatRestState;
-
-        const animate = () => {
-            if (!this.isPouring) return;
-
-            const elapsedTime = (this.app.clock.getElapsedTime() - START_TIME) * 1000;
-            const U_PBR = this.app.ImagePlaneManager.particlePBRMaterial.uniforms;
-            
-            if (elapsedTime < TRAVEL_DURATION) {
-                // --- STAGE 1: TRAVELING ---
-                const progress = elapsedTime / TRAVEL_DURATION;
-                const ease = 0.5 - 0.5 * Math.cos(progress * Math.PI);
-                const peak = Math.sin(progress * Math.PI);
-
-                S.particle_morphProgress = ease;
-                S.particle_flowStrength = peak * 1.5;
-                S.particle_attractionStrength = peak * 0.2;
-
-                S.particle_flowScale = this.app.THREE.MathUtils.lerp(startStateConfig.scale, endStateConfig.scale, ease);
-                S.particle_flowSpeed = this.app.THREE.MathUtils.lerp(startStateConfig.speed, endStateConfig.speed, ease);
-                S.particle_size_mix = this.app.THREE.MathUtils.lerp(startStateConfig.sizeMix, endStateConfig.sizeMix, ease);
-
-                const colorMixProgress = (targetState === 'model') ? ease : 1.0 - ease;
-                if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = colorMixProgress;
-
-            } else {
-                // --- STAGE 2: SETTLING ---
-                const progress = (elapsedTime - TRAVEL_DURATION) / SETTLE_DURATION;
-                const ease = Math.min(progress, 1.0);
-                
-                const settlingFromState = { morph: 1.0, flow: 0.0, attract: 0.0 };
-                
-                S.particle_morphProgress = this.app.THREE.MathUtils.lerp(settlingFromState.morph, endStateConfig.morph, ease);
-                S.particle_flowStrength = this.app.THREE.MathUtils.lerp(settlingFromState.flow, endStateConfig.flow, ease);
-                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(settlingFromState.attract, endStateConfig.attract, ease);
-                
-                S.particle_size_mix = endStateConfig.sizeMix;
-                if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = (targetState === 'model') ? 1.0 : 0.0;
-            }
-            
-            if (S.particleColorMode === 'chrome') {
-                if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = 0.0;
-                U_PBR.u_metalness.value = 1.0;
-                U_PBR.u_roughness.value = 0.1;
-            } else {
-                U_PBR.u_metalness.value = S.metalness;
-                U_PBR.u_roughness.value = S.roughness;
-            }
-
-            // --- UNIVERSAL UI UPDATE ---
-            this.updateRangeDisplay('particle_size_mix', S.particle_size_mix);
-            this.updateRangeDisplay('particle_morphProgress', S.particle_morphProgress);
-            this.updateRangeDisplay('particle_flowStrength', S.particle_flowStrength);
-            this.updateRangeDisplay('particle_attractionStrength', S.particle_attractionStrength);
-            this.updateRangeDisplay('particle_flowScale', S.particle_flowScale);
-            this.updateRangeDisplay('particle_flowSpeed', S.particle_flowSpeed);
-
-            document.getElementById('particle_size_mix').value = S.particle_size_mix;
-            document.getElementById('particle_morphProgress').value = S.particle_morphProgress;
-            document.getElementById('particle_flowStrength').value = S.particle_flowStrength;
-            document.getElementById('particle_attractionStrength').value = S.particle_attractionStrength;
-            document.getElementById('particle_flowScale').value = S.particle_flowScale;
-            document.getElementById('particle_flowSpeed').value = S.particle_flowSpeed;
-
-            // --- LOOP OR END ---
-            if (elapsedTime < TOTAL_DURATION) {
-                requestAnimationFrame(animate.bind(this));
-            } else {
-                this.isPouring = false;
-                S.particle_morphProgress = endStateConfig.morph;
-                S.particle_flowStrength = endStateConfig.flow;
-                S.particle_attractionStrength = endStateConfig.attract;
-                if (U_PBR.u_particleColorMix) U_PBR.u_particleColorMix.value = (targetState === 'model' && S.particleColorMode === 'model') ? 1.0 : 0.0;
-                this.logSuccess("Transition complete.");
-            }
-        };
-        
-        requestAnimationFrame(animate.bind(this));
-    },
-
 
     loadUserShader(presetId) {
         const userFragmentShader = this.app.vizSettings.shaderToyGLSL;
@@ -726,25 +603,21 @@ export const UIManager = {
             });
         }
         
+        // General control listener
         document.querySelectorAll('input[type="range"], select').forEach(control => {
-            if (control.closest('#cameraOptions') || control.id === 'particleMorphTarget' || control.id === 'particleColorMode' || control.id === 'particleTwinkleMode' || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls')) return;
-            
+            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list')) return;
+
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
-                if (!id) return;
+                if (!id || this.app.vizSettings[id] === undefined) return;
+                
                 const S = this.app.vizSettings;
                 let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-
-                if (S[id] !== undefined) {
-                     if (e.target.type === 'range' || e.target.type === 'number' || e.target.type === 'color') {
-                        S[id] = e.target.type === 'range' ? parseFloat(value) : value;
-                    } else {
-                        S[id] = value;
-                    }
-                }
+                
+                S[id] = (e.target.type === 'range' || e.target.type === 'number') ? parseFloat(value) : value;
                 
                 if (e.target.type === 'range' || e.target.type === 'number') this.updateRangeDisplay(id, value);
-                
+
                 if (id === 'toneMappingMode') {
                     const toneMappingOptions = { 'ACESFilmic': this.app.THREE.ACESFilmicToneMapping, 'Reinhard': this.app.THREE.ReinhardToneMapping, 'Linear': this.app.THREE.LinearToneMapping };
                     if (this.app.renderer) this.app.renderer.toneMapping = toneMappingOptions[value];
@@ -762,54 +635,17 @@ export const UIManager = {
                     if (this.app.directionalLight) {
                         this.app.directionalLight.position.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
                     }
-                } else if ((id === 'planeAspectRatio' || id === 'planeOrientation') && document.getElementById(id)) {
+                } else if ((id === 'planeAspectRatio' || id === 'planeOrientation')) {
                     this.app.ImagePlaneManager.createDefaultLandscape();
+                } else if (id === 'particle_morphProgress') {
+                    this.handleMorphSlider(parseFloat(value));
                 }
             });
         });
-
-        const particleMorphTargetSelect = document.getElementById('particleMorphTarget');
-        if (particleMorphTargetSelect) {
-            particleMorphTargetSelect.addEventListener('change', (e) => {
-                const CM = this.app.ComputeManager;
-                const S = this.app.vizSettings;
-                if (!CM.particleGpuCompute) return;
-                const uniforms = CM.particleVelocityVar.material.uniforms;
-
-                S.particle_target = e.target.value;
-
-                if (e.target.value === 'model') {
-                    if (this.particleModelMesh && CM.particleModelPositionTexture) {
-                        uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
-                    } else {
-                        this.logError("No model loaded to morph to!");
-                        e.target.value = 'flat'; 
-                        S.particle_target = 'flat';
-                    }
-                } else { 
-                    uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
-                }
-            });
-        }
-
-        const particlePourButton = document.getElementById('particlePourButton');
-        if (particlePourButton) {
-            particlePourButton.addEventListener('click', () => this.doPourTransition());
-        }
-
-        const particleColorModeSelect = document.getElementById('particleColorMode');
-        if(particleColorModeSelect) {
-            particleColorModeSelect.addEventListener('change', (e) => {
-                this.app.vizSettings.particleColorMode = e.target.value;
-            });
-        }
-
-        const particleTwinkleModeSelect = document.getElementById('particleTwinkleMode');
-        if(particleTwinkleModeSelect) {
-            particleTwinkleModeSelect.addEventListener('change', (e) => {
-                this.app.vizSettings.particleTwinkleMode = e.target.value;
-            });
-        }
+        
+        document.getElementById('goToCanvasButton').addEventListener('click', () => this.setMorphState(0.0));
+        document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(1.0));
+        document.getElementById('runTransitionButton').addEventListener('click', () => this.runTransition());
 
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.closest('#butterchurnControls')) return;
@@ -960,6 +796,91 @@ export const UIManager = {
         const demoButton = document.getElementById('demoModeButton');
         if (demoButton) {
             demoButton.addEventListener('click', () => this.toggleDemoMode());
+        }
+    },
+    
+    handleMorphSlider(progress) {
+        const S = this.app.vizSettings;
+        const CM = this.app.ComputeManager;
+        if (!CM || !CM.particleGpuCompute) return;
+        
+        const targetState = (progress > 0.5) ? 'model' : 'flat';
+        
+        if (S.particle_target !== targetState) {
+            S.particle_target = targetState;
+            
+            if (targetState === 'model') {
+                if (!this.particleModelMesh) {
+                    this.logError("No model baked. Cannot morph to 3D Model.");
+                    S.particle_morphProgress = 0.0;
+                    const slider = document.getElementById('particle_morphProgress');
+                    if(slider) slider.value = 0.0;
+                    this.updateRangeDisplay('particle_morphProgress', 0.0);
+                    return;
+                }
+                CM.particleVelocityVar.material.uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
+            } else {
+                CM.particleVelocityVar.material.uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
+            }
+        }
+    },
+    
+    setMorphState(targetProgress) {
+        const slider = document.getElementById('particle_morphProgress');
+        if (slider) {
+            slider.value = targetProgress;
+            slider.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    },
+
+    // ** THE FIX IS HERE: New function to run the transition animation **
+    runTransition() {
+        if (this.transitionAnimation) return; // Don't start a new animation if one is running
+
+        const S = this.app.vizSettings;
+        const startValue = S.particle_morphProgress;
+        const endValue = (startValue < 0.5) ? 1.0 : 0.0;
+        const duration = 5000; // 5 seconds for the transition
+
+        this.transitionAnimation = {
+            startTime: performance.now(),
+            startValue,
+            endValue,
+            duration,
+        };
+
+        // Start the animation loop
+        this.updateTransitionAnimation();
+    },
+
+    updateTransitionAnimation() {
+        if (!this.transitionAnimation) return;
+
+        const now = performance.now();
+        const elapsedTime = now - this.transitionAnimation.startTime;
+        let progress = elapsedTime / this.transitionAnimation.duration;
+
+        if (progress >= 1) {
+            progress = 1;
+            this.transitionAnimation = null; // End the animation
+        }
+        
+        // Ease-in-out function for smooth acceleration and deceleration
+        const ease = progress < 0.5 
+            ? 4 * progress * progress * progress 
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+        const currentValue = this.app.THREE.MathUtils.lerp(
+            this.transitionAnimation.startValue,
+            this.transitionAnimation.endValue,
+            ease
+        );
+
+        // Update the slider and trigger its logic
+        this.setMorphState(currentValue);
+
+        if (this.transitionAnimation) {
+            requestAnimationFrame(() => this.updateTransitionAnimation());
         }
     },
 
@@ -1180,7 +1101,7 @@ export const UIManager = {
                         const CM = this.app.ComputeManager;
                         if (CM && CM.particleModelPositionTexture) {
                             CM.bakeToTexture(this.particleModelMesh, CM.particleModelPositionTexture);
-                            this.logSuccess(`Baked ${file.name} to particle texture.`);
+                            this.logSuccess(`Baked ${preset.name}. Ready to transition.`);
                         }
                     } else {
                         this.logError('No mesh found in the loaded model.');

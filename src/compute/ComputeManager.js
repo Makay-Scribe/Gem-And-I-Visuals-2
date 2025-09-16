@@ -183,11 +183,15 @@ export const ComputeManager = {
         } else {
             this.app.UIManager.logSuccess("GPGPU Compute Initialized.");
         }
+        
+        // ** THE FIX IS HERE: Initialize the particle system unconditionally at startup. **
+        this.initParticleSystem();
     },
 
     initParticleSystem() {
         if (this.particleGpuCompute) {
-            return;
+            // If called again (e.g., on resolution change), dispose the old one first.
+            this.disposeParticleSystem();
         }
 
         const S = this.app.vizSettings;
@@ -245,10 +249,6 @@ export const ComputeManager = {
         velocityUniforms['particle_morphProgress'] = { value: S.particle_morphProgress };
         velocityUniforms['particle_attractionStrength'] = { value: S.particle_attractionStrength };
         
-        velocityUniforms['u_isPouring'] = { value: false };
-        velocityUniforms['u_pourProgress'] = { value: 0.0 };
-        velocityUniforms['u_pourSourcePoint'] = { value: new this.app.THREE.Vector3() };
-
         const positionUniforms = this.particlePositionVar.material.uniforms;
         positionUniforms['u_delta'] = { value: 0.0 };
 
@@ -322,14 +322,22 @@ export const ComputeManager = {
 
     disposeParticleSystem() {
         if (this.particleGpuCompute) {
-            this.particleGpuCompute.dispose();
-            this.particleGpuCompute = null;
-            this.particlePositionVar = null;
-            this.particleVelocityVar = null;
-            
+            // It's good practice to dispose of all textures associated with the compute renderer
+            const variables = [this.particlePositionVar, this.particleVelocityVar];
+            variables.forEach(variable => {
+                if (variable) {
+                    variable.renderTargets.forEach(rt => rt.texture.dispose());
+                }
+            });
+
             if (this.particleFlatPositionTexture) this.particleFlatPositionTexture.dispose();
             if (this.particleModelPositionTexture) this.particleModelPositionTexture.dispose();
             if (this.particleModelUVTexture) this.particleModelUVTexture.dispose();
+            
+            // GPUComputationRenderer doesn't have a dedicated dispose method, so we nullify everything
+            this.particleGpuCompute = null;
+            this.particlePositionVar = null;
+            this.particleVelocityVar = null;
             this.particleFlatPositionTexture = null; 
             this.particleModelPositionTexture = null;
             this.particleModelUVTexture = null;

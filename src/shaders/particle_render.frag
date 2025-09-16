@@ -15,13 +15,12 @@ uniform vec3 u_cameraPosition;
 uniform sampler2D u_particleModelUVTexture;
 uniform sampler2D u_particleModelTexture;
 uniform float u_particleColorMix;
-uniform int u_particleColorMode;
+// REMOVED: uniform int u_particleColorMode; // This is no longer needed.
 
 // Varyings from the vertex shader
 varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vNormal;
-// ** THE FIX IS HERE: Receive the correct GPGPU coordinate from the vertex shader. **
 varying vec2 vGpgpuUV;
 
 #define PI 3.14159265359
@@ -40,31 +39,21 @@ void main() {
         discard;
     }
 
-    // --- Step 2: Determine Albedo (base color) based on mode ---
-    vec3 albedo;
+    // --- Step 2: Determine Albedo (base color) ---
+    // ** THE FIX IS HERE: The logic is now simplified and unconditional. **
+    // The color is ALWAYS a mix between the flat image wrap and the baked model color,
+    // controlled entirely by the `u_particleColorMix` uniform.
     
-    if (u_particleColorMode == 1) { // Chrome Mode
-        albedo = vec3(1.0);
-    } else if (u_particleColorMode == 2) { // Model Color Mode
-        // ** THE FIX IS HERE: This is the core logic change. **
-        // 1. We get the default color using the particle's original grid position (`vUv`). This is our "Image Wrap" color.
-        vec3 defaultColor = texture(u_map, vUv).rgb;
-        
-        // 2. We look up the baked UV coordinate for this particle from our baked UV texture,
-        //    using the CORRECT lookup coordinate (`vGpgpuUV`).
-        vec2 modelUV = texture(u_particleModelUVTexture, vGpgpuUV).rg;
-        
-        // 3. We use that baked UV coordinate to sample the actual model's texture map.
-        vec3 modelColor = texture(u_particleModelTexture, modelUV).rgb;
-        
-        // 4. We mix between the two colors. The `u_particleColorMix` uniform will be used
-        //    for smooth transitions between Default and Model Color modes.
-        albedo = mix(defaultColor, modelColor, u_particleColorMix);
+    // 1. Get the "Image Wrap" color using the particle's original grid position (`vUv`).
+    vec3 imageWrapColor = texture(u_map, vUv).rgb;
+    
+    // 2. Get the "Model Color" using the baked UV data looked up with the correct coordinate (`vGpgpuUV`).
+    vec2 modelUV = texture(u_particleModelUVTexture, vGpgpuUV).rg;
+    vec3 modelColor = texture(u_particleModelTexture, modelUV).rgb;
+    
+    // 3. Mix between the two colors based on the single mix uniform.
+    vec3 albedo = mix(imageWrapColor, modelColor, u_particleColorMix);
 
-    } else { // Default Mode (Image Wrap)
-        // Use the particle's original grid position (`vUv`) to sample the main texture.
-        albedo = texture(u_map, vUv).rgb;
-    }
     
     // --- Step 3: Calculate PBR Lighting ---
     vec3 N = normalize(vNormal);
@@ -73,9 +62,9 @@ void main() {
     vec3 H = normalize(V + L);
 
     vec3 F0 = vec3(0.04);
-    F0 = mix(F0, albedo, u_metalness); // Use the global u_metalness uniform
+    F0 = mix(F0, albedo, u_metalness);
     vec3 Lo = vec3(0.0);
-    float NDF = DistributionGGX(N, H, u_roughness); // Use the global u_roughness uniform
+    float NDF = DistributionGGX(N, H, u_roughness);
     float G = GeometrySmith(N, V, L, u_roughness);
     vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
     vec3 kS = F;

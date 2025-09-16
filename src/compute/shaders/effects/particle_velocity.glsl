@@ -14,10 +14,7 @@ uniform float particle_flowStrength;
 uniform float particle_morphProgress;
 uniform float particle_attractionStrength;
 
-// ** NEW: Uniforms for the pouring transition **
-uniform bool u_isPouring;
-uniform float u_pourProgress;
-uniform vec3 u_pourSourcePoint;
+// ** REMOVED: Pouring uniforms are not used in this simplified model yet **
 
 
 void main() {
@@ -29,6 +26,7 @@ void main() {
     vec3 velocity = texture(textureVelocity, uv).xyz;
 
     // --- 1. Calculate Flow Field (Turbulence) ---
+    // This force pushes the particles around randomly.
     vec3 noise_coord = position * particle_flowScale;
     noise_coord.z += u_time * particle_flowSpeed;
     vec3 flowForce = vec3(
@@ -36,30 +34,26 @@ void main() {
         snoise(noise_coord + vec3(10.0)),
         snoise(noise_coord + vec3(20.0))
     ) * particle_flowStrength;
+    
+    // ** THE FIX IS HERE: Modify how morphProgress scales the turbulence. **
+    // We create a "peak" in the middle of the transition.
+    // When morphProgress is 0.0 or 1.0, turbulenceStrength is 0.0.
+    // When morphProgress is 0.5, turbulenceStrength is 1.0 (maximum).
+    float turbulenceStrength = sin(particle_morphProgress * PI);
+    vec3 scaledFlowForce = flowForce * turbulenceStrength;
+
 
     // --- 2. Calculate Attraction Force ---
+    // This force ALWAYS pulls the particles toward their target position.
     vec3 targetPos = texture(u_targetPositionMap, uv).xyz;
-    vec3 attractionForce;
-
-    // ** NEW: Gravity Well / Pouring Logic **
-    if (u_isPouring) {
-        // Stage 1: An initial strong pull towards the gravity well (the pour source point)
-        vec3 pourAttraction = (u_pourSourcePoint - position) * (particle_attractionStrength * 2.0);
-        
-        // Stage 2: The final attraction force towards the model's shape
-        vec3 finalAttraction = (targetPos - position) * particle_attractionStrength;
-        
-        // Blend between the two forces based on the pour progress.
-        // As u_pourProgress goes from 0 to 1, we transition from pouring to forming the final shape.
-        attractionForce = mix(pourAttraction, finalAttraction, u_pourProgress);
-    } else {
-        // Default behavior: just attract to the target shape
-        attractionForce = (targetPos - position) * particle_attractionStrength;
-    }
+    vec3 attractionForce = (targetPos - position) * particle_attractionStrength;
 
 
-    // --- 3. Blend Forces ---
-    vec3 finalForce = mix(flowForce, attractionForce, particle_morphProgress);
+    // --- 3. Combine Forces ---
+    // ** THE FIX IS HERE: We now ADD the forces instead of mixing them. **
+    // The particles are always attracted, and turbulence is added on top,
+    // scaled by how far along the transition is.
+    vec3 finalForce = attractionForce + scaledFlowForce;
 
     // --- 4. Apply Force and Damping ---
     velocity += finalForce;

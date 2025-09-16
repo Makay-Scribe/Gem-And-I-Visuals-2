@@ -105,7 +105,7 @@ const App = {
         imageEffect_joltSpeed: 10.0,
         imageEffect_joltAudioInfluence: 1.0,
         // --- GPGPU SETTINGS ---
-        gpgpuGeometryMode: 'faceted',
+        gpgpuGeometryMode: 'particles',
         gpgpu_enableWaterRipple: false,
         gpgpu_rippleSpeed: 0.5,
         gpgpu_rippleStrength: 1.0,
@@ -167,19 +167,19 @@ const App = {
         gpgpu_peelEnableAudio: true,
         gpgpu_peelDrift: 0.09,
         gpgpu_peelTextureAmount: 0.14,
-        // --- GPGPU PARTICLE SYSTEM SETTINGS ---
+        
+        // --- Updated and simplified particle settings ---
         particle_resolution: 512,
-        particle_base_size: 3.0,
-        particle_min_size: 0.0,
-        particle_size_mix: 0.0, // 0 = base size, 1 = min size
+        // ** THE FIX IS HERE: Default particle size is now 0.0 (Coarse) **
+        particle_size: 0.0, 
+        particle_twinkleIntensity: 0.0,
         particle_flowScale: 0.1,
         particle_flowSpeed: 0.2,
         particle_flowStrength: 0.20,
         particle_attractionStrength: 0.1,
-        particle_morphProgress: 1.0,
+        particle_morphProgress: 0.0, 
         particle_target: 'flat', 
-        particleColorMode: 'default',
-        particleTwinkleMode: 'off',
+
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,
@@ -245,45 +245,30 @@ const App = {
         }
     },
 
-    async preloadParticleTarget() {
-        if (!this.ComputeManager || !this.ComputeManager.particleGpuCompute) {
-            console.log("Particle system not active on init, skipping default model bake.");
-            return;
-        }
-
-        console.log("Preloading default particle target model (Rose.glb)...");
+    async preloadDefaultSculpture() {
+        console.log("Preloading default sculpture model (/Devmedia/Devmodel.glb)...");
         const loader = new GLTFLoader();
         try {
-            const gltf = await loader.loadAsync('/3dmodel/converted/Rose.glb');
+            const gltf = await loader.loadAsync('/Devmedia/Devmodel.glb');
             let bestMesh = null;
-            gltf.scene.traverse(child => {
-                if (child.isMesh) {
-                    bestMesh = child;
-                }
-            });
+            gltf.scene.traverse(child => { if (child.isMesh) bestMesh = child; });
 
             if (bestMesh) {
                 this.UIManager.particleModelMesh = bestMesh;
+                if (bestMesh.material && bestMesh.material.map) {
+                    this.UIManager.particleModelTexture = bestMesh.material.map;
+                } else {
+                    this.UIManager.particleModelTexture = null;
+                }
                 this.ComputeManager.bakeToTexture(bestMesh, this.ComputeManager.particleModelPositionTexture);
-
-                this.UIManager.logSuccess("Baked Rose.glb to particle texture.");
-                this.UIManager.updateFileNameDisplay('particleModel', 'Rose.glb');
-
-                const particleMorphTargetSelect = document.getElementById('particleMorphTarget');
-                if (particleMorphTargetSelect) {
-                    particleMorphTargetSelect.value = 'model';
-                }
-                const CM = this.ComputeManager;
-                if (CM && CM.particleGpuCompute) {
-                    const uniforms = CM.particleVelocityVar.material.uniforms;
-                    uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
-                }
+                this.UIManager.logSuccess("Default sculpture baked.");
+                this.UIManager.updateFileNameDisplay('particleModel', 'Devmodel.glb (Default)');
             } else {
-                throw new Error("No mesh found in Rose.glb");
+                throw new Error("No mesh found in Devmodel.glb");
             }
         } catch (error) {
-            console.error("Failed to preload and bake default particle target:", error);
-            this.UIManager.logError("Failed to load Rose.glb for particles.");
+            console.error("Failed to preload and bake default sculpture:", error);
+            this.UIManager.logError("Default sculpture /Devmedia/Devmodel.glb failed. 3D Model features disabled until a model is baked.");
         }
     },
 
@@ -434,7 +419,7 @@ const App = {
         this.renderer.toneMapping = toneMappingOptions[this.vizSettings.toneMappingMode] || THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
 
-        // Phase 1: Initialize all managers (assign this.app)
+        // Phase 1: Initialize all managers
         this.SceneManager.init(this);
         this.BackgroundManager.init(this);
         this.CameraManager.init(this);
@@ -445,15 +430,18 @@ const App = {
         this.ImagePlaneManager.init(this); 
         this.CubeWallManager.init(this);
         this.DirectorManager.init(this);
-        this.UIManager.init(this); 
         
         this.ComputeManager.init(this, 
             this.ImagePlaneManager.planeDimensions.x, 
             this.ImagePlaneManager.planeDimensions.y, 
             this.ImagePlaneManager.planeResolution.x, 
             this.ImagePlaneManager.planeResolution.y
-        );    
-        this.GPGPUDebugger.init(this);   
+        );
+        this.GPGPUDebugger.init(this);
+        
+        this.ComputeManager.initParticleSystem();
+
+        this.UIManager.init(this); 
         
         this.ambientLight = new THREE.AmbientLight(this.vizSettings.ambientLightColor, 1.0);
         this.scene.add(this.ambientLight);
@@ -475,13 +463,16 @@ const App = {
         this.scene.add(this.guideLaser);
 
 
-        // Phase 2: Trigger initial setup methods that depend on ALL managers being initialized.
+        // Phase 2: Create geometry and run preload tasks
         this.ImagePlaneManager.createDefaultLandscape(); 
         this.BackgroundManager.render(); 
         this.GPGPUDebugger.update(); 
         
         await this.preloadDevAssets();
-        await this.preloadParticleTarget();
+        
+        if (this.ComputeManager && this.ComputeManager.particleGpuCompute) {
+            await this.preloadDefaultSculpture();
+        }
         
         const defaultShaderId = 'presetBg6';
         const defaultShaderCode = this.shaderPresets[defaultShaderId];

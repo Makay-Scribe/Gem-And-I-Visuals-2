@@ -210,9 +210,6 @@ export const ImagePlaneManager = {
         const CM = this.app.ComputeManager;
 
         this._cleanupMeshes(); 
-        if (S.gpgpuGeometryMode !== 'particles' && CM.particleGpuCompute) {
-            CM.disposeParticleSystem();
-        }
 
         if (S.gpgpuGeometryMode === 'particles') {
             this._createParticleSystem();
@@ -268,18 +265,13 @@ export const ImagePlaneManager = {
     },
 
     _createParticleSystem() {
-        if (this.app.ComputeManager) {
-            this.app.ComputeManager.initParticleSystem();
-        }
-
         const S = this.app.vizSettings;
         const resolution = S.particle_resolution;
         const count = resolution * resolution;
 
         const cellSize = this.planeDimensions.x / (resolution - 1); 
         this.calculatedParticleBaseSize = cellSize * Math.sqrt(2);
-        console.log(`Calculated particle base size for seamless coverage: ${this.calculatedParticleBaseSize.toFixed(4)}`);
-
+        
         const geometry = new this.app.THREE.BufferGeometry();
         
         geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
@@ -368,8 +360,6 @@ export const ImagePlaneManager = {
         const CM = this.app.ComputeManager;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
-        
-        const finalBaseSize = this.calculatedParticleBaseSize * S.particle_base_size;
 
         this.particlePBRMaterial = new this.app.THREE.ShaderMaterial({
             uniforms: {
@@ -377,12 +367,11 @@ export const ImagePlaneManager = {
                 u_positionTexture: { value: null },
                 u_velocityTexture: { value: null },
                 u_particleModelUVTexture: { value: CM.particleModelUVTexture },
-                u_particleModelTexture: { value: null }, // Will be assigned by UIManager
-                u_particleColorMix: { value: 0.0 }, 
-                u_particleColorMode: { value: 0 }, 
-                particle_base_size: { value: finalBaseSize },
-                particle_min_size: { value: S.particle_min_size },
-                u_particle_size_mix: { value: S.particle_size_mix },
+                u_particleModelTexture: { value: this.app.UIManager?.particleModelTexture || null },
+                u_particleColorMix: { value: 0.0 },
+                particle_base_size: { value: 1.0 },
+                particle_min_size: { value: 0.1 }, 
+                u_particle_size_mix: { value: 1.0 }, 
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
@@ -487,23 +476,32 @@ export const ImagePlaneManager = {
                 U_PBR.u_positionTexture.value = posTarget.texture;
                 U_PBR.u_velocityTexture.value = velTarget.texture;
 
-                U_PBR.particle_base_size.value = this.calculatedParticleBaseSize * S.particle_base_size;
-                U_PBR.particle_min_size.value = S.particle_min_size;
-                U_PBR.u_particle_size_mix.value = S.particle_size_mix; 
-                U_PBR.u_pixelRatio.value = window.devicePixelRatio;
+                // ** THE FIX IS HERE: Smart sizing logic is now active **
+                // The single UI slider (`particle_size`) now controls a blend between two states.
+                // We also connect the `morphProgress` to this, so the particles automatically get
+                // finer as they approach the 3D model state.
+                const coarseSize = this.calculatedParticleBaseSize * 3.5;
+                const fineSize = 0.1;
+                // `particle_size` is 0.0 (Coarse) to 1.0 (Fine).
+                const sliderSize = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size);
+                // `morphProgress` is 0.0 (Canvas) to 1.0 (3D Model).
+                const autoSize = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_morphProgress);
+                // We use the smaller of the two sizes, so manual control can only make it finer.
+                const finalBaseSize = Math.min(sliderSize, autoSize);
 
-                const colorModeMap = { 'default': 0, 'chrome': 1, 'model': 2 };
-                U_PBR.u_particleColorMode.value = colorModeMap[S.particleColorMode] || 0;
+                U_PBR.particle_base_size.value = finalBaseSize;
+                U_PBR.particle_min_size.value = finalBaseSize;
+                U_PBR.u_particle_size_mix.value = 0.0; // Keep this at 0, we're only using base_size
+
+                U_PBR.u_pixelRatio.value = window.devicePixelRatio;
+                U_PBR.u_particleColorMix.value = S.particle_morphProgress;
                 
-                // PBR properties are now controlled by UIManager during transitions,
-                // but we set the default state here.
-                if (S.particleColorMode === 'chrome') {
-                    U_PBR.u_metalness.value = 1.0;
-                    U_PBR.u_roughness.value = 0.1;
-                } else {
-                    U_PBR.u_metalness.value = S.metalness;
-                    U_PBR.u_roughness.value = S.roughness;
+                if (this.app.UIManager.particleModelTexture) {
+                    U_PBR.u_particleModelTexture.value = this.app.UIManager.particleModelTexture;
                 }
+                
+                U_PBR.u_metalness.value = S.metalness;
+                U_PBR.u_roughness.value = S.roughness;
                 
                 U_PBR.u_envMapIntensity.value = S.reflectionStrength;
                 U_PBR.t_envMap.value = this.app.hdrTexture; 
