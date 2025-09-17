@@ -921,7 +921,6 @@ export const UIManager = {
         const anim = this.transitionAnimation;
 
         if (anim.isPouring) {
-            // ** THE FIX IS HERE: Back to the smooth, predictable bell curve for physics **
             const ease = 1 - Math.pow(1 - progress, 4); 
             const bellCurve = Math.sin(progress * Math.PI);
 
@@ -932,7 +931,8 @@ export const UIManager = {
             const peakFlow = 1.0;
             S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startFlowStrength, peakFlow, bellCurve);
             
-            const peakAttraction = 0.15;
+            // ** THE FIX IS HERE: Tuned attraction to decrease during turbulence **
+            const peakAttraction = 0.05; 
             S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(anim.startAttraction, peakAttraction, bellCurve);
 
             const targetPresetId = (anim.endValue > 0.5) ? 'pour' : 'default';

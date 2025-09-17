@@ -382,6 +382,8 @@ export const ImagePlaneManager = {
                 t_envMap: { value: this.app.hdrTexture },
                 u_time: { value: 0.0 },
                 u_pixelRatio: { value: window.devicePixelRatio },
+                // ** THE FIX IS HERE: Add the twinkle uniform to the material **
+                u_particle_twinkleIntensity: { value: S.particle_twinkleIntensity },
             },
             vertexShader: particleRenderVertexShader,
             fragmentShader: particleRenderFragmentShader,
@@ -476,14 +478,13 @@ export const ImagePlaneManager = {
                 U_PBR.u_positionTexture.value = posTarget.texture;
                 U_PBR.u_velocityTexture.value = velTarget.texture;
 
-                // ** THE FIX IS HERE: Connect the new sizing sliders to the shader uniforms **
                 const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
                 const fineSize = S.particle_min_size;
                 const finalBaseSize = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
 
                 U_PBR.particle_base_size.value = finalBaseSize;
                 U_PBR.particle_min_size.value = finalBaseSize;
-                U_PBR.u_particle_size_mix.value = 0.0; // Shader logic uses base_size only, so this stays 0.
+                U_PBR.u_particle_size_mix.value = 0.0;
 
                 U_PBR.u_pixelRatio.value = window.devicePixelRatio;
                 U_PBR.u_particleColorMix.value = S.particle_morphProgress;
@@ -501,6 +502,10 @@ export const ImagePlaneManager = {
                 U_PBR.u_lightColor.value.set(S.lightColor);
                 U_PBR.u_ambientLightColor.value.set(S.ambientLightColor);
                 U_PBR.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+                
+                // ** THE FIX IS HERE: Update the twinkle uniforms every frame **
+                U_PBR.u_time.value = this.app.currentTime;
+                U_PBR.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
             }
         } else { 
             if (!this.landscapeMaterial) return;
