@@ -13,14 +13,33 @@ export const UIManager = {
     particleModelMesh: null, 
     particleModelTexture: null,
     gltfLoader: new GLTFLoader(),
-    transitionAnimation: null, // Animation state management
+    
+    transitionAnimation: null,
+    activeTransitionPreset: 'default',
+    
+    transitionPresets: {
+        'default': {
+            particle_flowStrength: 0.20,
+            particle_attractionStrength: 0.1,
+            particle_base_size: 3.0,
+            particle_min_size: 0.0,
+            particle_size_mix: 0.0, 
+            particle_twinkleIntensity: 0.0,
+        },
+        'pour': {
+            particle_flowStrength: 0.25, 
+            particle_attractionStrength: 0.1, 
+            particle_base_size: 3.0,
+            particle_min_size: 0.0,
+            particle_size_mix: 0.75,
+            particle_twinkleIntensity: 0.0,
+        }
+    },
 
-    // --- Demo Mode Properties ---
     demoShaderInterval: null,
     demoShaderOrder: ['presetBg6', 'presetBg7', 'presetBg8', 'presetBg1', 'presetBg2', 'presetBg3', 'presetBg4', 'presetBg5'],
     demoShaderIndex: 0,
 
-    // --- GPGPU DEBUG PROPERTIES ---
     gpgpuPixelValueDisplay: null,
     isDisplayingPixelValue: false,
 
@@ -49,6 +68,8 @@ export const UIManager = {
         this.updateImageEffectsVisibility(true);
 
         this.updateMasterControls();
+        
+        this.loadPresetValues('default');
     },
 
     syncAllControlsToSettings() {
@@ -379,9 +400,9 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size', 'particle_twinkleIntensity'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity'].includes(id)) {
                 precision = 2;
-            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed'].includes(id)) {
+            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size'].includes(id)) {
                 precision = 2;
             } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod', 'gpgpu_eqRippleBarCount', 'gpgpu_foldAngle', 'gpgpu_foldAudioMod', 'gpgpu_cylinderArcAngle', 'gpgpu_cylinderArcOffset'].includes(id)) {
                 precision = 0;
@@ -647,6 +668,25 @@ export const UIManager = {
         document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(1.0));
         document.getElementById('runTransitionButton').addEventListener('click', () => this.runTransition());
 
+        const presetContainer = document.getElementById('particleTransitionPresetContainer');
+        if(presetContainer) {
+            presetContainer.querySelectorAll('button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const presetMap = { 'transitionPreset1': 'default', 'transitionPreset2': 'pour' };
+                    const presetId = presetMap[button.id];
+                    
+                    if (presetId && this.transitionPresets[presetId]) {
+                        this.activeTransitionPreset = presetId;
+                        presetContainer.querySelectorAll('button').forEach(btn => btn.classList.remove('button-glow-effect'));
+                        button.classList.add('button-glow-effect');
+                        this.logSuccess(`Transition style set to: ${this.activeTransitionPreset}`);
+                    } else {
+                        this.logError(`Preset for ${button.id} not yet implemented.`);
+                    }
+                });
+            });
+        }
+
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.closest('#butterchurnControls')) return;
              
@@ -826,30 +866,43 @@ export const UIManager = {
     },
     
     setMorphState(targetProgress) {
+        this.app.vizSettings.particle_morphProgress = targetProgress;
         const slider = document.getElementById('particle_morphProgress');
         if (slider) {
             slider.value = targetProgress;
-            slider.dispatchEvent(new Event('input', { bubbles: true }));
         }
+        this.updateRangeDisplay('particle_morphProgress', targetProgress);
+        this.handleMorphSlider(targetProgress);
     },
 
-    // ** THE FIX IS HERE: New function to run the transition animation **
     runTransition() {
-        if (this.transitionAnimation) return; // Don't start a new animation if one is running
+        if (this.transitionAnimation) return;
 
         const S = this.app.vizSettings;
+        const isPouring = this.activeTransitionPreset === 'pour';
         const startValue = S.particle_morphProgress;
-        const endValue = (startValue < 0.5) ? 1.0 : 0.0;
-        const duration = 5000; // 5 seconds for the transition
+        
+        let endValue;
+        if (startValue < 0.5) {
+            endValue = isPouring ? 0.90 : 1.0;
+        } else {
+            endValue = 0.0;
+        }
+
+        const duration = isPouring ? 15000 : 2000;
 
         this.transitionAnimation = {
             startTime: performance.now(),
             startValue,
             endValue,
             duration,
+            isPouring,
+            lastMorphProgress: startValue,
+            startFlowStrength: S.particle_flowStrength,
+            startAttraction: S.particle_attractionStrength,
+            startSizeMix: S.particle_size_mix
         };
 
-        // Start the animation loop
         this.updateTransitionAnimation();
     },
 
@@ -862,26 +915,78 @@ export const UIManager = {
 
         if (progress >= 1) {
             progress = 1;
-            this.transitionAnimation = null; // End the animation
         }
         
-        // Ease-in-out function for smooth acceleration and deceleration
-        const ease = progress < 0.5 
-            ? 4 * progress * progress * progress 
-            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        const S = this.app.vizSettings;
+        const anim = this.transitionAnimation;
 
-        const currentValue = this.app.THREE.MathUtils.lerp(
-            this.transitionAnimation.startValue,
-            this.transitionAnimation.endValue,
-            ease
-        );
+        if (anim.isPouring) {
+            // ** THE FIX IS HERE: Back to the smooth, predictable bell curve for physics **
+            const ease = 1 - Math.pow(1 - progress, 4); 
+            const bellCurve = Math.sin(progress * Math.PI);
 
-        // Update the slider and trigger its logic
-        this.setMorphState(currentValue);
+            this.setMorphState(this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease));
 
-        if (this.transitionAnimation) {
+            const T_POUR = this.transitionPresets.pour;
+
+            const peakFlow = 1.0;
+            S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startFlowStrength, peakFlow, bellCurve);
+            
+            const peakAttraction = 0.15;
+            S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(anim.startAttraction, peakAttraction, bellCurve);
+
+            const targetPresetId = (anim.endValue > 0.5) ? 'pour' : 'default';
+            const targetPreset = this.transitionPresets[targetPresetId];
+            const endSizeMix = targetPreset.particle_size_mix;
+            S.particle_size_mix = this.app.THREE.MathUtils.lerp(anim.startSizeMix, endSizeMix, ease);
+
+        } else { // Default transition
+            const ease = progress < 0.5 
+                ? 4 * progress * progress * progress 
+                : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+            const currentValue = this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease);
+            this.setMorphState(currentValue);
+        }
+
+        this.syncSlidersToSettings();
+
+        if (progress >= 1) {
+            this.setMorphState(anim.endValue);
+            
+            const finalPresetId = (anim.endValue > 0.5) ? this.activeTransitionPreset : 'default';
+            this.loadPresetValues(finalPresetId);
+            
+            this.transitionAnimation = null;
+        } else {
             requestAnimationFrame(() => this.updateTransitionAnimation());
         }
+    },
+    
+    loadPresetValues(presetId) {
+        const preset = this.transitionPresets[presetId];
+        if (!preset) return;
+
+        Object.keys(preset).forEach(key => {
+            this.app.vizSettings[key] = preset[key];
+        });
+        this.syncSlidersToSettings();
+    },
+
+    syncSlidersToSettings() {
+        const S = this.app.vizSettings;
+        const editorSliderIds = [
+            'particle_flowStrength', 'particle_flowSpeed', 'particle_flowScale', 
+            'particle_attractionStrength', 'particle_base_size', 'particle_min_size', 
+            'particle_size_mix', 'particle_twinkleIntensity'
+        ];
+        
+        editorSliderIds.forEach(key => {
+            const slider = document.getElementById(key);
+            if (slider && S[key] !== undefined) {
+                slider.value = S[key];
+                this.updateRangeDisplay(key, S[key]);
+            }
+        });
     },
 
     toggleDemoMode() {

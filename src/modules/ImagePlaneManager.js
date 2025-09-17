@@ -476,22 +476,14 @@ export const ImagePlaneManager = {
                 U_PBR.u_positionTexture.value = posTarget.texture;
                 U_PBR.u_velocityTexture.value = velTarget.texture;
 
-                // ** THE FIX IS HERE: Smart sizing logic is now active **
-                // The single UI slider (`particle_size`) now controls a blend between two states.
-                // We also connect the `morphProgress` to this, so the particles automatically get
-                // finer as they approach the 3D model state.
-                const coarseSize = this.calculatedParticleBaseSize * 3.5;
-                const fineSize = 0.1;
-                // `particle_size` is 0.0 (Coarse) to 1.0 (Fine).
-                const sliderSize = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size);
-                // `morphProgress` is 0.0 (Canvas) to 1.0 (3D Model).
-                const autoSize = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_morphProgress);
-                // We use the smaller of the two sizes, so manual control can only make it finer.
-                const finalBaseSize = Math.min(sliderSize, autoSize);
+                // ** THE FIX IS HERE: Connect the new sizing sliders to the shader uniforms **
+                const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
+                const fineSize = S.particle_min_size;
+                const finalBaseSize = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
 
                 U_PBR.particle_base_size.value = finalBaseSize;
                 U_PBR.particle_min_size.value = finalBaseSize;
-                U_PBR.u_particle_size_mix.value = 0.0; // Keep this at 0, we're only using base_size
+                U_PBR.u_particle_size_mix.value = 0.0; // Shader logic uses base_size only, so this stays 0.
 
                 U_PBR.u_pixelRatio.value = window.devicePixelRatio;
                 U_PBR.u_particleColorMix.value = S.particle_morphProgress;
