@@ -168,10 +168,10 @@ const App = {
         gpgpu_peelDrift: 0.09,
         gpgpu_peelTextureAmount: 0.14,
         
-        // --- Updated and simplified particle settings ---
         particle_resolution: 512,
-        // ** THE FIX IS HERE: Default particle size is now 0.0 (Coarse) **
-        particle_size: 0.0, 
+        particle_base_size: 3.0,
+        particle_min_size: 0.0,
+        particle_size_mix: 0.0,
         particle_twinkleIntensity: 0.0,
         particle_flowScale: 0.1,
         particle_flowSpeed: 0.2,
