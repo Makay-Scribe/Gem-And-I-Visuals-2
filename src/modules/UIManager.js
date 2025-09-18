@@ -891,16 +891,24 @@ export const UIManager = {
 
         const duration = isPouring ? 15000 : 2000;
 
+        // ** THE FIX IS HERE: Store the final target preset values **
+        const targetPresetId = (endValue > 0.5) ? this.activeTransitionPreset : 'default';
+        const targetPreset = this.transitionPresets[targetPresetId];
+
         this.transitionAnimation = {
             startTime: performance.now(),
             startValue,
             endValue,
             duration,
             isPouring,
-            lastMorphProgress: startValue,
+            // Store starting values of all animated properties
             startFlowStrength: S.particle_flowStrength,
             startAttraction: S.particle_attractionStrength,
-            startSizeMix: S.particle_size_mix
+            startSizeMix: S.particle_size_mix,
+            // Store target values from the destination preset
+            targetFlowStrength: targetPreset.particle_flowStrength,
+            targetAttraction: targetPreset.particle_attractionStrength,
+            targetSizeMix: targetPreset.particle_size_mix
         };
 
         this.updateTransitionAnimation();
@@ -919,42 +927,39 @@ export const UIManager = {
         
         const S = this.app.vizSettings;
         const anim = this.transitionAnimation;
+        const ease = 1 - Math.pow(1 - progress, 4); // Use a consistent ease-out for all animations
+        const bellCurve = Math.sin(progress * Math.PI); // For effects that peak in the middle
+
+        // Animate morph progress
+        this.setMorphState(this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease));
 
         if (anim.isPouring) {
-            const ease = 1 - Math.pow(1 - progress, 4); 
-            const bellCurve = Math.sin(progress * Math.PI);
-
-            this.setMorphState(this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease));
-
-            const T_POUR = this.transitionPresets.pour;
-
+            // Flow strength swells in the middle and settles to its target value
             const peakFlow = 1.0;
-            S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startFlowStrength, peakFlow, bellCurve);
+            const currentFlow = this.app.THREE.MathUtils.lerp(anim.startFlowStrength, peakFlow, bellCurve);
+            S.particle_flowStrength = this.app.THREE.MathUtils.lerp(currentFlow, anim.targetFlowStrength, ease);
+
+            // Attraction strength dips in the middle and returns to its target value
+            const minAttraction = 0.05;
+            const currentAttraction = this.app.THREE.MathUtils.lerp(anim.startAttraction, minAttraction, bellCurve);
+            S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(currentAttraction, anim.targetAttraction, ease);
             
-            // ** THE FIX IS HERE: Tuned attraction to decrease during turbulence **
-            const peakAttraction = 0.05; 
-            S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(anim.startAttraction, peakAttraction, bellCurve);
+            // Size mix animates straight to its target value
+            S.particle_size_mix = this.app.THREE.MathUtils.lerp(anim.startSizeMix, anim.targetSizeMix, ease);
 
-            const targetPresetId = (anim.endValue > 0.5) ? 'pour' : 'default';
-            const targetPreset = this.transitionPresets[targetPresetId];
-            const endSizeMix = targetPreset.particle_size_mix;
-            S.particle_size_mix = this.app.THREE.MathUtils.lerp(anim.startSizeMix, endSizeMix, ease);
-
-        } else { // Default transition
-            const ease = progress < 0.5 
-                ? 4 * progress * progress * progress 
-                : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-            const currentValue = this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease);
-            this.setMorphState(currentValue);
+        } else { // Default transition (simple morph, other values don't animate)
+             // No change needed here, it already works well
         }
 
         this.syncSlidersToSettings();
 
         if (progress >= 1) {
+            // ** THE FIX IS HERE: Set final values precisely **
             this.setMorphState(anim.endValue);
-            
-            const finalPresetId = (anim.endValue > 0.5) ? this.activeTransitionPreset : 'default';
-            this.loadPresetValues(finalPresetId);
+            S.particle_flowStrength = anim.targetFlowStrength;
+            S.particle_attractionStrength = anim.targetAttraction;
+            S.particle_size_mix = anim.targetSizeMix;
+            this.syncSlidersToSettings();
             
             this.transitionAnimation = null;
         } else {

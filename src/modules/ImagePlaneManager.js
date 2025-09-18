@@ -382,7 +382,6 @@ export const ImagePlaneManager = {
                 t_envMap: { value: this.app.hdrTexture },
                 u_time: { value: 0.0 },
                 u_pixelRatio: { value: window.devicePixelRatio },
-                // ** THE FIX IS HERE: Add the twinkle uniform to the material **
                 u_particle_twinkleIntensity: { value: S.particle_twinkleIntensity },
             },
             vertexShader: particleRenderVertexShader,
@@ -503,7 +502,6 @@ export const ImagePlaneManager = {
                 U_PBR.u_ambientLightColor.value.set(S.ambientLightColor);
                 U_PBR.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
                 
-                // ** THE FIX IS HERE: Update the twinkle uniforms every frame **
                 U_PBR.u_time.value = this.app.currentTime;
                 U_PBR.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
             }

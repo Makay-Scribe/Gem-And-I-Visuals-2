@@ -35,7 +35,7 @@ void main() {
         snoise(noise_coord + vec3(20.0))
     ) * particle_flowStrength;
     
-    // ** THE FIX IS HERE: Modify how morphProgress scales the turbulence. **
+    // Modify how morphProgress scales the turbulence.
     // We create a "peak" in the middle of the transition.
     // When morphProgress is 0.0 or 1.0, turbulenceStrength is 0.0.
     // When morphProgress is 0.5, turbulenceStrength is 1.0 (maximum).
@@ -50,7 +50,7 @@ void main() {
 
 
     // --- 3. Combine Forces ---
-    // ** THE FIX IS HERE: We now ADD the forces instead of mixing them. **
+    // We now ADD the forces instead of mixing them.
     // The particles are always attracted, and turbulence is added on top,
     // scaled by how far along the transition is.
     vec3 finalForce = attractionForce + scaledFlowForce;
