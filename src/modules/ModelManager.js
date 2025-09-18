@@ -216,8 +216,11 @@ export const ModelManager = {
         const totalDistance = ap.startPos.distanceTo(ap.endPos);
         const speed = this.app.vizSettings.modelAutopilotSpeed;
         
-        // ** THE FIX IS HERE: Assign the result of the clamp function **
-        ap.waypointTransitionDuration = this.app.THREE.MathUtils.clamp(totalDistance / (speed * 2), 16, 40);
+        // ** THE FIX IS HERE: More dynamic duration calculation **
+        const baseSpeedFactor = 3.0; // Lower is faster
+        const baseDuration = totalDistance / (speed * baseSpeedFactor);
+        const randomVariation = this.app.THREE.MathUtils.randFloat(0.8, 1.2);
+        ap.waypointTransitionDuration = Math.max(2.0, baseDuration * randomVariation); // Ensure duration is at least 2 seconds
         
         ap.holdTimer = 0.5; 
         ap.waypointProgress = 0;

@@ -365,7 +365,6 @@ export const ImagePlaneManager = {
             uniforms: {
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: null },
-                u_velocityTexture: { value: null },
                 u_particleModelUVTexture: { value: CM.particleModelUVTexture },
                 u_particleModelTexture: { value: this.app.UIManager?.particleModelTexture || null },
                 u_particleColorMix: { value: 0.0 },
@@ -470,12 +469,10 @@ export const ImagePlaneManager = {
             if (!CM || !CM.particleGpuCompute) return;
 
             const posTarget = CM.particleGpuCompute.getCurrentRenderTarget(CM.particlePositionVar);
-            const velTarget = CM.particleGpuCompute.getCurrentRenderTarget(CM.particleVelocityVar);
             
             if(this.particlePBRMaterial) {
                 const U_PBR = this.particlePBRMaterial.uniforms;
                 U_PBR.u_positionTexture.value = posTarget.texture;
-                U_PBR.u_velocityTexture.value = velTarget.texture;
 
                 const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
                 const fineSize = S.particle_min_size;
