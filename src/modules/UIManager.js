@@ -454,11 +454,13 @@ export const UIManager = {
     },
 
     updateUIVisibilityForMode(mode) {
-        const gpgpuAccordions = document.querySelectorAll('#gpgpuEffectsAccordion > .accordion-item');
+        // ** THE FIX IS HERE: Corrected selector to find nested accordion items **
+        const gpgpuAccordions = document.querySelectorAll('#gpgpuEffectsAccordion .accordion-item');
         
+        // ** THE FIX IS HERE: Updated logic for geocube to allow all GPGPU effects **
         const visibilityMap = {
             particles: ['Particle System'],
-            geocube: ['CubeWall'],
+            geocube: ['CubeWall', 'Peel', 'Water Ripple', 'EQ Ripple', 'Fold', 'Cylinder', 'Sag', 'Droop', 'Cloth Physics'],
             continuous: ['Peel', 'Water Ripple', 'EQ Ripple', 'Fold', 'Cylinder', 'Sag', 'Droop', 'Cloth Physics'],
             faceted: ['Peel', 'Water Ripple', 'EQ Ripple', 'Fold', 'Cylinder', 'Sag', 'Droop', 'Cloth Physics']
         };
