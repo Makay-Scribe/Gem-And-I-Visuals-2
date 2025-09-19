@@ -40,7 +40,7 @@ uniform float u_gpgpu_ambientWindStrength;
 uniform float u_gpgpu_ambientWindSpeed;
 uniform float u_gpgpu_ambientWindScale;
 uniform vec3 u_gpgpu_directionalWind;
-uniform float u_gpgpu_clothBlendFactor;
+uniform float u_gpgpu_clothBlendFactor; // Used for smooth transition when enabling cloth
 
 // Fold Uniforms
 uniform bool u_gpgpu_enableFold;
@@ -107,24 +107,30 @@ void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
     vec3 initialPos = texture(u_initialPosition, uv).xyz;
     
-    vec3 finalPos = initialPos;
+    vec3 finalPos;
     
-    // --- GEOMETRIC TRANSFORMATIONS ---
-    // These effects fundamentally change the shape and should be applied first.
-    finalPos = calculateCylinder(finalPos, uv, u_audioLow);
-    finalPos = calculateFold(finalPos, uv, u_audioLow);
-    
-    // --- MUTUALLY EXCLUSIVE EFFECTS ---
-    // The cloth simulation runs independently of the other displacement effects.
-    // This prevents state contamination and calculation errors when toggling cloth on/off.
+    // --- HIGH-LEVEL LOGIC BRANCH ---
+    // The cloth simulation is fundamentally incompatible with the other effects.
+    // It must run exclusively to maintain a stable physics state.
     if (u_gpgpu_enableCloth) {
-        // When cloth is enabled, it takes the geometrically transformed position and simulates it.
-        // It reads from texturePosition, which contains the previous frame's full simulation state.
+        // When cloth is on, it's the ONLY thing that should run.
+        // It reads the previous frame's simulation state and computes the next.
+        // Crucially, it uses the original 'initialPos' as its anchor/tether goal,
+        // not a pre-deformed shape, which ensures stability.
         vec3 currentSimPos = texture(texturePosition, uv).xyz;
-        finalPos = calculateCloth(currentSimPos, finalPos, uv, u_audioLow); // Pass the base shape as the 'initialPos' goal
+        finalPos = calculateCloth(currentSimPos, initialPos, uv, u_audioLow);
     } else {
-        // --- STANDARD DISPLACEMENT EFFECTS ---
-        // If cloth is off, apply the other displacement effects to the base shape.
+        // --- NON-CLOTH EFFECTS PIPELINE ---
+        // If cloth is off, we can apply the other effects in a controlled sequence.
+
+        // 1. Start with the flat, initial position as our base shape.
+        vec3 baseShape = initialPos;
+        
+        // 2. Apply geometric transformations first to define this new base shape.
+        baseShape = calculateCylinder(baseShape, uv, u_audioLow);
+        baseShape = calculateFold(baseShape, uv, u_audioLow);
+        
+        // 3. Calculate all additive displacement effects.
         vec3 displacement = vec3(0.0);
         displacement += calculateSag(uv, u_audioLow);
         displacement += calculateDroop(uv, u_audioLow);
@@ -132,7 +138,8 @@ void main() {
         displacement += calculateEqRipple(uv);
         displacement += calculatePeel(uv, u_audioLow);
         
-        finalPos += displacement;
+        // 4. Add the final displacement to the (potentially transformed) base shape.
+        finalPos = baseShape + displacement;
     }
 
     // Write the final calculated position to the output texture

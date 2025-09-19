@@ -61,7 +61,8 @@ export const DirectorManager = {
         this.autopilotCycleTimer = 60; // Reset for 1 minute
     },
 
-    update(delta) {
+    // ** THE FIX IS HERE: The main update function is now async **
+    async update(delta) {
         if (!this.isActive) return;
 
         const modelState = this.app.ModelManager.state;
@@ -111,11 +112,22 @@ export const DirectorManager = {
                 break;
 
             case 'TRANSITION_SWAP':
+                // This state now handles the asynchronous loading
                 console.log(`DIRECTOR: Swapping to model ${this.nextModelId}`);
-                this.app.ModelManager.loadGLTFModel(this.app.modelPresets[this.nextModelId]);
-                this.currentModelId = this.nextModelId;
-                this.phase = 'TRANSITION_IN';
-                this.transitionProgress = 0;
+                try {
+                    // ** THE FIX IS HERE: We now 'await' the model load **
+                    await this.app.ModelManager.loadGLTFModel(this.app.modelPresets[this.nextModelId]);
+                    
+                    // Only proceed to the next state after the load is successful
+                    this.currentModelId = this.nextModelId;
+                    this.phase = 'TRANSITION_IN';
+                    this.transitionProgress = 0;
+                    console.log("DIRECTOR: Model swap successful. Beginning transition in.");
+                } catch (error) {
+                    // If the model fails to load, we stop the director to prevent errors.
+                    console.error("DIRECTOR: Halting sequence due to model load failure.", error);
+                    this.stop();
+                }
                 break;
 
             case 'TRANSITION_IN':

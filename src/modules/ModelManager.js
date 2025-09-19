@@ -216,7 +216,6 @@ export const ModelManager = {
         const totalDistance = ap.startPos.distanceTo(ap.endPos);
         const speed = this.app.vizSettings.modelAutopilotSpeed;
         
-        // ** THE FIX IS HERE: More dynamic duration calculation **
         const baseSpeedFactor = 3.0; // Lower is faster
         const baseDuration = totalDistance / (speed * baseSpeedFactor);
         const randomVariation = this.app.THREE.MathUtils.randFloat(0.8, 1.2);
@@ -286,79 +285,94 @@ export const ModelManager = {
         }
     },
 
+    // ** THE FIX IS HERE: Converted to an async function that returns a Promise **
     loadGLTFModel(preset) {
-        if (!preset || !preset.path) {
-            console.error("No valid GLTF model preset provided.");
-            if (this.app.UIManager) this.app.UIManager.logError("Cannot load model: Invalid preset.");
-            return;
-        }
-
-        const ap = this.autopilot;
-        ap.active = false;
-        ap.preset = null;
-        ap.nextPresetId = null;
-        ap.isTransitioningToHome = false;
-        ap.isHoldingAtHome = false;
-        this.app.vizSettings.modelAutopilotOn = false;
-        if (this.app.UIManager) {
-            this.app.UIManager.updateMasterControls();
-        }
-
-        this.activePresetId = preset.id;
-        if (this.app.UIManager) this.app.UIManager.updateModelPresetGlow();
-
-        const loader = new GLTFLoader();
-        loader.load(
-            preset.path,
-            (gltf) => {
-                if (this.gltfModel) {
-                    this.gltfModel.removeFromParent();
-                }
-                if (this.animationMixer) {
-                    this.animationMixer.stopAllAction();
-                    this.animationMixer = null;
-                }
-
-                this.gltfModel = gltf.scene;
-                this.app.gltfModel = gltf.scene;
-                
-                this.app.scene.add(this.gltfModel);
-                
-                const finalHomePos = new this.app.THREE.Vector3().copy(this.state.homePosition);
-                if (preset.homeOffset) {
-                    finalHomePos.add(preset.homeOffset);
-                }
-                this.gltfModel.position.copy(finalHomePos);
-                this.state.targetPosition.copy(finalHomePos);
-                
-                const box = new this.app.THREE.Box3().setFromObject(this.gltfModel);
-                box.getBoundingSphere(this.boundingSphere);
-                
-                const size = box.getSize(new this.app.THREE.Vector3());
-                const scale = 10 / Math.max(size.x, size.y, size.z);
-                this.baseScale.set(scale, scale, scale);
-                this.gltfModel.scale.copy(this.baseScale);
-                
-                this.boundingSphere.radius *= scale;
-
-                if (gltf.animations && gltf.animations.length) {
-                    this.animationMixer = new this.app.THREE.AnimationMixer(this.gltfModel);
-                    const action = this.animationMixer.clipAction(gltf.animations[0]);
-                    action.play();
-                    this.app.animationMixer = this.animationMixer;
-                }
-                
-                if (this.app.UIManager) this.app.UIManager.logSuccess(`Model loaded: ${preset.name}`);
-                
-                this.gltfModel.scale.multiplyScalar(this.app.defaultVisualizerSettings.modelScale);
-                
-            },
-            undefined, 
-            (error) => {
-                console.error("An error happened loading GLTF:", error);
-                if (this.app.UIManager) this.app.UIManager.logError(`GLTF Load Error: ${error.message.substring(0, 100)}...`);
+        return new Promise((resolve, reject) => {
+            if (!preset || !preset.path) {
+                const errorMsg = "No valid GLTF model preset provided.";
+                console.error(errorMsg);
+                if (this.app.UIManager) this.app.UIManager.logError("Cannot load model: Invalid preset.");
+                reject(new Error(errorMsg));
+                return;
             }
-        );
+
+            // Stop any current autopilot
+            const ap = this.autopilot;
+            ap.active = false;
+            ap.preset = null;
+            ap.nextPresetId = null;
+            ap.isTransitioningToHome = false;
+            ap.isHoldingAtHome = false;
+            this.app.vizSettings.modelAutopilotOn = false;
+            if (this.app.UIManager) {
+                this.app.UIManager.updateMasterControls();
+            }
+
+            this.activePresetId = preset.id;
+            if (this.app.UIManager) this.app.UIManager.updateModelPresetGlow();
+
+            const loader = new GLTFLoader();
+            loader.load(
+                preset.path,
+                (gltf) => {
+                    // Cleanup old model
+                    if (this.gltfModel) {
+                        this.gltfModel.removeFromParent();
+                    }
+                    if (this.animationMixer) {
+                        this.animationMixer.stopAllAction();
+                        this.animationMixer = null;
+                    }
+
+                    // Setup new model
+                    this.gltfModel = gltf.scene;
+                    this.app.gltfModel = gltf.scene;
+                    
+                    this.app.scene.add(this.gltfModel);
+                    
+                    // Set home position, scale, and bounding sphere
+                    const finalHomePos = new this.app.THREE.Vector3().copy(this.state.homePosition);
+                    if (preset.homeOffset) {
+                        finalHomePos.add(preset.homeOffset);
+                    }
+                    this.gltfModel.position.copy(finalHomePos);
+                    this.state.targetPosition.copy(finalHomePos);
+                    
+                    const box = new this.app.THREE.Box3().setFromObject(this.gltfModel);
+                    box.getBoundingSphere(this.boundingSphere);
+                    
+                    const size = box.getSize(new this.app.THREE.Vector3());
+                    const scale = 10 / Math.max(size.x, size.y, size.z);
+                    this.baseScale.set(scale, scale, scale);
+                    this.gltfModel.scale.copy(this.baseScale);
+                    
+                    this.boundingSphere.radius *= scale;
+
+                    // Setup animation
+                    if (gltf.animations && gltf.animations.length) {
+                        this.animationMixer = new this.app.THREE.AnimationMixer(this.gltfModel);
+                        const action = this.animationMixer.clipAction(gltf.animations[0]);
+                        action.play();
+                        this.app.animationMixer = this.animationMixer;
+                    }
+                    
+                    if (this.app.UIManager) this.app.UIManager.logSuccess(`Model loaded: ${preset.name}`);
+                    
+                    this.gltfModel.scale.multiplyScalar(this.app.defaultVisualizerSettings.modelScale);
+
+                    // ** Resolve the promise on successful load **
+                    resolve(this.gltfModel);
+                },
+                undefined, 
+                (error) => {
+                    const errorMsg = `GLTF Load Error: ${error.message.substring(0, 100)}...`;
+                    console.error("An error happened loading GLTF:", error);
+                    if (this.app.UIManager) this.app.UIManager.logError(errorMsg);
+                    // ** Reject the promise on failure **
+                    reject(error);
+                }
+            );
+        });
     },
 
     update(delta) {
