@@ -20,7 +20,8 @@ export const UIManager = {
 
     liveFXPresets: {
         'wavy': {
-            particle_morphProgress: 0.01, // A tiny morph to activate turbulence
+            // ** THE FIX IS HERE: Add a tiny morph progress to activate turbulence **
+            particle_morphProgress: 0.01,
             particle_flowStrength: 0.4,
             particle_flowSpeed: 0.1,
             particle_flowScale: 0.05,
@@ -28,7 +29,6 @@ export const UIManager = {
         }
     },
     
-    // ** THE FIX IS HERE: Unified all preset defaults to a clean state **
     transitionPresets: {
         'default': {
             particle_flowStrength: 0.0,
@@ -717,7 +717,7 @@ export const UIManager = {
                 S[id] = parseFloat(e.target.value);
                 this.updateRangeDisplay(id, S[id]);
 
-                if (S.particle_morphProgress < 0.01) {
+                if (S.particle_morphProgress < 0.01 && S.particle_morphProgress >= 0) {
                     S.particle_morphProgress = 0.01;
                     this.syncSlidersToSettings();
                 }
