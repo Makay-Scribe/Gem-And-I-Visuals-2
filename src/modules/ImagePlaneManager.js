@@ -362,6 +362,10 @@ export const ImagePlaneManager = {
         if(!this.currentTexture) textureToUse.needsUpdate = true;
 
         this.particlePBRMaterial = new this.app.THREE.ShaderMaterial({
+            // ** THE FIX IS HERE: Add the 'defines' property to the material **
+            defines: {
+                'USE_ENVMAP': ''
+            },
             uniforms: {
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: null },
@@ -385,6 +389,7 @@ export const ImagePlaneManager = {
             },
             vertexShader: particleRenderVertexShader,
             fragmentShader: particleRenderFragmentShader,
+            // ** Revert back to the correct transparency settings **
             transparent: true,
             depthWrite: false
         });

@@ -173,9 +173,10 @@ const App = {
         particle_min_size: 0.0,
         particle_size_mix: 0.0,
         particle_twinkleIntensity: 0.0,
+        // ** THE FIX IS HERE: Reset particle physics defaults to a "null" state **
         particle_flowScale: 0.1,
-        particle_flowSpeed: 0.2,
-        particle_flowStrength: 0.20,
+        particle_flowSpeed: 0.0,
+        particle_flowStrength: 0.0,
         particle_attractionStrength: 0.1,
         particle_morphProgress: 0.0, 
         particle_target: 'flat', 
@@ -183,7 +184,7 @@ const App = {
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
         gpgpu_enableCubeWall: false,
-        gpgpu_cubeWallMorph: 1.0,
+        gpgpu_cubeWallMorph: 0.0,
         gpgpu_cubeWallUseImageTexture: false,
         gpgpu_cubeWallSideColor: '#4a586a',
         gpgpu_cubeWallBevelWidth: 0.1,

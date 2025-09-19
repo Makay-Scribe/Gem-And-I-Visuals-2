@@ -34,18 +34,58 @@ float DistributionGGX(vec3 N, vec3 H, float roughness) { float a = roughness * r
 float GeometrySchlickGGX(float NdotV, float roughness) { float r = (roughness + 1.0); float k = (r * r) / 8.0; float nom = NdotV; float denom = NdotV * (1.0 - k) + k; return nom / denom; }
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) { float NdotV = max(dot(N, V), 0.0); float NdotL = max(dot(N, L), 0.0); float ggx2 = GeometrySchlickGGX(NdotV, roughness); float ggx1 = GeometrySchlickGGX(NdotL, roughness); return ggx1 * ggx2; }
 
-// Simple pseudo-random number function
-float rand(vec2 co){
-    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+// --- Simplex Noise (snoise) ---
+// From https://github.com/stegu/webgl-noise
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+float snoise(vec3 v) {
+    const vec2 C = vec2(1.0/6.0, 1.0/3.0) ;
+    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+    vec3 i  = floor(v + dot(v, C.yyy) );
+    vec3 x0 = v - i + dot(i, C.xxx) ;
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min( g.xyz, l.zxy );
+    vec3 i2 = max( g.xyz, l.zxy );
+    vec3 x1 = x0 - i1 + C.xxx;
+    vec3 x2 = x0 - i2 + C.yyy;
+    vec3 x3 = x0 - D.yyy;
+    i = mod289(i);
+    vec4 p = permute( permute( permute(
+        i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+        + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+        + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+    float n_ = 0.142857142857;
+    vec3 ns = n_ * D.wyz - D.xzx;
+    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+    vec4 x_ = floor(j * ns.z);
+    vec4 y_ = floor(j - 7.0 * x_ );
+    vec4 x = x_ *ns.x + ns.yyyy;
+    vec4 y = y_ *ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs(x) - abs(y);
+    vec4 b0 = vec4( x.xy, y.xy );
+    vec4 b1 = vec4( x.zw, y.zw );
+    vec4 s0 = floor(b0)*2.0 + 1.0;
+    vec4 s1 = floor(b1)*2.0 + 1.0;
+    vec4 sh = -step(h, vec4(0.0));
+    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+    vec3 p0 = vec3(a0.xy,h.x);
+    vec3 p1 = vec3(a0.zw,h.y);
+    vec3 p2 = vec3(a1.xy,h.z);
+    vec3 p3 = vec3(a1.zw,h.w);
+    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+    m = m * m;
+    return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
 }
 
 void main() {
-    // --- Step 1: Make the point circular ---
-    float dist = distance(gl_PointCoord, vec2(0.5));
-    float alpha = 1.0 - smoothstep(0.45, 0.5, dist);
-    if (alpha <= 0.0) {
-        discard;
-    }
+    // The particle will be a solid square with full alpha.
+    float alpha = 1.0;
 
     // --- Step 2: Determine Albedo (base color) ---
     vec3 imageWrapColor = texture(u_map, vUv).rgb;
@@ -80,34 +120,40 @@ void main() {
     // --- Step 4: Advanced Twinkle Effect ---
     vec3 final_color = pbr_color;
     if (u_particle_twinkleIntensity > 0.0) {
-        // Generate a random value that changes slowly over time for each particle
-        float twinkle_noise = rand(vUv + sin(u_time * 0.1));
+        // ** THE FIX IS HERE: Use Simplex noise instead of random noise **
+        // Sample a 3D noise field that moves over time. The scale (10.0) and speed (0.3) can be tweaked.
+        float noiseVal = snoise(vec3(vUv * 10.0, u_time * 0.3));
+        // Remap the noise from [-1, 1] to [0, 1]
+        noiseVal = (noiseVal + 1.0) * 0.5;
 
-        // Define a very high threshold for a particle to "flash"
-        // The twinkle intensity slider makes it more likely to pass this threshold
-        float flash_threshold = 0.999;
-        float flash_probability = u_particle_twinkleIntensity * 0.1; // small multiplier to make slider feel right
-        
-        if (twinkle_noise > flash_threshold - flash_probability) {
+        // ** THE FIX IS HERE: Adjust the activation logic **
+        // Only the very brightest peaks of the noise field will activate the twinkle.
+        // The twinkleIntensity slider makes the threshold lower, making twinkling more likely.
+        float activation_threshold = 0.95;
+        float adjusted_threshold = activation_threshold - (u_particle_twinkleIntensity * 0.2);
+
+        if (noiseVal > adjusted_threshold) {
             // This particle is "active" for this frame.
-            
-            // 1. Create the starburst "shine lines"
-            vec2 coord = (gl_PointCoord - 0.5) * 2.0; // -1.0 to 1.0
+
+            // The original starburst effect is great, let's keep it.
+            vec2 coord = (gl_PointCoord - 0.5) * 2.0; 
             float starburst = 0.0;
-            starburst = max(starburst, 1.0 - abs(coord.x)); // Vertical line
-            starburst = max(starburst, 1.0 - abs(coord.y)); // Horizontal line
-            starburst = max(starburst, 1.0 - abs(coord.x - coord.y)); // Diagonal
-            starburst = max(starburst, 1.0 - abs(coord.x + coord.y)); // Anti-diagonal
-            starburst = pow(starburst, 15.0); // Make lines sharp
+            starburst = max(starburst, 1.0 - abs(coord.x)); 
+            starburst = max(starburst, 1.0 - abs(coord.y)); 
+            starburst = max(starburst, 1.0 - abs(coord.x - coord.y)); 
+            starburst = max(starburst, 1.0 - abs(coord.x + coord.y)); 
+            starburst = pow(starburst, 15.0); 
             
-            // 2. Create the bright core flash
-            float core_flash = 1.0 - dist * 2.0; // Brightest at the center
+            float dist = distance(gl_PointCoord, vec2(0.5));
+            float core_flash = 1.0 - dist * 2.0; 
             core_flash = pow(core_flash, 3.0);
             
-            // 3. Combine and add to the base color, making it extremely bright
-            // This high value is what the bloom filter will pick up later.
-            float combined_flash = (core_flash * 2.0 + starburst) * u_particle_twinkleIntensity;
-            final_color += vec3(combined_flash * 50.0);
+            // ** THE FIX IS HERE: Modulate flash strength by how much it passed the threshold **
+            // This makes the twinkle effect smoother, not just on/off.
+            float flash_strength = smoothstep(adjusted_threshold, 1.0, noiseVal);
+            
+            float combined_flash = (core_flash * 2.0 + starburst) * flash_strength;
+            final_color += vec3(combined_flash * 50.0); // Make it very bright for bloom
         }
     }
 

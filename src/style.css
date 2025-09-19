@@ -568,6 +568,27 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--button-secondary-hover-bg);
 }
 
+/* ** THE FIX IS HERE: New styles for the Live FX buttons ** */
+.live-fx-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    margin-bottom: 4px;
+}
+
+.live-fx-preset-grid button {
+    background-color: var(--debug-header-bg); /* Use the gold debug color */
+    font-size: 10px;
+    padding: 3px 2px;
+    min-height: 22px;
+    font-weight: 500;
+}
+
+.live-fx-preset-grid button:hover {
+    background-color: var(--debug-header-hover-bg);
+}
+
+
 /* 3D Model Preset Grid */
 .model-preset-grid {
     display: grid;
@@ -586,7 +607,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--sub-header-hover-bg);
 }
 
-/* ** THE FIX IS HERE: New styles for the model preset list ** */
 .model-preset-list {
     display: flex;
     flex-direction: column;

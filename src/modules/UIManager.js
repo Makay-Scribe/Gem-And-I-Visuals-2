@@ -16,22 +16,66 @@ export const UIManager = {
     
     transitionAnimation: null,
     activeTransitionPreset: 'default',
+    sliderInactivityTimer: null,
+
+    liveFXPresets: {
+        'wavy': {
+            particle_morphProgress: 0.01, // A tiny morph to activate turbulence
+            particle_flowStrength: 0.4,
+            particle_flowSpeed: 0.1,
+            particle_flowScale: 0.05,
+            particle_attractionStrength: 0.02
+        }
+    },
     
+    // ** THE FIX IS HERE: Unified all preset defaults to a clean state **
     transitionPresets: {
         'default': {
-            particle_flowStrength: 0.20,
+            particle_flowStrength: 0.0,
+            particle_flowSpeed: 0.0,
+            particle_flowScale: 0.1,
             particle_attractionStrength: 0.1,
-            particle_base_size: 3.0,
-            particle_min_size: 0.0,
             particle_size_mix: 0.0, 
             particle_twinkleIntensity: 0.0,
         },
         'pour': {
-            particle_flowStrength: 0.25, 
-            particle_attractionStrength: 0.1, 
-            particle_base_size: 3.0,
-            particle_min_size: 0.0,
-            particle_size_mix: 0.75,
+            particle_flowStrength: 0.0,
+            particle_flowSpeed: 0.0,
+            particle_flowScale: 0.1,
+            particle_attractionStrength: 0.1,
+            particle_size_mix: 0.0, 
+            particle_twinkleIntensity: 0.0,
+        },
+        'liquid': {
+            particle_flowStrength: 0.0,
+            particle_flowSpeed: 0.0,
+            particle_flowScale: 0.1,
+            particle_attractionStrength: 0.1,
+            particle_size_mix: 0.0, 
+            particle_twinkleIntensity: 0.0,
+        },
+        'explode': {
+            particle_flowStrength: 0.0,
+            particle_flowSpeed: 0.0,
+            particle_flowScale: 0.1,
+            particle_attractionStrength: 0.1,
+            particle_size_mix: 0.0, 
+            particle_twinkleIntensity: 0.0,
+        },
+        'nebula': {
+            particle_flowStrength: 0.0,
+            particle_flowSpeed: 0.0,
+            particle_flowScale: 0.1,
+            particle_attractionStrength: 0.1,
+            particle_size_mix: 0.0, 
+            particle_twinkleIntensity: 0.0,
+        },
+        'melt': {
+            particle_flowStrength: 0.0,
+            particle_flowSpeed: 0.0,
+            particle_flowScale: 0.1,
+            particle_attractionStrength: 0.1,
+            particle_size_mix: 0.0,
             particle_twinkleIntensity: 0.0,
         }
     },
@@ -454,10 +498,8 @@ export const UIManager = {
     },
 
     updateUIVisibilityForMode(mode) {
-        // ** THE FIX IS HERE: Corrected selector to find nested accordion items **
         const gpgpuAccordions = document.querySelectorAll('#gpgpuEffectsAccordion .accordion-item');
         
-        // ** THE FIX IS HERE: Updated logic for geocube to allow all GPGPU effects **
         const visibilityMap = {
             particles: ['Particle System'],
             geocube: ['CubeWall', 'Peel', 'Water Ripple', 'EQ Ripple', 'Fold', 'Cylinder', 'Sag', 'Droop', 'Cloth Physics'],
@@ -626,9 +668,8 @@ export const UIManager = {
             });
         }
         
-        // General control listener
         document.querySelectorAll('input[type="range"], select').forEach(control => {
-            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list')) return;
+            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleTransitionEditor')) return;
 
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -660,21 +701,49 @@ export const UIManager = {
                     }
                 } else if ((id === 'planeAspectRatio' || id === 'planeOrientation')) {
                     this.app.ImagePlaneManager.createDefaultLandscape();
-                } else if (id === 'particle_morphProgress') {
-                    this.handleMorphSlider(parseFloat(value));
                 }
             });
         });
         
         document.getElementById('goToCanvasButton').addEventListener('click', () => this.setMorphState(0.0));
-        document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(1.0));
+        document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(0.95));
         document.getElementById('runTransitionButton').addEventListener('click', () => this.runTransition());
+        document.getElementById('resetFXButton').addEventListener('click', () => this.loadPresetValues(this.activeTransitionPreset));
+        
+        document.querySelectorAll('#particleTransitionEditor input[type="range"]').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const S = this.app.vizSettings;
+                const id = e.target.id;
+                S[id] = parseFloat(e.target.value);
+                this.updateRangeDisplay(id, S[id]);
+
+                if (S.particle_morphProgress < 0.01) {
+                    S.particle_morphProgress = 0.01;
+                    this.syncSlidersToSettings();
+                }
+
+                if (this.sliderInactivityTimer) clearTimeout(this.sliderInactivityTimer);
+                
+                this.sliderInactivityTimer = setTimeout(() => {
+                    this.logSuccess('Resetting sliders to preset defaults due to inactivity.');
+                    this.loadPresetValues(this.activeTransitionPreset);
+                }, 5000);
+            });
+        });
+
 
         const presetContainer = document.getElementById('particleTransitionPresetContainer');
         if(presetContainer) {
             presetContainer.querySelectorAll('button').forEach(button => {
                 button.addEventListener('click', () => {
-                    const presetMap = { 'transitionPreset1': 'default', 'transitionPreset2': 'pour' };
+                    const presetMap = { 
+                        'transitionPreset1': 'default', 
+                        'transitionPreset2': 'pour',
+                        'transitionPreset3': 'liquid',
+                        'transitionPreset4': 'explode',
+                        'transitionPreset5': 'nebula',
+                        'transitionPreset6': 'melt'
+                    };
                     const presetId = presetMap[button.id];
                     
                     if (presetId && this.transitionPresets[presetId]) {
@@ -682,12 +751,15 @@ export const UIManager = {
                         presetContainer.querySelectorAll('button').forEach(btn => btn.classList.remove('button-glow-effect'));
                         button.classList.add('button-glow-effect');
                         this.logSuccess(`Transition style set to: ${this.activeTransitionPreset}`);
+                        this.loadPresetValues(this.activeTransitionPreset);
                     } else {
                         this.logError(`Preset for ${button.id} not yet implemented.`);
                     }
                 });
             });
         }
+        
+        document.getElementById('liveFX1').addEventListener('click', () => this.loadLiveFXPreset('wavy'));
 
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.closest('#butterchurnControls')) return;
@@ -841,6 +913,21 @@ export const UIManager = {
         }
     },
     
+    loadLiveFXPreset(presetId) {
+        const preset = this.liveFXPresets[presetId];
+        if (!preset) {
+            this.logError(`Live FX Preset "${presetId}" not found.`);
+            return;
+        }
+
+        Object.keys(preset).forEach(key => {
+            this.app.vizSettings[key] = preset[key];
+        });
+
+        this.syncSlidersToSettings();
+        this.logSuccess(`Loaded Live FX: ${presetId}`);
+    },
+    
     handleMorphSlider(progress) {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
@@ -881,19 +968,16 @@ export const UIManager = {
         if (this.transitionAnimation) return;
 
         const S = this.app.vizSettings;
-        const isPouring = this.activeTransitionPreset === 'pour';
         const startValue = S.particle_morphProgress;
         
         let endValue;
         if (startValue < 0.5) {
-            endValue = isPouring ? 0.90 : 1.0;
+            endValue = 0.95;
         } else {
             endValue = 0.0;
         }
 
-        const duration = isPouring ? 15000 : 2000;
-
-        // ** THE FIX IS HERE: Store the final target preset values **
+        const duration = (this.activeTransitionPreset === 'pour' || this.activeTransitionPreset === 'melt') ? 7000 : 4000;
         const targetPresetId = (endValue > 0.5) ? this.activeTransitionPreset : 'default';
         const targetPreset = this.transitionPresets[targetPresetId];
 
@@ -902,16 +986,18 @@ export const UIManager = {
             startValue,
             endValue,
             duration,
-            isPouring,
-            // Store starting values of all animated properties
-            startFlowStrength: S.particle_flowStrength,
-            startAttraction: S.particle_attractionStrength,
-            startSizeMix: S.particle_size_mix,
-            // Store target values from the destination preset
-            targetFlowStrength: targetPreset.particle_flowStrength,
-            targetAttraction: targetPreset.particle_attractionStrength,
-            targetSizeMix: targetPreset.particle_size_mix
+            presetId: this.activeTransitionPreset,
+            startParams: {},
+            targetParams: {}
         };
+
+        Object.keys(targetPreset).forEach(key => {
+            this.transitionAnimation.startParams[key] = S[key];
+            this.transitionAnimation.targetParams[key] = targetPreset[key];
+        });
+        
+        this.transitionAnimation.targetParams.particle_size_mix = (endValue > 0.5) ? 0.75 : 0.0;
+        this.transitionAnimation.targetParams.particle_twinkleIntensity = (endValue > 0.5) ? 0.5 : 0.0;
 
         this.updateTransitionAnimation();
     },
@@ -920,49 +1006,80 @@ export const UIManager = {
         if (!this.transitionAnimation) return;
 
         const now = performance.now();
-        const elapsedTime = now - this.transitionAnimation.startTime;
-        let progress = elapsedTime / this.transitionAnimation.duration;
-
-        if (progress >= 1) {
-            progress = 1;
-        }
+        const anim = this.transitionAnimation;
+        const elapsedTime = now - anim.startTime;
+        let progress = Math.min(1.0, elapsedTime / anim.duration);
         
         const S = this.app.vizSettings;
-        const anim = this.transitionAnimation;
-        const ease = 1 - Math.pow(1 - progress, 4); // Use a consistent ease-out for all animations
-        const bellCurve = Math.sin(progress * Math.PI); // For effects that peak in the middle
+        const ease = 1 - Math.pow(1 - progress, 4); 
+        const bellCurve = Math.sin(progress * Math.PI); 
+        
+        const pUniformsV = this.app.ComputeManager.particleVelocityVar.material.uniforms;
+        
+        const editor = document.getElementById('particleTransitionEditor');
+        if (editor) editor.style.pointerEvents = 'none';
 
-        // Animate morph progress
         this.setMorphState(this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease));
 
-        if (anim.isPouring) {
-            // Flow strength swells in the middle and settles to its target value
-            const peakFlow = 1.0;
-            const currentFlow = this.app.THREE.MathUtils.lerp(anim.startFlowStrength, peakFlow, bellCurve);
-            S.particle_flowStrength = this.app.THREE.MathUtils.lerp(currentFlow, anim.targetFlowStrength, ease);
+        switch(anim.presetId) {
+            case 'explode':
+                const peakFlow = 5.0; 
+                S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startParams.particle_flowStrength, peakFlow, bellCurve);
+                
+                const attractionDelay = 0.7;
+                const attractionProgress = Math.max(0.0, (progress - attractionDelay) / (1.0 - attractionDelay));
+                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.01, anim.targetParams.particle_attractionStrength, attractionProgress);
+                break;
 
-            // Attraction strength dips in the middle and returns to its target value
-            const minAttraction = 0.05;
-            const currentAttraction = this.app.THREE.MathUtils.lerp(anim.startAttraction, minAttraction, bellCurve);
-            S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(currentAttraction, anim.targetAttraction, ease);
-            
-            // Size mix animates straight to its target value
-            S.particle_size_mix = this.app.THREE.MathUtils.lerp(anim.startSizeMix, anim.targetSizeMix, ease);
+            case 'melt':
+                S.particle_flowStrength = 0.0;
+                S.particle_attractionStrength = 0.0;
 
-        } else { // Default transition (simple morph, other values don't animate)
-             // No change needed here, it already works well
+                const meltPhaseProgress = Math.min(1.0, progress / 0.5); 
+                pUniformsV.u_meltProgress.value = meltPhaseProgress;
+                
+                const vortexPhaseProgress = Math.min(1.0, Math.max(0.0, (progress - 0.2) / 0.6)); 
+                pUniformsV.u_gravity.value.y = -0.1 * bellCurve; 
+                pUniformsV.u_vortexStrength.value = 5.0 * bellCurve;
+                
+                const reformPhaseProgress = Math.min(1.0, Math.max(0.0, (progress - 0.8) / 0.2)); 
+                if(reformPhaseProgress > 0) {
+                    pUniformsV.u_gravity.value.y = 0;
+                    pUniformsV.u_vortexStrength.value = 0;
+                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, anim.targetParams.particle_attractionStrength, reformPhaseProgress);
+                }
+                break;
+
+            case 'liquid':
+            case 'nebula':
+            case 'pour':
+            default:
+                Object.keys(anim.targetParams).forEach(key => {
+                    if (S[key] !== undefined && key !== 'particle_size_mix' && key !== 'particle_twinkleIntensity') {
+                        S[key] = this.app.THREE.MathUtils.lerp(anim.startParams[key], anim.targetParams[key], ease);
+                    }
+                });
+                break;
         }
+
+        S.particle_size_mix = this.app.THREE.MathUtils.lerp(anim.startParams.particle_size_mix, anim.targetParams.particle_size_mix, ease);
+        S.particle_twinkleIntensity = this.app.THREE.MathUtils.lerp(anim.startParams.particle_twinkleIntensity, anim.targetParams.particle_twinkleIntensity, ease);
+
 
         this.syncSlidersToSettings();
 
         if (progress >= 1) {
-            // ** THE FIX IS HERE: Set final values precisely **
             this.setMorphState(anim.endValue);
-            S.particle_flowStrength = anim.targetFlowStrength;
-            S.particle_attractionStrength = anim.targetAttraction;
-            S.particle_size_mix = anim.targetSizeMix;
-            this.syncSlidersToSettings();
+            Object.keys(anim.targetParams).forEach(key => {
+                S[key] = anim.targetParams[key];
+            });
+            pUniformsV.u_gravity.value.y = 0.0;
+            pUniformsV.u_vortexStrength.value = 0.0;
+            pUniformsV.u_meltProgress.value = 0.0;
             
+            if (editor) editor.style.pointerEvents = 'auto';
+
+            this.syncSlidersToSettings();
             this.transitionAnimation = null;
         } else {
             requestAnimationFrame(() => this.updateTransitionAnimation());
@@ -976,6 +1093,10 @@ export const UIManager = {
         Object.keys(preset).forEach(key => {
             this.app.vizSettings[key] = preset[key];
         });
+        
+        const currentMorph = this.app.vizSettings.particle_morphProgress;
+        this.setMorphState(currentMorph < 0.5 ? 0.0 : 0.95);
+
         this.syncSlidersToSettings();
     },
 

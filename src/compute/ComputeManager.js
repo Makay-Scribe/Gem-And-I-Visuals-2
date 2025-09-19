@@ -184,13 +184,11 @@ export const ComputeManager = {
             this.app.UIManager.logSuccess("GPGPU Compute Initialized.");
         }
         
-        // ** THE FIX IS HERE: Initialize the particle system unconditionally at startup. **
         this.initParticleSystem();
     },
 
     initParticleSystem() {
         if (this.particleGpuCompute) {
-            // If called again (e.g., on resolution change), dispose the old one first.
             this.disposeParticleSystem();
         }
 
@@ -243,11 +241,21 @@ export const ComputeManager = {
         const velocityUniforms = this.particleVelocityVar.material.uniforms;
         velocityUniforms['u_time'] = { value: 0.0 };
         velocityUniforms['u_targetPositionMap'] = { value: this.particleFlatPositionTexture };
+        // ** THE FIX IS HERE: Add u_initialPosition so the melt shader can access it **
+        velocityUniforms['u_initialPosition'] = { value: this.particleFlatPositionTexture };
+        velocityUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
+
         velocityUniforms['particle_flowScale'] = { value: S.particle_flowScale };
         velocityUniforms['particle_flowSpeed'] = { value: S.particle_flowSpeed };
         velocityUniforms['particle_flowStrength'] = { value: S.particle_flowStrength };
         velocityUniforms['particle_morphProgress'] = { value: S.particle_morphProgress };
         velocityUniforms['particle_attractionStrength'] = { value: S.particle_attractionStrength };
+
+        velocityUniforms['u_gravity'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
+        velocityUniforms['u_vortexStrength'] = { value: 0.0 };
+        velocityUniforms['u_vortexPosition'] = { value: new this.app.THREE.Vector2(0, 0) };
+        // ** THE FIX IS HERE: Add the melt progress uniform **
+        velocityUniforms['u_meltProgress'] = { value: 0.0 };
         
         const positionUniforms = this.particlePositionVar.material.uniforms;
         positionUniforms['u_delta'] = { value: 0.0 };
@@ -322,7 +330,6 @@ export const ComputeManager = {
 
     disposeParticleSystem() {
         if (this.particleGpuCompute) {
-            // It's good practice to dispose of all textures associated with the compute renderer
             const variables = [this.particlePositionVar, this.particleVelocityVar];
             variables.forEach(variable => {
                 if (variable) {
@@ -334,7 +341,6 @@ export const ComputeManager = {
             if (this.particleModelPositionTexture) this.particleModelPositionTexture.dispose();
             if (this.particleModelUVTexture) this.particleModelUVTexture.dispose();
             
-            // GPUComputationRenderer doesn't have a dedicated dispose method, so we nullify everything
             this.particleGpuCompute = null;
             this.particlePositionVar = null;
             this.particleVelocityVar = null;

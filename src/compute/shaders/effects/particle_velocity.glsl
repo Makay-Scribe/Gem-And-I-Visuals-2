@@ -4,6 +4,8 @@
 // Uniforms for controlling the simulation
 uniform float u_time;
 uniform sampler2D u_targetPositionMap; // Texture containing the target shape (flat plane, 3D model, etc.)
+uniform sampler2D u_initialPosition; // The original, flat position of the particle
+uniform vec2 u_planeDimensions; 
 
 // Uniforms for the flow field (turbulence)
 uniform float particle_flowScale;
@@ -14,7 +16,11 @@ uniform float particle_flowStrength;
 uniform float particle_morphProgress;
 uniform float particle_attractionStrength;
 
-// ** REMOVED: Pouring uniforms are not used in this simplified model yet **
+// Uniforms for the new Melt/Vortex effect
+uniform vec3 u_gravity;
+uniform float u_vortexStrength;
+uniform vec2 u_vortexPosition; // Center of the vortex in world space
+uniform float u_meltProgress; // 0 = not melting, 1 = fully melted
 
 
 void main() {
@@ -24,9 +30,9 @@ void main() {
     // Read the current position and velocity from the input textures
     vec3 position = texture(texturePosition, uv).xyz;
     vec3 velocity = texture(textureVelocity, uv).xyz;
+    vec3 initialPos = texture(u_initialPosition, uv).xyz;
 
     // --- 1. Calculate Flow Field (Turbulence) ---
-    // This force pushes the particles around randomly.
     vec3 noise_coord = position * particle_flowScale;
     noise_coord.z += u_time * particle_flowSpeed;
     vec3 flowForce = vec3(
@@ -35,29 +41,45 @@ void main() {
         snoise(noise_coord + vec3(20.0))
     ) * particle_flowStrength;
     
-    // Modify how morphProgress scales the turbulence.
-    // We create a "peak" in the middle of the transition.
-    // When morphProgress is 0.0 or 1.0, turbulenceStrength is 0.0.
-    // When morphProgress is 0.5, turbulenceStrength is 1.0 (maximum).
+    // ** THE FIX IS HERE: Reverted to the original logic. **
+    // Turbulence is now ONLY active during a transition.
     float turbulenceStrength = sin(particle_morphProgress * PI);
     vec3 scaledFlowForce = flowForce * turbulenceStrength;
 
 
     // --- 2. Calculate Attraction Force ---
-    // This force ALWAYS pulls the particles toward their target position.
     vec3 targetPos = texture(u_targetPositionMap, uv).xyz;
     vec3 attractionForce = (targetPos - position) * particle_attractionStrength;
 
+    // --- 3. Calculate Vortex Force ---
+    vec3 vortexForce = vec3(0.0);
+    if (u_vortexStrength > 0.0) {
+        vec2 toCenter = u_vortexPosition - position.xy;
+        float dist = length(toCenter);
+        vec2 pullDir = normalize(toCenter);
+        vec2 swirlDir = vec2(-pullDir.y, pullDir.x);
+        float falloff = 1.0 / (1.0 + dist * dist);
+        vortexForce.xy = (pullDir + swirlDir) * u_vortexStrength * falloff;
+    }
 
-    // --- 3. Combine Forces ---
-    // We now ADD the forces instead of mixing them.
-    // The particles are always attracted, and turbulence is added on top,
-    // scaled by how far along the transition is.
-    vec3 finalForce = attractionForce + scaledFlowForce;
+    // --- 4. Calculate Melt/Gravity Force ---
+    vec3 gravityForce = vec3(0.0);
+    if (u_meltProgress > 0.0) {
+        float topOfPlane = u_planeDimensions.y * 0.5;
+        float meltFrontY = topOfPlane * (1.0 - u_meltProgress * 2.0); 
+        
+        if (initialPos.y > meltFrontY) {
+            gravityForce = u_gravity;
+        }
+    }
 
-    // --- 4. Apply Force and Damping ---
+
+    // --- 5. Combine Forces ---
+    vec3 finalForce = attractionForce + scaledFlowForce + gravityForce + vortexForce;
+
+    // --- 6. Apply Force and Damping ---
     velocity += finalForce;
-    velocity *= 0.98; 
+    velocity *= 0.90; 
 
     gl_FragColor = vec4(velocity, 1.0);
 }
