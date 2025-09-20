@@ -25,7 +25,11 @@ export const ComputeManager = {
     positionVariable: null,
     previousPositionVariable: null, 
     initialPositionTexture: null,
-    clothEnableTime: -1, 
+    
+    // ** THE FIX IS HERE: New state variables for blending **
+    clothState: 'idle', // idle, blending_in, blending_out
+    clothBlendStartTime: 0,
+
 
     // --- Isolated GPGPU System for Particles ---
     particleGpuCompute: null,
@@ -43,8 +47,6 @@ export const ComputeManager = {
         this.app = appInstance;
         const renderer = this.app.renderer;
 
-        // ** THE FIX IS HERE: Call dispose first to clean up any existing systems **
-        // This prevents memory leaks if init() is ever called more than once.
         this.dispose();
 
         this.WIDTH = planeResX;
@@ -330,7 +332,6 @@ export const ComputeManager = {
         console.log(`Baked ${particleCount} points (position & UVs) to textures.`);
     },
 
-    // ** THE FIX IS HERE: New and updated dispose methods **
     dispose() {
         this.disposeLandscapeSystem();
         this.disposeParticleSystem();
@@ -361,7 +362,6 @@ export const ComputeManager = {
             const variables = [this.particlePositionVar, this.particleVelocityVar];
             variables.forEach(variable => {
                 if (variable && variable.renderTargets) {
-                    // Correctly dispose of the render target itself, which handles the texture within it.
                     variable.renderTargets.forEach(rt => rt.dispose());
                 }
             });
@@ -389,19 +389,45 @@ export const ComputeManager = {
         if (this.gpuCompute && S.gpgpuGeometryMode !== 'particles') {
             const uniforms = this.positionVariable.material.uniforms;
             
-            if (S.gpgpu_enableCloth && this.clothEnableTime < 0) {
-                this.clothEnableTime = this.app.currentTime;
-            } else if (!S.gpgpu_enableCloth) {
-                this.clothEnableTime = -1;
+            // ** THE FIX IS HERE: New blend logic **
+            const clothEnabled = S.gpgpu_enableCloth;
+            const blendDuration = S.gpgpu_clothBlendTime > 0 ? S.gpgpu_clothBlendTime : 0.01;
+            let blendFactor = uniforms.u_gpgpu_clothBlendFactor.value;
+
+            // Handle state transitions
+            if (clothEnabled && this.clothState === 'idle') {
+                this.clothState = 'blending_in';
+                this.clothBlendStartTime = this.app.currentTime;
+            } else if (!clothEnabled && this.clothState === 'blending_in') {
+                this.clothState = 'blending_out';
+                // To reverse from the current point, we calculate an adjusted start time
+                const currentProgress = (this.app.currentTime - this.clothBlendStartTime) / blendDuration;
+                this.clothBlendStartTime = this.app.currentTime - (1.0 - currentProgress) * blendDuration;
+            } else if (!clothEnabled && this.clothState === 'idle') {
+                 // Do nothing, already stable
+            } else if (clothEnabled && this.clothState === 'blending_out') {
+                this.clothState = 'blending_in';
+                const currentProgress = 1.0 - (this.app.currentTime - this.clothBlendStartTime) / blendDuration;
+                this.clothBlendStartTime = this.app.currentTime - currentProgress * blendDuration;
             }
 
-            let blendFactor = 0.0;
-            if (this.clothEnableTime > 0) {
-                const elapsedTime = this.app.currentTime - this.clothEnableTime;
-                const blendDuration = S.gpgpu_clothBlendTime > 0 ? S.gpgpu_clothBlendTime : 0.01;
+
+            // Calculate blend factor based on state
+            if (this.clothState === 'blending_in') {
+                const elapsedTime = this.app.currentTime - this.clothBlendStartTime;
                 blendFactor = Math.min(elapsedTime / blendDuration, 1.0);
+                if (blendFactor >= 1.0) {
+                    this.clothState = 'idle';
+                }
+            } else if (this.clothState === 'blending_out') {
+                const elapsedTime = this.app.currentTime - this.clothBlendStartTime;
+                blendFactor = 1.0 - Math.min(elapsedTime / blendDuration, 1.0);
+                if (blendFactor <= 0.0) {
+                    this.clothState = 'idle';
+                }
             }
             uniforms.u_gpgpu_clothBlendFactor.value = blendFactor;
+
 
             uniforms.u_gpgpu_enableWaterRipple.value = S.gpgpu_enableWaterRipple;
             uniforms.u_gpgpu_rippleSpeed.value = S.gpgpu_rippleSpeed;

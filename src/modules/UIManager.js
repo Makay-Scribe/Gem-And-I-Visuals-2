@@ -508,22 +508,16 @@ export const UIManager = {
         document.getElementById('lightDirectionZ').disabled = disabled;
     },
 
-    // ** THE FIX IS HERE: The refresh logic is now more robust. **
-    refreshAccordion(elementInside) {
-        if (!elementInside) return;
-
-        // Use a timeout to allow the browser to reflow the layout *before* we measure scrollHeight.
+    refreshAccordion(containerElement) {
+        if (!containerElement) return;
         setTimeout(() => {
-            let parent = elementInside.closest('.accordion-content.open');
-            while (parent) {
-                // Temporarily remove the max-height to measure the true content height.
-                parent.style.maxHeight = 'none';
-                // Set the new max-height based on the actual content size.
-                parent.style.maxHeight = parent.scrollHeight + 'px';
-                // Move up to the next parent accordion in the hierarchy.
-                parent = parent.parentElement.closest('.accordion-content.open');
-            }
-        }, 0); // A delay of 0ms is enough to push this to the next render cycle.
+            const openContents = containerElement.querySelectorAll('.accordion-content.open');
+            openContents.forEach(content => {
+                content.style.maxHeight = 'none'; 
+                const scrollHeight = content.scrollHeight;
+                content.style.maxHeight = scrollHeight + 'px';
+            });
+        }, 0);
     },
 
     loadUserShader(presetId) {

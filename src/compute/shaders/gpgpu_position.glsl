@@ -40,7 +40,7 @@ uniform float u_gpgpu_ambientWindStrength;
 uniform float u_gpgpu_ambientWindSpeed;
 uniform float u_gpgpu_ambientWindScale;
 uniform vec3 u_gpgpu_directionalWind;
-uniform float u_gpgpu_clothBlendFactor; // Used for smooth transition when enabling cloth
+uniform float u_gpgpu_clothBlendFactor; // This will now be used to scale forces
 
 // Fold Uniforms
 uniform bool u_gpgpu_enableFold;
@@ -109,31 +109,26 @@ void main() {
     
     vec3 finalPos;
     
-    // --- HIGH-LEVEL LOGIC BRANCH ---
-    // The cloth simulation is fundamentally incompatible with the other effects.
-    // It must run exclusively to maintain a stable physics state.
+    // --- ** THE FIX IS HERE: Reverted to a stable, state-preserving structure ** ---
+    // The simulation's state is preserved correctly with this if/else structure.
+    // The smooth transition is now handled by animating the physics uniforms from the CPU.
     if (u_gpgpu_enableCloth) {
-        // When cloth is on, it's the ONLY thing that should run.
+        // When cloth is on, it's the ONLY thing that should run for this variable.
+        // Its output is fed back into itself on the next frame to maintain state.
         vec3 currentSimPos = texture(texturePosition, uv).xyz;
         finalPos = calculateCloth(currentSimPos, initialPos, uv, u_audioLow);
     } else {
-        // --- NON-CLOTH EFFECTS PIPELINE ---
-
-        // 1. Determine the base shape. Geometric transformations like Fold and Cylinder
-        // are mutually exclusive. We use an if/else-if chain to ensure only one runs.
+        // If cloth is off, calculate the geometric/displacement effects.
+        // This effectively "resets" the simulation texture to a non-physical state.
         vec3 baseShape;
-        
-        // ** THE FIX IS HERE: Enforce mutual exclusivity for geometric transformations **
         if (u_gpgpu_enableCylinder) {
             baseShape = calculateCylinder(initialPos, uv, u_audioLow);
         } else if (u_gpgpu_enableFold) {
             baseShape = calculateFold(initialPos, uv, u_audioLow);
         } else {
-            // If no geometric transformation is active, the base shape is the flat plane.
             baseShape = initialPos;
         }
         
-        // 2. Calculate all additive displacement effects. These can be safely combined.
         vec3 displacement = vec3(0.0);
         displacement += calculateSag(uv, u_audioLow);
         displacement += calculateDroop(uv, u_audioLow);
@@ -141,7 +136,6 @@ void main() {
         displacement += calculateEqRipple(uv);
         displacement += calculatePeel(uv, u_audioLow);
         
-        // 3. Add the final displacement to the calculated base shape.
         finalPos = baseShape + displacement;
     }
 
