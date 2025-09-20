@@ -173,7 +173,6 @@ const App = {
         particle_min_size: 0.0,
         particle_size_mix: 0.0,
         particle_twinkleIntensity: 0.0,
-        // ** THE FIX IS HERE: Reset particle physics defaults to a "null" state **
         particle_flowScale: 0.1,
         particle_flowSpeed: 0.0,
         particle_flowStrength: 0.0,
