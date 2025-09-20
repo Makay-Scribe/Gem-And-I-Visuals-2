@@ -89,10 +89,9 @@ vec3 calculateCloth(vec3 currentPos, vec3 initialPos, vec2 uv, float audio) {
     vec3 newPos = currentPos + velocity + totalAcceleration * u_delta * u_delta;
 
     // --- Constraints ---
-    // ** THE FIX IS HERE: Calculate separate rest lengths for X and Y axes **
     float restLengthX = u_planeDimensions.x / resolution.x;
     float restLengthY = u_planeDimensions.y / resolution.y;
-    float restLengthDiag = length(vec2(restLengthX, restLengthY)); // Correct diagonal length
+    float restLengthDiag = length(vec2(restLengthX, restLengthY));
 
     int iterations = int(gpgpu_clothIterations);
 

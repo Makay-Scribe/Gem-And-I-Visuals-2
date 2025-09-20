@@ -508,6 +508,7 @@ export const UIManager = {
         document.getElementById('lightDirectionZ').disabled = disabled;
     },
 
+    // ** THE FIX IS HERE: The refresh logic is now robust. **
     refreshAccordion(containerElement) {
         if (!containerElement) return;
         setTimeout(() => {
@@ -516,6 +517,14 @@ export const UIManager = {
                 content.style.maxHeight = 'none'; 
                 const scrollHeight = content.scrollHeight;
                 content.style.maxHeight = scrollHeight + 'px';
+
+                // Also refresh any open parent accordions
+                let parent = content.parentElement.closest('.accordion-content.open');
+                while(parent) {
+                    parent.style.maxHeight = 'none';
+                    parent.style.maxHeight = parent.scrollHeight + 'px';
+                    parent = parent.parentElement.closest('.accordion-content.open');
+                }
             });
         }, 0);
     },
