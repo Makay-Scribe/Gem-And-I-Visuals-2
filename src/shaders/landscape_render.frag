@@ -58,40 +58,42 @@ float GeometrySchlickGGX(float NdotV, float roughness) { float r = (roughness + 
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) { float NdotV = max(dot(N, V), 0.0); float NdotL = max(dot(N, L), 0.0); float ggx2 = GeometrySchlickGGX(NdotV, roughness); float ggx1 = GeometrySchlickGGX(NdotL, roughness); return ggx1 * ggx2; }
 
 void main() {
-    vec2 workingUV = vUv;
     vec3 albedo;
     vec3 N = normalize(vWorldNormal);
 
-    // --- BEVEL EFFECT (CONDITIONAL) ---
+    // --- ** THE FIX IS HERE ** ---
+    // We now have two distinct paths for coloring: one for the complex CubeWall,
+    // and a simple one for all other mesh types (Faceted, Continuous).
+
     if (u_gpgpu_enableCubeWall) {
+        // --- CUBEWALL / GEOCUBE LOGIC ---
+        
+        // 1. Apply beveling to the normal for edge highlights
         bool isCubeFace = abs(vLocalNormal.z) > 0.9 || abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9;
         if (isCubeFace) {
             vec2 faceUV = fract(vUv * u_gpgpu_cubeWallGridSize);
             N = getBeveledNormal(N, faceUV, u_gpgpu_cubeWallBevelWidth, u_gpgpu_cubeWallBevelIntensity);
         }
-    }
 
-    // --- ALBEDO (COLOR) LOGIC ---
-    // ** THE FIX IS HERE: The `triangleWave` block has been removed. **
-    if (abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9) {
-        albedo = u_gpgpu_cubeWallSideColor;
-
-    } else if (abs(vLocalNormal.z) > 0.9) {
-        bool isPlane = (vLocalNormal.x == 0.0 && vLocalNormal.y == 0.0);
-        if (isPlane) {
-            albedo = texture2D(u_map, workingUV).rgb;
+        // 2. Determine albedo based on face orientation (front vs. side)
+        if (abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9) {
+            // This is a side face of a cube.
+            albedo = u_gpgpu_cubeWallSideColor;
         } else {
+            // This is a front face. Use the image texture or a default dark color.
             if (gpgpu_cubeWallUseImageTexture) {
-                albedo = texture2D(u_map, workingUV).rgb;
+                albedo = texture2D(u_map, vUv).rgb;
             } else {
                 albedo = vec3(0.1);
             }
         }
     } else {
-        albedo = texture2D(u_map, workingUV).rgb;
+        // --- FACETED / CONTINUOUS LOGIC ---
+        // For any non-CubeWall mesh, we simply apply the texture directly.
+        albedo = texture2D(u_map, vUv).rgb;
     }
     
-    // --- PBR LIGHTING CALCULATION (now uses potentially modified normal 'N') ---
+    // --- PBR LIGHTING CALCULATION (now uses the correct normal 'N' and 'albedo') ---
     float metalness = u_metalness;
     float roughness = u_roughness;
     

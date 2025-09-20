@@ -18,13 +18,9 @@ export const UIManager = {
     activeTransitionPreset: 'default',
     sliderInactivityTimer: null,
 
-    // ** THE FIX IS HERE: Define groups of mutually exclusive GPGPU effects **
     gpgpuExclusiveGroups: [
-        // Cloth is incompatible with all other geometric or displacement effects.
         ['gpgpu_enableCloth'], 
-        // These are fundamental geometric transformations that shouldn't be combined.
         ['gpgpu_enableFold', 'gpgpu_enableCylinder']
-        // Add more groups here if needed, e.g., ['effect_A', 'effect_B']
     ],
 
     liveFXPresets: {
@@ -115,7 +111,7 @@ export const UIManager = {
         this.setupEventListeners();
 
         this.updateUIVisibilityForMode(this.app.vizSettings.gpgpuGeometryMode);
-        this._updateGpgpuPanelStates(); // Initial check on load
+        this._updateGpgpuPanelStates(); 
         
         this.updateBackgroundControlsVisibility(true);
         this.updateImageEffectsVisibility(true);
@@ -600,12 +596,10 @@ export const UIManager = {
         });
     },
 
-    // ** THE FIX IS HERE: This function was renamed and is now private **
     _updateGpgpuPanelStates() {
         const S = this.app.vizSettings;
         let activeExclusiveEffect = null;
     
-        // Find which, if any, exclusive effect is currently active
         for (const group of this.gpgpuExclusiveGroups) {
             for (const effectId of group) {
                 if (S[effectId]) {
@@ -616,26 +610,22 @@ export const UIManager = {
             if (activeExclusiveEffect) break;
         }
     
-        // A special case for 'Cloth', which disables all other GPGPU effects
         if (S.gpgpu_enableCloth) {
             const allGpgpuCheckboxes = document.querySelectorAll('#gpgpuEffectsAccordion .header-toggle-checkbox');
             allGpgpuCheckboxes.forEach(checkbox => {
                 const accordionItem = checkbox.closest('.accordion-item');
                 if (accordionItem) {
-                    // Disable all panels except for the cloth panel itself
                     const isDisabled = (checkbox.id !== 'gpgpu_enableCloth');
                     accordionItem.classList.toggle('container-disabled', isDisabled);
                 }
             });
-            return; // Exit early
+            return; 
         }
     
-        // Handle all other exclusive groups
         this.gpgpuExclusiveGroups.forEach(group => {
             let groupHasActiveEffect = false;
             let activeEffectInGroup = null;
     
-            // Check if any effect in this specific group is active
             for (const effectId of group) {
                 if (S[effectId]) {
                     groupHasActiveEffect = true;
@@ -644,7 +634,6 @@ export const UIManager = {
                 }
             }
     
-            // Enable or disable other items in the group
             group.forEach(effectId => {
                 const checkbox = document.getElementById(effectId);
                 if (checkbox) {
@@ -819,8 +808,6 @@ export const UIManager = {
                     }
                 }
                 
-                // ** THE FIX IS HERE: Call the panel state update function **
-                // This checks for conflicts every time a GPGPU checkbox is toggled.
                 const isGpgpuCheckbox = !!e.target.closest('#gpgpuEffectsAccordion');
                 if (isGpgpuCheckbox) {
                     this._updateGpgpuPanelStates();
@@ -1172,8 +1159,12 @@ export const UIManager = {
         this.app.isDemoModeActive = true;
         document.getElementById('demoModeButton').textContent = 'STOP DEMO';
         
-        this.app.ImagePlaneManager.startAutopilot('autopilotPreset3');
+        // --- THE FIX IS HERE: Explicitly set the geometry mode for the demo ---
+        this.app.vizSettings.gpgpuGeometryMode = 'faceted';
+        this.app.ImagePlaneManager.createDefaultLandscape();
+        // --- END OF FIX ---
 
+        this.app.ImagePlaneManager.startAutopilot('autopilotPreset3');
         this.app.ModelManager.startAutopilot('autopilotPreset2');
         
         const audioEl = this.app.AudioProcessor.audioElement;
@@ -1194,6 +1185,8 @@ export const UIManager = {
 
         this.syncAllControlsToSettings();
         this.updateMasterControls();
+        this.updateUIVisibilityForMode('faceted'); // Update UI to match demo mode
+        this._updateGpgpuPanelStates();
     },
 
     stopDemoMode() {
@@ -1216,6 +1209,10 @@ export const UIManager = {
 
         this.app.vizSettings = JSON.parse(JSON.stringify(this.app.defaultVisualizerSettings));
         
+        // --- THE FIX IS HERE: Explicitly restore the default geometry mode ---
+        this.app.ImagePlaneManager.createDefaultLandscape();
+        // --- END OF FIX ---
+
         const defaultShaderId = 'presetBg6';
         this.app.vizSettings.shaderToyGLSL = this.app.shaderPresets[defaultShaderId];
         this.loadUserShader(defaultShaderId);
@@ -1223,7 +1220,7 @@ export const UIManager = {
         this.syncAllControlsToSettings();
         this.updateMasterControls();
         this.updateUIVisibilityForMode(this.app.vizSettings.gpgpuGeometryMode);
-        this.updateBackgroundControlsVisibility(true);
+        this._updateGpgpuPanelStates();
     },
     
     cycleDemoShader() {
