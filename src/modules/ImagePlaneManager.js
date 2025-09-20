@@ -569,6 +569,25 @@ export const ImagePlaneManager = {
         return new this.app.THREE.Vector3(x, y, z);
     },
 
+    /**
+     * ** THE FIX IS HERE: New helper function **
+     * Converts a grid coordinate (e.g., x=5, y=3) into a UV coordinate (e.g., u=0.5, v=0.3)
+     * that can be used to sample textures or replicate shader logic.
+     * @param {number} gridX The X index of the cube on the grid.
+     * @param {number} gridY The Y index of the cube on the grid.
+     * @returns {THREE.Vector2} The calculated UV coordinate.
+     */
+    getUvFromGridCoords(gridX, gridY) {
+        const S = this.app.vizSettings;
+        const GRID_SIZE = S.gpgpu_cubeWallGridSize;
+        
+        // This calculation matches the GPGPU texture sampling in the vertex shader
+        const u = gridX / (GRID_SIZE - 1.0);
+        const v = 1.0 - (gridY / (GRID_SIZE - 1.0)); // Flipped to match GPGPU texture coordinates
+
+        return new this.app.THREE.Vector2(u, v);
+    },
+
     getCubeWorldPosition(gridX, gridY) {
         const localPos = this.getCubeLocalPosition(gridX, gridY);
         const container = this.landscapeContainer;

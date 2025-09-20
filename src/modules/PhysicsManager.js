@@ -349,24 +349,47 @@ export const PhysicsManager = {
 
     // Update function called in the main animation loop
     update(delta) {
-        if (!this.world || !this.app.vizSettings.enablePhysicsCubes) {
-            this.clearCubes(); // Ensure cubes are cleared if effect is disabled
+        const S = this.app.vizSettings;
+
+        if (!this.world || !S.enablePhysicsCubes) {
+            if (this.physicsMeshes.length > 0) this.clearCubes();
             return;
         }
 
+        // --- THE FIX IS HERE ---
+        // Check for any active GPGPU effects that animate the terrain over time.
+        // If any are active, the physics simulation is paused and cubes are cleared
+        // to prevent desynchronization between the visual mesh and the static physics body.
+        const isGpgpuAnimationActive = S.gpgpu_enableWaterRipple ||
+                                       S.gpgpu_enableEqRipple ||
+                                       S.gpgpu_enableCloth ||
+                                       S.gpgpu_enableFold ||
+                                       S.gpgpu_enableSag ||
+                                       S.gpgpu_enableDroop ||
+                                       S.gpgpu_enablePeel;
+
+        if (isGpgpuAnimationActive) {
+            if (this.physicsMeshes.length > 0) {
+                this.clearCubes();
+            }
+            return; // Exit before stepping the physics world.
+        }
+        // --- END OF FIX ---
+
+
         // Update gravity if the setting changed
-        if (this.world.gravity.y !== this.app.vizSettings.physicsGravityY) {
-            this.world.gravity.set(0, this.app.vizSettings.physicsGravityY, 0);
+        if (this.world.gravity.y !== S.physicsGravityY) {
+            this.world.gravity.set(0, S.physicsGravityY, 0);
         }
 
         // Update physics material properties if settings changed
         if (this.world.contactmaterials.length > 0) {
             const contactMaterial = this.world.contactmaterials[0]; // Assuming first contact material is cube-ground
-            if (contactMaterial.friction !== this.app.vizSettings.physicsCubeFriction) {
-                contactMaterial.friction = this.app.vizSettings.physicsCubeFriction;
+            if (contactMaterial.friction !== S.physicsCubeFriction) {
+                contactMaterial.friction = S.physicsCubeFriction;
             }
-            if (contactMaterial.restitution !== this.app.vizSettings.physicsCubeBounciness) {
-                contactMaterial.restitution = this.app.vizSettings.physicsCubeBounciness;
+            if (contactMaterial.restitution !== S.physicsCubeBounciness) {
+                contactMaterial.restitution = S.physicsCubeBounciness;
             }
         }
 
@@ -383,8 +406,8 @@ export const PhysicsManager = {
 
             // Handle scaling here to apply the vizSetting.physicsCubeSize to existing cubes
             // Only update if the current scale is different
-            if (mesh.scale.x !== this.app.vizSettings.physicsCubeSize) {
-                mesh.scale.set(this.app.vizSettings.physicsCubeSize, this.app.vizSettings.physicsCubeSize, this.app.vizSettings.physicsCubeSize);
+            if (mesh.scale.x !== S.physicsCubeSize) {
+                mesh.scale.set(S.physicsCubeSize, S.physicsCubeSize, S.physicsCubeSize);
             }
         });
     }

@@ -39,10 +39,34 @@ export const CubeWallManager = {
         console.log("CubeWallManager initialized.");
     },
 
+    _calculateGpgpuOffsetCPU() {
+        const S = this.app.vizSettings;
+        let totalOffset = 0;
+
+        const playerUv = this.app.ImagePlaneManager.getUvFromGridCoords(this.playerGridPos.x, this.playerGridPos.y);
+
+        if (S.gpgpu_enableWaterRipple) {
+            const dist = playerUv.distanceTo(new THREE.Vector2(0.5, 0.5));
+            const ripple = Math.sin(dist * S.gpgpu_rippleFrequency - this.app.currentTime * S.gpgpu_rippleSpeed) * (1.0 - dist);
+            const audioFactor = 1.0 + this.app.AudioProcessor.energy.low * 2.0;
+            totalOffset += ripple * S.gpgpu_rippleStrength * audioFactor;
+        }
+
+        if (S.gpgpu_enablePeel) {
+            const centeredUv = new THREE.Vector2(playerUv.x - 0.5, playerUv.y - 0.5);
+            const cornerStrength = Math.pow(centeredUv.length() * 1.414, 4.0);
+            const peelAnimation = (Math.sin(this.app.currentTime * 0.5) + 1.0) * 0.5;
+            const audioInfluence = S.gpgpu_peelEnableAudio ? this.app.AudioProcessor.energy.low : 0.0;
+            const totalAmount = S.gpgpu_peelAmount * peelAnimation * (1.0 + audioInfluence * 3.0);
+            totalOffset += cornerStrength * totalAmount * 10.0;
+        }
+
+        return totalOffset;
+    },
+
     _createPlayerCube() {
         if (this.playerCube) {
             this.playerCube.geometry.dispose();
-            // If material is an array, dispose each one
             if (Array.isArray(this.playerCube.material)) {
                 this.playerCube.material.forEach(m => m.dispose());
             } else {
@@ -53,7 +77,6 @@ export const CubeWallManager = {
         const cubeSize = this._getCubeSize() * 0.9;
         const playerGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
         
-        // ** THE FIX IS HERE: Create an array of materials for each face **
         const textureLoader = new THREE.TextureLoader();
         const facePaths = [
             '/Devmedia/playercuberight.png',
@@ -66,16 +89,15 @@ export const CubeWallManager = {
 
         const materials = facePaths.map(path => {
             const texture = textureLoader.load(path);
-            texture.colorSpace = THREE.SRGBColorSpace; // Assume standard color space for UI images
+            texture.colorSpace = THREE.SRGBColorSpace; 
 
             const material = new THREE.MeshStandardMaterial({ 
-                color: 0xffffff, // White color to not tint the texture
+                color: 0xffffff,
                 map: texture,
                 metalness: this.app.vizSettings.metalness,
                 roughness: this.app.vizSettings.roughness,
             });
 
-            // Apply the same bevel shader logic to each material
             material.onBeforeCompile = (shader) => {
                 shader.uniforms.u_gpgpu_enableCubeWall = { value: this.app.vizSettings.gpgpu_enableCubeWall };
                 shader.uniforms.u_gpgpu_cubeWallBevelWidth = { value: this.app.vizSettings.gpgpu_cubeWallBevelWidth };
@@ -172,7 +194,9 @@ export const CubeWallManager = {
     },
 
     startNextMove() {
-        if (this.animationState.isMoving || !this.playerCube || !this.playerCube.visible) return;
+        // --- THE FIX IS HERE: The visibility check has been removed. ---
+        // The movement logic can now run even if the cube is not visible.
+        if (this.animationState.isMoving || !this.playerCube) return;
 
         let nextMove = null;
         if (this.currentDirection && Math.random() > 0.25) {
@@ -233,9 +257,11 @@ export const CubeWallManager = {
 
     update() {
         const S = this.app.vizSettings;
-        if (!this.playerCube || !this.playerCube.visible || !S.gpgpu_enableCubeWall) return;
+        if (!this.playerCube || !S.gpgpu_enableCubeWall) {
+            if(this.playerCube) this.playerCube.visible = false;
+            return;
+        }
 
-        // ** THE FIX IS HERE: Update the array of materials **
         if (Array.isArray(this.playerCube.material)) {
             this.playerCube.material.forEach(material => {
                 material.roughness = S.roughness;
@@ -252,23 +278,25 @@ export const CubeWallManager = {
         }
 
         const state = this.animationState;
-        
-        const isSliderActive = false; // TODO: Replace with actual check
+        const isSliderActive = false;
+
+        const landscapeBasePos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
+        const gpgpuOffset = this._calculateGpgpuOffsetCPU();
+        const playerHeightOffset = (this._getCubeSize() / 2) + ((this._getCubeSize() * 0.9) / 2);
+        const finalTargetZ = landscapeBasePos.z + gpgpuOffset + playerHeightOffset;
+
 
         if (state.isMoving && !isSliderActive) {
             const progress = Math.min(1, (performance.now() - state.startTime) / this.PLAYER_MOVE_DURATION);
             
-            const landscapeCubeSize = this._getCubeSize();
-            const zOffset = (landscapeCubeSize / 2) + ((landscapeCubeSize * 0.9) / 2);
-
-            const targetLandscapeZ = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y).z;
-            state.targetPosition.z = targetLandscapeZ + zOffset;
+            state.targetPosition.z = finalTargetZ;
 
             const tempPosition = new THREE.Vector3().lerpVectors(state.startPosition, state.targetPosition, progress);
             
+            const landscapeCubeSize = this._getCubeSize();
             tempPosition.z += this.PLAYER_ROLL_LIFT_AMOUNT * landscapeCubeSize * Math.sin(progress * Math.PI);
-            this.playerCube.position.copy(tempPosition);
             
+            this.playerCube.position.copy(tempPosition);
             this.playerCube.quaternion.slerpQuaternions(state.startQuaternion, state.targetQuaternion, progress);
 
             if (progress >= 1) {
@@ -281,12 +309,11 @@ export const CubeWallManager = {
             }
         } else {
             if (this.playerCube && !state.isMoving) {
-                const landscapeCubeSize = this._getCubeSize();
-                const zOffset = (landscapeCubeSize / 2) + ((landscapeCubeSize * 0.9) / 2);
-                 
-                const currentLandscapeZ = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y).z;
-                this.playerCube.position.z = currentLandscapeZ + zOffset;
+                this.playerCube.position.z = finalTargetZ;
             }
         }
+
+        const isComplexEffectActive = S.gpgpu_enableCloth;
+        this.playerCube.visible = !isComplexEffectActive;
     }
 };
