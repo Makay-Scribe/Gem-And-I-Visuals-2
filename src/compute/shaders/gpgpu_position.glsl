@@ -114,23 +114,26 @@ void main() {
     // It must run exclusively to maintain a stable physics state.
     if (u_gpgpu_enableCloth) {
         // When cloth is on, it's the ONLY thing that should run.
-        // It reads the previous frame's simulation state and computes the next.
-        // Crucially, it uses the original 'initialPos' as its anchor/tether goal,
-        // not a pre-deformed shape, which ensures stability.
         vec3 currentSimPos = texture(texturePosition, uv).xyz;
         finalPos = calculateCloth(currentSimPos, initialPos, uv, u_audioLow);
     } else {
         // --- NON-CLOTH EFFECTS PIPELINE ---
-        // If cloth is off, we can apply the other effects in a controlled sequence.
 
-        // 1. Start with the flat, initial position as our base shape.
-        vec3 baseShape = initialPos;
+        // 1. Determine the base shape. Geometric transformations like Fold and Cylinder
+        // are mutually exclusive. We use an if/else-if chain to ensure only one runs.
+        vec3 baseShape;
         
-        // 2. Apply geometric transformations first to define this new base shape.
-        baseShape = calculateCylinder(baseShape, uv, u_audioLow);
-        baseShape = calculateFold(baseShape, uv, u_audioLow);
+        // ** THE FIX IS HERE: Enforce mutual exclusivity for geometric transformations **
+        if (u_gpgpu_enableCylinder) {
+            baseShape = calculateCylinder(initialPos, uv, u_audioLow);
+        } else if (u_gpgpu_enableFold) {
+            baseShape = calculateFold(initialPos, uv, u_audioLow);
+        } else {
+            // If no geometric transformation is active, the base shape is the flat plane.
+            baseShape = initialPos;
+        }
         
-        // 3. Calculate all additive displacement effects.
+        // 2. Calculate all additive displacement effects. These can be safely combined.
         vec3 displacement = vec3(0.0);
         displacement += calculateSag(uv, u_audioLow);
         displacement += calculateDroop(uv, u_audioLow);
@@ -138,7 +141,7 @@ void main() {
         displacement += calculateEqRipple(uv);
         displacement += calculatePeel(uv, u_audioLow);
         
-        // 4. Add the final displacement to the (potentially transformed) base shape.
+        // 3. Add the final displacement to the calculated base shape.
         finalPos = baseShape + displacement;
     }
 

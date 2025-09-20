@@ -218,7 +218,7 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
 .accordion-content.open { padding: 4px; }
 
 
-/* --- NEW Styles for Disabled Accordions/Containers --- */
+/* --- ** THE FIX IS HERE: New styles for Disabled Accordions/Containers ** --- */
 .container-disabled {
     pointer-events: none;
     opacity: 0.4;
@@ -236,20 +236,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: #222;
 }
 
-/* --- NEW Status Light Style --- */
-.status-light {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background-color: var(--status-light-off);
-    margin-left: 5px;
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
-    flex-shrink: 0;
-}
-.status-light.active {
-    background-color: var(--status-light-on);
-    box-shadow: 0 0 5px 1px var(--status-light-on-glow);
-}
 
 /* "Coming Soon" Overlay Style */
 .disabled-feature::after {
@@ -568,7 +554,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--button-secondary-hover-bg);
 }
 
-/* ** THE FIX IS HERE: New styles for the Live FX buttons ** */
 .live-fx-preset-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -590,23 +575,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
 
 
 /* 3D Model Preset Grid */
-.model-preset-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 3px;
-    margin-bottom: 4px;
-}
-.model-preset-grid button {
-    background-color: var(--sub-header-bg);
-    font-size: 10px;
-    padding: 3px 2px;
-    min-height: 22px;
-    font-weight: bold;
-}
-.model-preset-grid button:hover {
-    background-color: var(--sub-header-hover-bg);
-}
-
 .model-preset-list {
     display: flex;
     flex-direction: column;

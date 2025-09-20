@@ -18,9 +18,17 @@ export const UIManager = {
     activeTransitionPreset: 'default',
     sliderInactivityTimer: null,
 
+    // ** THE FIX IS HERE: Define groups of mutually exclusive GPGPU effects **
+    gpgpuExclusiveGroups: [
+        // Cloth is incompatible with all other geometric or displacement effects.
+        ['gpgpu_enableCloth'], 
+        // These are fundamental geometric transformations that shouldn't be combined.
+        ['gpgpu_enableFold', 'gpgpu_enableCylinder']
+        // Add more groups here if needed, e.g., ['effect_A', 'effect_B']
+    ],
+
     liveFXPresets: {
         'wavy': {
-            // ** THE FIX IS HERE: Add a tiny morph progress to activate turbulence **
             particle_morphProgress: 0.01,
             particle_flowStrength: 0.4,
             particle_flowSpeed: 0.1,
@@ -107,6 +115,7 @@ export const UIManager = {
         this.setupEventListeners();
 
         this.updateUIVisibilityForMode(this.app.vizSettings.gpgpuGeometryMode);
+        this._updateGpgpuPanelStates(); // Initial check on load
         
         this.updateBackgroundControlsVisibility(true);
         this.updateImageEffectsVisibility(true);
@@ -591,32 +600,64 @@ export const UIManager = {
         });
     },
 
-    handleExclusiveGPGPUToggle(toggledId) {
+    // ** THE FIX IS HERE: This function was renamed and is now private **
+    _updateGpgpuPanelStates() {
         const S = this.app.vizSettings;
-        const exclusiveEffects = [
-            'gpgpu_enableWaterRipple',
-            'gpgpu_enableEqRipple',
-            'gpgpu_enableCloth',
-            'gpgpu_enableFold',
-            'gpgpu_enableCylinder',
-            'gpgpu_enableSag',
-            'gpgpu_enableDroop',
-            'gpgpu_enablePeel'
-        ];
+        let activeExclusiveEffect = null;
     
-        if (S[toggledId]) {
-            exclusiveEffects.forEach(effectId => {
-                if (effectId !== toggledId) {
-                    S[effectId] = false;
-                    const checkbox = document.getElementById(effectId);
-                    if (checkbox) {
-                        checkbox.checked = false;
+        // Find which, if any, exclusive effect is currently active
+        for (const group of this.gpgpuExclusiveGroups) {
+            for (const effectId of group) {
+                if (S[effectId]) {
+                    activeExclusiveEffect = effectId;
+                    break;
+                }
+            }
+            if (activeExclusiveEffect) break;
+        }
+    
+        // A special case for 'Cloth', which disables all other GPGPU effects
+        if (S.gpgpu_enableCloth) {
+            const allGpgpuCheckboxes = document.querySelectorAll('#gpgpuEffectsAccordion .header-toggle-checkbox');
+            allGpgpuCheckboxes.forEach(checkbox => {
+                const accordionItem = checkbox.closest('.accordion-item');
+                if (accordionItem) {
+                    // Disable all panels except for the cloth panel itself
+                    const isDisabled = (checkbox.id !== 'gpgpu_enableCloth');
+                    accordionItem.classList.toggle('container-disabled', isDisabled);
+                }
+            });
+            return; // Exit early
+        }
+    
+        // Handle all other exclusive groups
+        this.gpgpuExclusiveGroups.forEach(group => {
+            let groupHasActiveEffect = false;
+            let activeEffectInGroup = null;
+    
+            // Check if any effect in this specific group is active
+            for (const effectId of group) {
+                if (S[effectId]) {
+                    groupHasActiveEffect = true;
+                    activeEffectInGroup = effectId;
+                    break;
+                }
+            }
+    
+            // Enable or disable other items in the group
+            group.forEach(effectId => {
+                const checkbox = document.getElementById(effectId);
+                if (checkbox) {
+                    const accordionItem = checkbox.closest('.accordion-item');
+                    if (accordionItem) {
+                        const isDisabled = groupHasActiveEffect && effectId !== activeEffectInGroup;
+                        accordionItem.classList.toggle('container-disabled', isDisabled);
                     }
                 }
             });
-        }
+        });
     },
-
+    
     setupEventListeners() {
         document.getElementById('toggleMicInput').addEventListener('click', () => this.app.AudioProcessor.startMic());
         document.getElementById('playPauseAudioButton').addEventListener('click', () => this.app.AudioProcessor.toggleFilePlayback());
@@ -778,11 +819,12 @@ export const UIManager = {
                     }
                 }
                 
-                const exclusiveGpgpuEffects = ['gpgpu_enableWaterRipple', 'gpgpu_enableEqRipple', 'gpgpu_enableCloth', 'gpgpu_enableFold', 'gpgpu_enableCylinder', 'gpgpu_enableSag', 'gpgpu_enableDroop', 'gpgpu_enablePeel'];
-                if (exclusiveGpgpuEffects.includes(e.target.id)) {
-                    this.handleExclusiveGPGPUToggle(e.target.id);
+                // ** THE FIX IS HERE: Call the panel state update function **
+                // This checks for conflicts every time a GPGPU checkbox is toggled.
+                const isGpgpuCheckbox = !!e.target.closest('#gpgpuEffectsAccordion');
+                if (isGpgpuCheckbox) {
+                    this._updateGpgpuPanelStates();
                 }
-
              });
         });
 

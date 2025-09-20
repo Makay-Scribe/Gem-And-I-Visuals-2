@@ -43,6 +43,10 @@ export const ComputeManager = {
         this.app = appInstance;
         const renderer = this.app.renderer;
 
+        // ** THE FIX IS HERE: Call dispose first to clean up any existing systems **
+        // This prevents memory leaks if init() is ever called more than once.
+        this.dispose();
+
         this.WIDTH = planeResX;
         this.HEIGHT = planeResY;
         this.AREA = this.WIDTH * this.HEIGHT;
@@ -241,7 +245,6 @@ export const ComputeManager = {
         const velocityUniforms = this.particleVelocityVar.material.uniforms;
         velocityUniforms['u_time'] = { value: 0.0 };
         velocityUniforms['u_targetPositionMap'] = { value: this.particleFlatPositionTexture };
-        // ** THE FIX IS HERE: Add u_initialPosition so the melt shader can access it **
         velocityUniforms['u_initialPosition'] = { value: this.particleFlatPositionTexture };
         velocityUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
 
@@ -254,7 +257,6 @@ export const ComputeManager = {
         velocityUniforms['u_gravity'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
         velocityUniforms['u_vortexStrength'] = { value: 0.0 };
         velocityUniforms['u_vortexPosition'] = { value: new this.app.THREE.Vector2(0, 0) };
-        // ** THE FIX IS HERE: Add the melt progress uniform **
         velocityUniforms['u_meltProgress'] = { value: 0.0 };
         
         const positionUniforms = this.particlePositionVar.material.uniforms;
@@ -328,12 +330,39 @@ export const ComputeManager = {
         console.log(`Baked ${particleCount} points (position & UVs) to textures.`);
     },
 
+    // ** THE FIX IS HERE: New and updated dispose methods **
+    dispose() {
+        this.disposeLandscapeSystem();
+        this.disposeParticleSystem();
+    },
+
+    disposeLandscapeSystem() {
+        if (this.gpuCompute) {
+            if (this.positionVariable) {
+                this.positionVariable.renderTargets.forEach(rt => rt.dispose());
+            }
+            if (this.previousPositionVariable) {
+                this.previousPositionVariable.renderTargets.forEach(rt => rt.dispose());
+            }
+            if (this.initialPositionTexture) {
+                this.initialPositionTexture.dispose();
+            }
+
+            this.gpuCompute = null;
+            this.positionVariable = null;
+            this.previousPositionVariable = null;
+            this.initialPositionTexture = null;
+            console.log("Landscape GPGPU system disposed.");
+        }
+    },
+
     disposeParticleSystem() {
         if (this.particleGpuCompute) {
             const variables = [this.particlePositionVar, this.particleVelocityVar];
             variables.forEach(variable => {
-                if (variable) {
-                    variable.renderTargets.forEach(rt => rt.texture.dispose());
+                if (variable && variable.renderTargets) {
+                    // Correctly dispose of the render target itself, which handles the texture within it.
+                    variable.renderTargets.forEach(rt => rt.dispose());
                 }
             });
 
