@@ -110,7 +110,6 @@ export const UIManager = {
         this.setupEQCanvas(); 
         this.setupEventListeners();
 
-        this.updateUIVisibilityForMode(this.app.vizSettings.gpgpuGeometryMode);
         this._updateGpgpuPanelStates(); 
         
         this.updateBackgroundControlsVisibility(true);
@@ -502,32 +501,6 @@ export const UIManager = {
         }
     },
 
-    updateUIVisibilityForMode(mode) {
-        const gpgpuAccordions = document.querySelectorAll('#gpgpuEffectsAccordion .accordion-item');
-        
-        const visibilityMap = {
-            particles: ['Particle System'],
-            geocube: ['CubeWall', 'Peel', 'Water Ripple', 'EQ Ripple', 'Fold', 'Cylinder', 'Sag', 'Droop', 'Cloth Physics'],
-            continuous: ['Peel', 'Water Ripple', 'EQ Ripple', 'Fold', 'Cylinder', 'Sag', 'Droop', 'Cloth Physics'],
-            faceted: ['Peel', 'Water Ripple', 'EQ Ripple', 'Fold', 'Cylinder', 'Sag', 'Droop', 'Cloth Physics']
-        };
-
-        const activePanels = visibilityMap[mode] || [];
-
-        gpgpuAccordions.forEach(el => {
-            const titleEl = el.querySelector('.accordion-header .header-title');
-            if (titleEl) {
-                const title = titleEl.textContent.trim();
-                const shouldBeEnabled = activePanels.includes(title);
-                
-                el.classList.toggle('container-disabled', !shouldBeEnabled);
-            }
-        });
-
-        this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
-    },
-
-
     toggleLightSliders() { 
         const disabled = this.app.vizSettings.enableLightOrbit; 
         document.getElementById('lightDirectionX').disabled = disabled;
@@ -535,14 +508,22 @@ export const UIManager = {
         document.getElementById('lightDirectionZ').disabled = disabled;
     },
 
+    // ** THE FIX IS HERE: The refresh logic is now more robust. **
     refreshAccordion(elementInside) {
         if (!elementInside) return;
-        let parent = elementInside.closest('.accordion-content.open');
-        while (parent) {
-            parent.style.maxHeight = 'none';
-            parent.style.maxHeight = parent.scrollHeight + 'px';
-            parent = parent.parentElement.closest('.accordion-content.open');
-        }
+
+        // Use a timeout to allow the browser to reflow the layout *before* we measure scrollHeight.
+        setTimeout(() => {
+            let parent = elementInside.closest('.accordion-content.open');
+            while (parent) {
+                // Temporarily remove the max-height to measure the true content height.
+                parent.style.maxHeight = 'none';
+                // Set the new max-height based on the actual content size.
+                parent.style.maxHeight = parent.scrollHeight + 'px';
+                // Move up to the next parent accordion in the hierarchy.
+                parent = parent.parentElement.closest('.accordion-content.open');
+            }
+        }, 0); // A delay of 0ms is enough to push this to the next render cycle.
     },
 
     loadUserShader(presetId) {
@@ -598,53 +579,75 @@ export const UIManager = {
 
     _updateGpgpuPanelStates() {
         const S = this.app.vizSettings;
-        let activeExclusiveEffect = null;
-    
-        for (const group of this.gpgpuExclusiveGroups) {
-            for (const effectId of group) {
-                if (S[effectId]) {
-                    activeExclusiveEffect = effectId;
-                    break;
-                }
+        const isParticleMode = S.gpgpuGeometryMode === 'particles';
+        
+        const allGpgpuPanels = {};
+        document.querySelectorAll('#gpgpuEffectsAccordion .accordion-item').forEach(el => {
+            const title = el.querySelector('.header-title')?.textContent.trim();
+            if (title) {
+                allGpgpuPanels[title] = el;
             }
-            if (activeExclusiveEffect) break;
-        }
-    
-        if (S.gpgpu_enableCloth) {
-            const allGpgpuCheckboxes = document.querySelectorAll('#gpgpuEffectsAccordion .header-toggle-checkbox');
-            allGpgpuCheckboxes.forEach(checkbox => {
-                const accordionItem = checkbox.closest('.accordion-item');
-                if (accordionItem) {
-                    const isDisabled = (checkbox.id !== 'gpgpu_enableCloth');
-                    accordionItem.classList.toggle('container-disabled', isDisabled);
-                }
+        });
+
+        if (isParticleMode) {
+            Object.entries(allGpgpuPanels).forEach(([title, panel]) => {
+                const isParticlePanel = title === 'Particle System';
+                panel.style.display = isParticlePanel ? 'block' : 'none';
+                panel.classList.toggle('container-disabled', !isParticlePanel);
             });
-            return; 
-        }
-    
-        this.gpgpuExclusiveGroups.forEach(group => {
-            let groupHasActiveEffect = false;
-            let activeEffectInGroup = null;
-    
-            for (const effectId of group) {
-                if (S[effectId]) {
-                    groupHasActiveEffect = true;
-                    activeEffectInGroup = effectId;
-                    break;
-                }
-            }
-    
-            group.forEach(effectId => {
-                const checkbox = document.getElementById(effectId);
-                if (checkbox) {
-                    const accordionItem = checkbox.closest('.accordion-item');
-                    if (accordionItem) {
-                        const isDisabled = groupHasActiveEffect && effectId !== activeEffectInGroup;
-                        accordionItem.classList.toggle('container-disabled', isDisabled);
+        } else {
+            Object.entries(allGpgpuPanels).forEach(([title, panel]) => {
+                const isParticlePanel = title === 'Particle System';
+                panel.style.display = isParticlePanel ? 'none' : 'block';
+                 panel.classList.toggle('container-disabled', isParticlePanel);
+            });
+
+            let activeExclusiveEffect = null;
+            for (const group of this.gpgpuExclusiveGroups) {
+                for (const effectId of group) {
+                    if (S[effectId]) {
+                        activeExclusiveEffect = effectId;
+                        break;
                     }
                 }
-            });
-        });
+                if (activeExclusiveEffect) break;
+            }
+        
+            if (S.gpgpu_enableCloth) {
+                Object.values(allGpgpuPanels).forEach(panel => {
+                    const checkbox = panel.querySelector('.header-toggle-checkbox');
+                    if (checkbox && checkbox.id !== 'gpgpu_enableCloth') {
+                        panel.classList.add('container-disabled');
+                    }
+                });
+            } else {
+                this.gpgpuExclusiveGroups.forEach(group => {
+                    let groupHasActiveEffect = false;
+                    let activeEffectInGroup = null;
+            
+                    for (const effectId of group) {
+                        if (S[effectId]) {
+                            groupHasActiveEffect = true;
+                            activeEffectInGroup = effectId;
+                            break;
+                        }
+                    }
+            
+                    group.forEach(effectId => {
+                        const checkbox = document.getElementById(effectId);
+                        if (checkbox) {
+                            const accordionItem = checkbox.closest('.accordion-item');
+                            if (accordionItem) {
+                                const isDisabled = groupHasActiveEffect && effectId !== activeEffectInGroup;
+                                accordionItem.classList.toggle('container-disabled', isDisabled);
+                            }
+                        }
+                    });
+                });
+            }
+        }
+        
+        this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
     },
     
     setupEventListeners() {
@@ -694,7 +697,7 @@ export const UIManager = {
             gpgpuGeometryModeSelect.addEventListener('change', (e) => {
                 this.app.vizSettings.gpgpuGeometryMode = e.target.value;
                 this.app.ImagePlaneManager.createDefaultLandscape();
-                this.updateUIVisibilityForMode(e.target.value);
+                this._updateGpgpuPanelStates(); 
             });
         }
         
@@ -1159,10 +1162,8 @@ export const UIManager = {
         this.app.isDemoModeActive = true;
         document.getElementById('demoModeButton').textContent = 'STOP DEMO';
         
-        // --- THE FIX IS HERE: Explicitly set the geometry mode for the demo ---
         this.app.vizSettings.gpgpuGeometryMode = 'faceted';
         this.app.ImagePlaneManager.createDefaultLandscape();
-        // --- END OF FIX ---
 
         this.app.ImagePlaneManager.startAutopilot('autopilotPreset3');
         this.app.ModelManager.startAutopilot('autopilotPreset2');
@@ -1185,7 +1186,6 @@ export const UIManager = {
 
         this.syncAllControlsToSettings();
         this.updateMasterControls();
-        this.updateUIVisibilityForMode('faceted'); // Update UI to match demo mode
         this._updateGpgpuPanelStates();
     },
 
@@ -1209,17 +1209,14 @@ export const UIManager = {
 
         this.app.vizSettings = JSON.parse(JSON.stringify(this.app.defaultVisualizerSettings));
         
-        // --- THE FIX IS HERE: Explicitly restore the default geometry mode ---
         this.app.ImagePlaneManager.createDefaultLandscape();
-        // --- END OF FIX ---
-
+        
         const defaultShaderId = 'presetBg6';
         this.app.vizSettings.shaderToyGLSL = this.app.shaderPresets[defaultShaderId];
         this.loadUserShader(defaultShaderId);
         
         this.syncAllControlsToSettings();
         this.updateMasterControls();
-        this.updateUIVisibilityForMode(this.app.vizSettings.gpgpuGeometryMode);
         this._updateGpgpuPanelStates();
     },
     
