@@ -19,8 +19,8 @@ export const UIManager = {
     sliderInactivityTimer: null,
 
     gpgpuExclusiveGroups: [
-        ['gpgpu_enableCloth'], 
-        ['gpgpu_enableFold', 'gpgpu_enableCylinder']
+        ['gpgpu_enableFold', 'gpgpu_enableCylinder'],
+        ['gpgpu_enableCloth']
     ],
 
     liveFXPresets: {
@@ -480,24 +480,14 @@ export const UIManager = {
             this.app.ButterchurnManager.deactivate();
         }
     
-        if (!isInitial) this.refreshAccordion(document.getElementById('backgroundMode'));
+        if (!isInitial) this.refreshAccordion(document.getElementById('backgroundMode').closest('.accordion-item'));
     },
 
     updateImageEffectsVisibility(isInitial = false) {
-        const type = this.app.vizSettings.imageEffectType;
-        const selectiveContainer = document.getElementById('imageEffects_selectiveParams');
-        const tintContainer = document.getElementById('imageEffects_tintParams');
-
-        if (!selectiveContainer || !tintContainer) return;
-
-        const isSelective = type === 'selective_balloon' || type === 'selective_pinch';
-        const isTint = type === 'tint_pulse';
-
-        selectiveContainer.style.display = isSelective ? 'block' : 'none';
-        tintContainer.style.display = isTint ? 'block' : 'none';
-
+        // This function is now simplified, as the accordion logic handles visibility.
+        // We just need to trigger a refresh if a change happens.
         if (!isInitial) {
-            this.refreshAccordion(document.getElementById('imageEffectType'));
+            this.refreshAccordion(document.getElementById('imageEffectsAccordion'));
         }
     },
 
@@ -508,25 +498,19 @@ export const UIManager = {
         document.getElementById('lightDirectionZ').disabled = disabled;
     },
 
-    // ** THE FIX IS HERE: The refresh logic is now robust. **
-    refreshAccordion(containerElement) {
-        if (!containerElement) return;
+    refreshAccordion(element) {
+        // ** THE FIX IS HERE: This logic now bubbles up from the element that changed **
+        if (!element) return;
         setTimeout(() => {
-            const openContents = containerElement.querySelectorAll('.accordion-content.open');
-            openContents.forEach(content => {
-                content.style.maxHeight = 'none'; 
-                const scrollHeight = content.scrollHeight;
-                content.style.maxHeight = scrollHeight + 'px';
-
-                // Also refresh any open parent accordions
-                let parent = content.parentElement.closest('.accordion-content.open');
-                while(parent) {
-                    parent.style.maxHeight = 'none';
-                    parent.style.maxHeight = parent.scrollHeight + 'px';
-                    parent = parent.parentElement.closest('.accordion-content.open');
-                }
-            });
-        }, 0);
+            let parentContent = element.closest('.accordion-content.open');
+            while (parentContent) {
+                // Temporarily remove height limit to accurately measure the new content height
+                parentContent.style.maxHeight = 'none';
+                parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
+                // Move up to the next parent
+                parentContent = parentContent.parentElement.closest('.accordion-content.open');
+            }
+        }, 50); // A small delay gives the DOM time to update before we measure it.
     },
 
     loadUserShader(presetId) {
@@ -584,38 +568,25 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const isParticleMode = S.gpgpuGeometryMode === 'particles';
         
+        const gpgpuAccordion = document.getElementById('gpgpuEffectsAccordion');
+        if (!gpgpuAccordion) return;
+
         const allGpgpuPanels = {};
-        document.querySelectorAll('#gpgpuEffectsAccordion .accordion-item').forEach(el => {
-            const title = el.querySelector('.header-title')?.textContent.trim();
-            if (title) {
-                allGpgpuPanels[title] = el;
+        gpgpuAccordion.querySelectorAll('.accordion-item').forEach(el => {
+            const titleEl = el.querySelector('.header-title');
+            if (titleEl) {
+                allGpgpuPanels[titleEl.textContent.trim()] = el;
             }
         });
-
-        if (isParticleMode) {
-            Object.entries(allGpgpuPanels).forEach(([title, panel]) => {
-                const isParticlePanel = title === 'Particle System';
-                panel.style.display = isParticlePanel ? 'block' : 'none';
-                panel.classList.toggle('container-disabled', !isParticlePanel);
-            });
-        } else {
-            Object.entries(allGpgpuPanels).forEach(([title, panel]) => {
-                const isParticlePanel = title === 'Particle System';
-                panel.style.display = isParticlePanel ? 'none' : 'block';
-                 panel.classList.toggle('container-disabled', isParticlePanel);
-            });
-
-            let activeExclusiveEffect = null;
-            for (const group of this.gpgpuExclusiveGroups) {
-                for (const effectId of group) {
-                    if (S[effectId]) {
-                        activeExclusiveEffect = effectId;
-                        break;
-                    }
-                }
-                if (activeExclusiveEffect) break;
-            }
         
+        Object.entries(allGpgpuPanels).forEach(([title, panel]) => {
+            const isParticlePanel = title === 'Particle System';
+            panel.style.display = isParticlePanel === isParticleMode ? 'block' : 'none';
+        });
+        
+        Object.values(allGpgpuPanels).forEach(panel => panel.classList.remove('container-disabled'));
+
+        if (!isParticleMode) {
             if (S.gpgpu_enableCloth) {
                 Object.values(allGpgpuPanels).forEach(panel => {
                     const checkbox = panel.querySelector('.header-toggle-checkbox');
@@ -625,32 +596,29 @@ export const UIManager = {
                 });
             } else {
                 this.gpgpuExclusiveGroups.forEach(group => {
-                    let groupHasActiveEffect = false;
                     let activeEffectInGroup = null;
-            
                     for (const effectId of group) {
                         if (S[effectId]) {
-                            groupHasActiveEffect = true;
                             activeEffectInGroup = effectId;
                             break;
                         }
                     }
-            
-                    group.forEach(effectId => {
-                        const checkbox = document.getElementById(effectId);
-                        if (checkbox) {
-                            const accordionItem = checkbox.closest('.accordion-item');
-                            if (accordionItem) {
-                                const isDisabled = groupHasActiveEffect && effectId !== activeEffectInGroup;
-                                accordionItem.classList.toggle('container-disabled', isDisabled);
+                    
+                    if (activeEffectInGroup) {
+                        group.forEach(effectId => {
+                            if (effectId !== activeEffectInGroup) {
+                                const checkbox = document.getElementById(effectId);
+                                if (checkbox) {
+                                    checkbox.closest('.accordion-item')?.classList.add('container-disabled');
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 });
             }
         }
         
-        this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
+        this.refreshAccordion(gpgpuAccordion);
     },
     
     setupEventListeners() {
@@ -698,7 +666,14 @@ export const UIManager = {
         const gpgpuGeometryModeSelect = document.getElementById('gpgpuGeometryMode');
         if (gpgpuGeometryModeSelect) {
             gpgpuGeometryModeSelect.addEventListener('change', (e) => {
-                this.app.vizSettings.gpgpuGeometryMode = e.target.value;
+                const S = this.app.vizSettings;
+                S.gpgpuGeometryMode = e.target.value;
+                
+                document.querySelectorAll('#gpgpuEffectsAccordion .header-toggle-checkbox').forEach(cb => {
+                    cb.checked = false;
+                    if (S[cb.id] !== undefined) S[cb.id] = false;
+                });
+
                 this.app.ImagePlaneManager.createDefaultLandscape();
                 this._updateGpgpuPanelStates(); 
             });
@@ -798,7 +773,7 @@ export const UIManager = {
         document.getElementById('liveFX1').addEventListener('click', () => this.loadLiveFXPreset('wavy'));
 
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.id === 'masterEnableSpin' || checkbox.closest('#butterchurnControls')) return;
+             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.closest('#gpgpuEffectsAccordion') || checkbox.closest('#butterchurnControls')) return;
              
              checkbox.addEventListener('input', (e) => {
                  if (this.app.vizSettings[e.target.id] !== undefined) {
@@ -813,12 +788,16 @@ export const UIManager = {
                         ipm.currentTexture.needsUpdate = true;
                     }
                 }
-                
-                const isGpgpuCheckbox = !!e.target.closest('#gpgpuEffectsAccordion');
-                if (isGpgpuCheckbox) {
-                    this._updateGpgpuPanelStates();
-                }
              });
+        });
+        
+        document.querySelectorAll('#gpgpuEffectsAccordion .header-toggle-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                if (this.app.vizSettings[e.target.id] !== undefined) {
+                    this.app.vizSettings[e.target.id] = e.target.checked;
+                }
+                this._updateGpgpuPanelStates();
+            });
         });
 
         this.setupButterchurnEventListeners();
@@ -857,12 +836,15 @@ export const UIManager = {
                 }
                 
                 content.classList.toggle('open');
+
+                // ** THE FIX IS HERE: Simplified and more direct accordion resizing logic **
                 if (content.classList.contains('open')) {
                     content.style.maxHeight = content.scrollHeight + 'px';
                 } else {
                     content.style.maxHeight = '0px';
                 }
-                this.refreshAccordion(content);
+                // Always call refresh on the container of the button that was clicked.
+                this.refreshAccordion(headerContainer); 
             });
         });
         

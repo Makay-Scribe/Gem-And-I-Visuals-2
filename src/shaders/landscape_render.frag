@@ -13,6 +13,7 @@ uniform vec3 u_cameraPosition;
 
 // General uniforms
 uniform float u_time;
+// ** THE FIX IS HERE: This uniform is now declared globally **
 uniform bool gpgpu_cubeWallUseImageTexture;
 
 // CUBEWALL UNIFORMS
@@ -27,6 +28,7 @@ varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
 varying vec3 vLocalNormal;
+varying float vTriangleId;
 
 #define PI 3.14159265359
 
@@ -51,7 +53,7 @@ vec3 getBeveledNormal(vec3 originalNormal, vec2 faceUV, float bevelWidth, float 
 }
 
 
-// PBR lighting functions (unchanged)
+// PBR lighting functions
 vec3 fresnelSchlick(float cosTheta, vec3 F0) { return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0); }
 float DistributionGGX(vec3 N, vec3 H, float roughness) { float a = roughness * roughness; float a2 = a * a; float NdotH = max(dot(N, H), 0.0); float NdotH2 = NdotH * NdotH; float nom = a2; float denom = (NdotH2 * (a2 - 1.0) + 1.0); denom = PI * denom * denom; return nom / max(denom, 0.001); }
 float GeometrySchlickGGX(float NdotV, float roughness) { float r = (roughness + 1.0); float k = (r * r) / 8.0; float nom = NdotV; float denom = NdotV * (1.0 - k) + k; return nom / denom; }
@@ -61,39 +63,27 @@ void main() {
     vec3 albedo;
     vec3 N = normalize(vWorldNormal);
 
-    // --- ** THE FIX IS HERE ** ---
-    // We now have two distinct paths for coloring: one for the complex CubeWall,
-    // and a simple one for all other mesh types (Faceted, Continuous).
-
     if (u_gpgpu_enableCubeWall) {
         // --- CUBEWALL / GEOCUBE LOGIC ---
         
-        // 1. Apply beveling to the normal for edge highlights
-        bool isCubeFace = abs(vLocalNormal.z) > 0.9 || abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9;
-        if (isCubeFace) {
-            vec2 faceUV = fract(vUv * u_gpgpu_cubeWallGridSize);
-            N = getBeveledNormal(N, faceUV, u_gpgpu_cubeWallBevelWidth, u_gpgpu_cubeWallBevelIntensity);
-        }
+        vec2 faceUV = fract(vUv * u_gpgpu_cubeWallGridSize);
+        N = getBeveledNormal(N, faceUV, u_gpgpu_cubeWallBevelWidth, u_gpgpu_cubeWallBevelIntensity);
 
-        // 2. Determine albedo based on face orientation (front vs. side)
-        if (abs(vLocalNormal.x) > 0.9 || abs(vLocalNormal.y) > 0.9) {
-            // This is a side face of a cube.
-            albedo = u_gpgpu_cubeWallSideColor;
-        } else {
-            // This is a front face. Use the image texture or a default dark color.
+        if (abs(vLocalNormal.z) > 0.9) {
             if (gpgpu_cubeWallUseImageTexture) {
                 albedo = texture2D(u_map, vUv).rgb;
             } else {
                 albedo = vec3(0.1);
             }
+        } else {
+            albedo = u_gpgpu_cubeWallSideColor;
         }
     } else {
         // --- FACETED / CONTINUOUS LOGIC ---
-        // For any non-CubeWall mesh, we simply apply the texture directly.
         albedo = texture2D(u_map, vUv).rgb;
     }
     
-    // --- PBR LIGHTING CALCULATION (now uses the correct normal 'N' and 'albedo') ---
+    // --- PBR LIGHTING CALCULATION ---
     float metalness = u_metalness;
     float roughness = u_roughness;
     

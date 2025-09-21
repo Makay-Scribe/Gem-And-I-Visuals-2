@@ -228,6 +228,7 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
 .container-disabled .accordion-header-with-toggle {
     background-color: #333 !important;
     color: #888 !important;
+    cursor: not-allowed;
 }
 .container-disabled .accordion-item .accordion-header {
     background-color: #2a2a2a !important;
