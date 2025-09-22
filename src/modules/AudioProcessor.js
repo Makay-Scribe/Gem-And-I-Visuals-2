@@ -1,5 +1,5 @@
 import { Debugger } from './Debugger.js';
-import THREE from '../three-singleton.js'; // UPDATED: Import THREE from our new singleton
+import THREE from '../three-singleton.js';
 
 export const AudioProcessor = {
     app: null, // Will be set on init
@@ -14,7 +14,6 @@ export const AudioProcessor = {
     testToneGain: null,
     testToneInterval: null,
     butterchurnGainNode: null,
-    // REMOVED: muteNode is no longer needed
     activeAudioSource: 'none',
 
     // --- Data Outputs ---

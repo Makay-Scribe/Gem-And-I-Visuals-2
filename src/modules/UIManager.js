@@ -564,6 +564,7 @@ export const UIManager = {
         });
     },
 
+    // ** THE FIX IS HERE: The function is completely rewritten for robustness. **
     _updateGpgpuPanelStates() {
         const S = this.app.vizSettings;
         const isParticleMode = S.gpgpuGeometryMode === 'particles';
@@ -571,30 +572,45 @@ export const UIManager = {
         const gpgpuAccordion = document.getElementById('gpgpuEffectsAccordion');
         if (!gpgpuAccordion) return;
 
+        // --- 1. Collect all panels for easier access ---
         const allGpgpuPanels = {};
         gpgpuAccordion.querySelectorAll('.accordion-item').forEach(el => {
+            const checkbox = el.querySelector('.header-toggle-checkbox');
             const titleEl = el.querySelector('.header-title');
-            if (titleEl) {
-                allGpgpuPanels[titleEl.textContent.trim()] = el;
+            if (checkbox && checkbox.id) {
+                 allGpgpuPanels[checkbox.id] = el;
+            } else if (titleEl && titleEl.textContent.trim() === 'Particle System') {
+                 allGpgpuPanels['particleSystemPanel'] = el;
             }
         });
         
-        Object.entries(allGpgpuPanels).forEach(([title, panel]) => {
-            const isParticlePanel = title === 'Particle System';
-            panel.style.display = isParticlePanel === isParticleMode ? 'block' : 'none';
-        });
-        
+        // --- 2. Reset all disabled states to start fresh ---
         Object.values(allGpgpuPanels).forEach(panel => panel.classList.remove('container-disabled'));
+        
+        // --- 3. Disable panels based on the primary Geometry Mode ---
+        if (isParticleMode) {
+            // In particle mode, disable all non-particle panels.
+            Object.entries(allGpgpuPanels).forEach(([key, panel]) => {
+                if (key !== 'particleSystemPanel') {
+                    panel.classList.add('container-disabled');
+                }
+            });
+        } else {
+            // In non-particle modes, disable the particle panel.
+            if (allGpgpuPanels['particleSystemPanel']) {
+                allGpgpuPanels['particleSystemPanel'].classList.add('container-disabled');
+            }
 
-        if (!isParticleMode) {
+            // --- 4. Apply secondary exclusivity logic for non-particle modes ---
             if (S.gpgpu_enableCloth) {
-                Object.values(allGpgpuPanels).forEach(panel => {
-                    const checkbox = panel.querySelector('.header-toggle-checkbox');
-                    if (checkbox && checkbox.id !== 'gpgpu_enableCloth') {
-                        panel.classList.add('container-disabled');
+                // If cloth is on, disable all other GPGPU effects.
+                this.gpgpuExclusiveGroups.flat().forEach(effectId => {
+                    if (effectId !== 'gpgpu_enableCloth' && allGpgpuPanels[effectId]) {
+                        allGpgpuPanels[effectId].classList.add('container-disabled');
                     }
                 });
             } else {
+                // If other exclusive effects are on, disable their counterparts.
                 this.gpgpuExclusiveGroups.forEach(group => {
                     let activeEffectInGroup = null;
                     for (const effectId of group) {
@@ -606,11 +622,8 @@ export const UIManager = {
                     
                     if (activeEffectInGroup) {
                         group.forEach(effectId => {
-                            if (effectId !== activeEffectInGroup) {
-                                const checkbox = document.getElementById(effectId);
-                                if (checkbox) {
-                                    checkbox.closest('.accordion-item')?.classList.add('container-disabled');
-                                }
+                            if (effectId !== activeEffectInGroup && allGpgpuPanels[effectId]) {
+                                allGpgpuPanels[effectId].classList.add('container-disabled');
                             }
                         });
                     }
@@ -618,6 +631,7 @@ export const UIManager = {
             }
         }
         
+        // --- 5. Refresh the main accordion height after state changes ---
         this.refreshAccordion(gpgpuAccordion);
     },
     

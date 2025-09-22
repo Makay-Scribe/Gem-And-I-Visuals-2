@@ -1,4 +1,4 @@
-// REMOVED: import * as THREE from 'three';
+import THREE from '../three-singleton.js';
 
 export const Debugger = {
     app: null,
@@ -42,8 +42,6 @@ export const Debugger = {
 
         const landscapeManager = this.app.ImagePlaneManager;
         const modelManager = this.app.ModelManager;
-        // Use this.app.THREE
-        const THREE = this.app.THREE;
 
         // Helper for formatting vectors
         const formatV3 = (v) => v ? `${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}` : 'N/A';
@@ -51,7 +49,7 @@ export const Debugger = {
         // Helper for formatting rotations from quaternions into degrees
         const formatQuat = (q) => {
             if (!q) return 'N/A';
-            // Use this.app.THREE.Euler and this.app.THREE.MathUtils
+            // Use THREE.Euler and THREE.MathUtils
             const euler = new THREE.Euler().setFromQuaternion(q, 'YXZ');
             const x = THREE.MathUtils.radToDeg(euler.x).toFixed(1);
             const y = THREE.MathUtils.radToDeg(euler.y).toFixed(1);
@@ -62,7 +60,7 @@ export const Debugger = {
         // --- LANDSCAPE DEBUG INFO ---
         let landscapeOutput = "--- LANDSCAPE NOT LOADED ---";
         if (landscapeManager && landscapeManager.state && landscapeManager.landscapeContainer) {
-            // Use this.app.THREE.Vector3 and this.app.THREE.Quaternion
+            // Use THREE.Vector3 and THREE.Quaternion
             const actualPos = new THREE.Vector3();
             landscapeManager.landscapeContainer.getWorldPosition(actualPos);
             const actualQuat = new THREE.Quaternion();
@@ -82,7 +80,7 @@ Actual Rot:  [${formatQuat(actualQuat)}] (x,y,z deg)
         // --- MODEL DEBUG INFO ---
         let modelOutput = "\n--- 3D MODEL NOT LOADED ---";
         if (modelManager && modelManager.state && modelManager.gltfModel) {
-            // Use this.app.THREE.Vector3 and this.app.THREE.Quaternion
+            // Use THREE.Vector3 and THREE.Quaternion
             const actualPos = new THREE.Vector3();
             modelManager.gltfModel.getWorldPosition(actualPos);
             const actualQuat = new THREE.Quaternion();
