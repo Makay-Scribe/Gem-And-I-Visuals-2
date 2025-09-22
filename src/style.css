@@ -555,26 +555,6 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--button-secondary-hover-bg);
 }
 
-.live-fx-preset-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 3px;
-    margin-bottom: 4px;
-}
-
-.live-fx-preset-grid button {
-    background-color: var(--debug-header-bg); /* Use the gold debug color */
-    font-size: 10px;
-    padding: 3px 2px;
-    min-height: 22px;
-    font-weight: 500;
-}
-
-.live-fx-preset-grid button:hover {
-    background-color: var(--debug-header-hover-bg);
-}
-
-
 /* 3D Model Preset Grid */
 .model-preset-list {
     display: flex;
@@ -642,6 +622,27 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     color: #666;
     cursor: not-allowed;
     opacity: 0.7; /* Make it slightly more faded */
+}
+
+/* ** THE FIX IS HERE: New style for the master GPGPU reset button ** */
+#gpgpuResetButton {
+    background-color: var(--reset-button-bg);
+    font-weight: bold;
+    font-size: 10px;
+    padding: 4px 6px;
+    min-height: 22px;
+    margin-top: 6px;
+}
+#gpgpuResetButton:hover {
+    background-color: var(--reset-button-hover-bg);
+}
+
+/* ** THE FIX IS HERE: New style for the Run Transition button ** */
+#runTransitionButton {
+    background-color: var(--button-secondary-bg);
+}
+#runTransitionButton:hover {
+    background-color: var(--button-secondary-hover-bg);
 }
 
 

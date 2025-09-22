@@ -18,20 +18,11 @@ export const UIManager = {
     activeTransitionPreset: 'default',
     sliderInactivityTimer: null,
 
+    // This is now only for conflicts WITHIN the 'deformation' mode
     gpgpuExclusiveGroups: [
         ['gpgpu_enableFold', 'gpgpu_enableCylinder'],
         ['gpgpu_enableCloth']
     ],
-
-    liveFXPresets: {
-        'wavy': {
-            particle_morphProgress: 0.01,
-            particle_flowStrength: 0.4,
-            particle_flowSpeed: 0.1,
-            particle_flowScale: 0.05,
-            particle_attractionStrength: 0.02
-        }
-    },
     
     transitionPresets: {
         'default': {
@@ -110,7 +101,8 @@ export const UIManager = {
         this.setupEQCanvas(); 
         this.setupEventListeners();
 
-        this._updateGpgpuPanelStates(); 
+        this._updateGpgpuModeVisibility();
+        this._updateDeformationPanelStates(); 
         
         this.updateBackgroundControlsVisibility(true);
         this.updateImageEffectsVisibility(true);
@@ -499,18 +491,15 @@ export const UIManager = {
     },
 
     refreshAccordion(element) {
-        // ** THE FIX IS HERE: This logic now bubbles up from the element that changed **
         if (!element) return;
         setTimeout(() => {
             let parentContent = element.closest('.accordion-content.open');
             while (parentContent) {
-                // Temporarily remove height limit to accurately measure the new content height
                 parentContent.style.maxHeight = 'none';
                 parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
-                // Move up to the next parent
                 parentContent = parentContent.parentElement.closest('.accordion-content.open');
             }
-        }, 50); // A small delay gives the DOM time to update before we measure it.
+        }, 50); 
     },
 
     loadUserShader(presetId) {
@@ -564,75 +553,125 @@ export const UIManager = {
         });
     },
 
-    // ** THE FIX IS HERE: The function is completely rewritten for robustness. **
-    _updateGpgpuPanelStates() {
+    // ** THE FIX IS HERE: Renamed and rewritten for the new UI **
+    _updateGpgpuModeVisibility() {
         const S = this.app.vizSettings;
-        const isParticleMode = S.gpgpuGeometryMode === 'particles';
-        
-        const gpgpuAccordion = document.getElementById('gpgpuEffectsAccordion');
-        if (!gpgpuAccordion) return;
+        const mode = S.gpgpuGeometryMode;
 
-        // --- 1. Collect all panels for easier access ---
-        const allGpgpuPanels = {};
-        gpgpuAccordion.querySelectorAll('.accordion-item').forEach(el => {
-            const checkbox = el.querySelector('.header-toggle-checkbox');
-            const titleEl = el.querySelector('.header-title');
-            if (checkbox && checkbox.id) {
-                 allGpgpuPanels[checkbox.id] = el;
-            } else if (titleEl && titleEl.textContent.trim() === 'Particle System') {
-                 allGpgpuPanels['particleSystemPanel'] = el;
+        const containers = {
+            deformation: document.getElementById('deformationControlsContainer'),
+            geocube: document.getElementById('geocubeControlsContainer'),
+            particles: document.getElementById('particleControlsContainer'),
+            fluidsim: document.getElementById('fluidSimControlsContainer'),
+        };
+
+        let activeContainerKey = mode;
+        if (mode === 'faceted') {
+            activeContainerKey = 'deformation';
+        }
+        
+        for (const [key, container] of Object.entries(containers)) {
+            if (container) {
+                container.style.display = (key === activeContainerKey) ? 'block' : 'none';
             }
+        }
+
+        document.querySelectorAll('#gpgpuModeSelector .segmented-control-button').forEach(btn => {
+            const btnMode = btn.dataset.mode;
+            // The active key can be either the direct mode name or 'deformation' for 'faceted'
+            const isActive = (btnMode === activeContainerKey);
+            btn.classList.toggle('active', isActive);
+            // ** THE FIX IS HERE: Add/remove glow effect **
+            btn.classList.toggle('button-glow-effect', isActive);
         });
         
-        // --- 2. Reset all disabled states to start fresh ---
-        Object.values(allGpgpuPanels).forEach(panel => panel.classList.remove('container-disabled'));
+        // ** THE FIX IS HERE: Force the parent accordion to resize after changing display **
+        this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
+    },
+
+    _updateDeformationPanelStates() {
+        const S = this.app.vizSettings;
+        const container = document.getElementById('deformationControlsContainer');
+        if (!container) return;
         
-        // --- 3. Disable panels based on the primary Geometry Mode ---
-        if (isParticleMode) {
-            // In particle mode, disable all non-particle panels.
-            Object.entries(allGpgpuPanels).forEach(([key, panel]) => {
-                if (key !== 'particleSystemPanel') {
+        container.querySelectorAll('.accordion-item').forEach(panel => {
+            panel.classList.remove('container-disabled');
+        });
+
+        if (S.gpgpu_enableCloth) {
+            container.querySelectorAll('.accordion-item').forEach(panel => {
+                const checkbox = panel.querySelector('.header-toggle-checkbox');
+                if (checkbox && checkbox.id !== 'gpgpu_enableCloth') {
                     panel.classList.add('container-disabled');
                 }
             });
         } else {
-            // In non-particle modes, disable the particle panel.
-            if (allGpgpuPanels['particleSystemPanel']) {
-                allGpgpuPanels['particleSystemPanel'].classList.add('container-disabled');
-            }
-
-            // --- 4. Apply secondary exclusivity logic for non-particle modes ---
-            if (S.gpgpu_enableCloth) {
-                // If cloth is on, disable all other GPGPU effects.
-                this.gpgpuExclusiveGroups.flat().forEach(effectId => {
-                    if (effectId !== 'gpgpu_enableCloth' && allGpgpuPanels[effectId]) {
-                        allGpgpuPanels[effectId].classList.add('container-disabled');
+            this.gpgpuExclusiveGroups.forEach(group => {
+                let activeEffectInGroup = null;
+                for (const effectId of group) {
+                    if (S[effectId]) {
+                        activeEffectInGroup = effectId;
+                        break;
                     }
-                });
-            } else {
-                // If other exclusive effects are on, disable their counterparts.
-                this.gpgpuExclusiveGroups.forEach(group => {
-                    let activeEffectInGroup = null;
-                    for (const effectId of group) {
-                        if (S[effectId]) {
-                            activeEffectInGroup = effectId;
-                            break;
-                        }
-                    }
-                    
-                    if (activeEffectInGroup) {
-                        group.forEach(effectId => {
-                            if (effectId !== activeEffectInGroup && allGpgpuPanels[effectId]) {
-                                allGpgpuPanels[effectId].classList.add('container-disabled');
+                }
+                
+                if (activeEffectInGroup) {
+                    group.forEach(effectId => {
+                        if (effectId !== activeEffectInGroup) {
+                            const checkbox = document.getElementById(effectId);
+                            if (checkbox) {
+                                checkbox.closest('.accordion-item')?.classList.add('container-disabled');
                             }
-                        });
-                    }
-                });
-            }
+                        }
+                    });
+                }
+            });
         }
         
-        // --- 5. Refresh the main accordion height after state changes ---
-        this.refreshAccordion(gpgpuAccordion);
+        this.refreshAccordion(container);
+    },
+
+    // ** THE FIX IS HERE: New function to reset all GPGPU settings **
+    resetGpgpuSettings() {
+        const S = this.app.vizSettings;
+        const D = this.app.defaultVisualizerSettings;
+
+        const gpgpuKeys = [
+            // Deformation Effects
+            'gpgpu_enableWaterRipple', 'gpgpu_rippleSpeed', 'gpgpu_rippleStrength', 'gpgpu_rippleFrequency',
+            'gpgpu_enableEqRipple', 'gpgpu_eqRippleStrength', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleBarCount', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'gpgpu_eqRippleStyle',
+            'gpgpu_enableCloth', 'gpgpu_clothDamping', 'gpgpu_clothStiffness', 'gpgpu_clothAudioForce', 'gpgpu_clothForceRadius', 'gpgpu_clothIterations', 'gpgpu_clothPinMode', 'gpgpu_tetherStrength', 'gpgpu_ambientWindStrength', 'gpgpu_ambientWindSpeed', 'gpgpu_ambientWindScale', 'gpgpu_directionalWindX', 'gpgpu_directionalWindY', 'gpgpu_directionalWindZ', 'gpgpu_clothBlendTime',
+            'gpgpu_enableFold', 'gpgpu_foldAngle', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldAudioMod', 'gpgpu_foldNudge', 'gpgpu_enableFoldCrease', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_enableFoldTuck', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach',
+            'gpgpu_enableCylinder', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_cylinderAxisAlignment', 'gpgpu_cylinderArcAngle', 'gpgpu_cylinderArcOffset',
+            'gpgpu_enableSag', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod',
+            'gpgpu_enableDroop', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor',
+            'gpgpu_enablePeel', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelEnableAudio', 'gpgpu_peelTextureAmount', 'gpgpu_peelDrift',
+            // Particle Effects
+            'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress',
+            // CubeWall Effects
+            'gpgpu_enableCubeWall', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity'
+        ];
+
+        gpgpuKeys.forEach(key => {
+            if (D[key] !== undefined) {
+                S[key] = D[key];
+                const el = document.getElementById(key);
+                if (el) {
+                    if (el.type === 'checkbox') {
+                        el.checked = D[key];
+                    } else {
+                        el.value = D[key];
+                    }
+                    if (el.type === 'range') {
+                        this.updateRangeDisplay(key, D[key]);
+                    }
+                }
+            }
+        });
+
+        // After resetting, re-evaluate the UI state
+        this._updateDeformationPanelStates();
+        this.logSuccess("All GPGPU settings have been reset to default.");
     },
     
     setupEventListeners() {
@@ -664,6 +703,9 @@ export const UIManager = {
         });
         document.getElementById('landscapeResetButton').addEventListener('click', () => this.resetLandscapeSettings());
         
+        // ** THE FIX IS HERE: Listener for the new master reset button **
+        document.getElementById('gpgpuResetButton').addEventListener('click', () => this.resetGpgpuSettings());
+        
         const fileInputIds = ['mainTextureInput', 'videoTextureInput', 'audioFileInput', 'gltfModelInput', 'hdriInput', 'iChannel0Input', 'iChannel1Input', 'iChannel2Input', 'iChannel3Input', 'particleModelInput'];
         fileInputIds.forEach(id => {
             const el = document.getElementById(id);
@@ -677,21 +719,45 @@ export const UIManager = {
             });
         }
         
-        const gpgpuGeometryModeSelect = document.getElementById('gpgpuGeometryMode');
-        if (gpgpuGeometryModeSelect) {
-            gpgpuGeometryModeSelect.addEventListener('change', (e) => {
+        document.querySelectorAll('#gpgpuModeSelector button').forEach(button => {
+            button.addEventListener('click', () => {
+                const mode = button.dataset.mode;
+                if (!mode || button.disabled) return;
+
                 const S = this.app.vizSettings;
-                S.gpgpuGeometryMode = e.target.value;
                 
-                document.querySelectorAll('#gpgpuEffectsAccordion .header-toggle-checkbox').forEach(cb => {
+                let systemMode = mode;
+                if (mode === 'deformation') {
+                    systemMode = 'faceted'; 
+                }
+                
+                if (S.gpgpuGeometryMode === systemMode) return; 
+
+                S.gpgpuGeometryMode = systemMode;
+                
+                document.querySelectorAll('#deformationControlsContainer .header-toggle-checkbox').forEach(cb => {
                     cb.checked = false;
                     if (S[cb.id] !== undefined) S[cb.id] = false;
                 });
 
                 this.app.ImagePlaneManager.createDefaultLandscape();
-                this._updateGpgpuPanelStates(); 
+                this._updateGpgpuModeVisibility();
+                this._updateDeformationPanelStates();
+
+                // ** THE FIX IS HERE: Auto-enable and open CubeWall accordion **
+                if (mode === 'geocube') {
+                    const cubeWallCheckbox = document.getElementById('gpgpu_enableCubeWall');
+                    if (cubeWallCheckbox && !cubeWallCheckbox.checked) {
+                        cubeWallCheckbox.checked = true;
+                        S.gpgpu_enableCubeWall = true;
+                    }
+                    const cubeWallContent = cubeWallCheckbox.closest('.accordion-item').querySelector('.accordion-content');
+                    if (cubeWallContent && !cubeWallContent.classList.contains('open')) {
+                        cubeWallCheckbox.closest('.accordion-header-with-toggle').querySelector('.accordion-header').click();
+                    }
+                }
             });
-        }
+        });
         
         document.querySelectorAll('input[type="range"], select').forEach(control => {
             if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleTransitionEditor')) return;
@@ -733,7 +799,6 @@ export const UIManager = {
         document.getElementById('goToCanvasButton').addEventListener('click', () => this.setMorphState(0.0));
         document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(0.95));
         document.getElementById('runTransitionButton').addEventListener('click', () => this.runTransition());
-        document.getElementById('resetFXButton').addEventListener('click', () => this.loadPresetValues(this.activeTransitionPreset));
         
         document.querySelectorAll('#particleTransitionEditor input[type="range"]').forEach(slider => {
             slider.addEventListener('input', (e) => {
@@ -784,8 +849,6 @@ export const UIManager = {
             });
         }
         
-        document.getElementById('liveFX1').addEventListener('click', () => this.loadLiveFXPreset('wavy'));
-
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.closest('#gpgpuEffectsAccordion') || checkbox.closest('#butterchurnControls')) return;
              
@@ -805,12 +868,12 @@ export const UIManager = {
              });
         });
         
-        document.querySelectorAll('#gpgpuEffectsAccordion .header-toggle-checkbox').forEach(checkbox => {
+        document.querySelectorAll('#deformationControlsContainer .header-toggle-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', (e) => {
                 if (this.app.vizSettings[e.target.id] !== undefined) {
                     this.app.vizSettings[e.target.id] = e.target.checked;
                 }
-                this._updateGpgpuPanelStates();
+                this._updateDeformationPanelStates();
             });
         });
 
@@ -851,13 +914,11 @@ export const UIManager = {
                 
                 content.classList.toggle('open');
 
-                // ** THE FIX IS HERE: Simplified and more direct accordion resizing logic **
                 if (content.classList.contains('open')) {
                     content.style.maxHeight = content.scrollHeight + 'px';
                 } else {
                     content.style.maxHeight = '0px';
                 }
-                // Always call refresh on the container of the button that was clicked.
                 this.refreshAccordion(headerContainer); 
             });
         });
@@ -942,21 +1003,6 @@ export const UIManager = {
         if (demoButton) {
             demoButton.addEventListener('click', () => this.toggleDemoMode());
         }
-    },
-    
-    loadLiveFXPreset(presetId) {
-        const preset = this.liveFXPresets[presetId];
-        if (!preset) {
-            this.logError(`Live FX Preset "${presetId}" not found.`);
-            return;
-        }
-
-        Object.keys(preset).forEach(key => {
-            this.app.vizSettings[key] = preset[key];
-        });
-
-        this.syncSlidersToSettings();
-        this.logSuccess(`Loaded Live FX: ${presetId}`);
     },
     
     handleMorphSlider(progress) {
@@ -1185,7 +1231,7 @@ export const UIManager = {
 
         this.syncAllControlsToSettings();
         this.updateMasterControls();
-        this._updateGpgpuPanelStates();
+        this._updateDeformationPanelStates();
     },
 
     stopDemoMode() {
@@ -1216,7 +1262,7 @@ export const UIManager = {
         
         this.syncAllControlsToSettings();
         this.updateMasterControls();
-        this._updateGpgpuPanelStates();
+        this._updateDeformationPanelStates();
     },
     
     cycleDemoShader() {
@@ -1466,16 +1512,7 @@ export const UIManager = {
         const D = this.app.defaultVisualizerSettings;
     
         const landscapeKeys = [
-            'enableLandscape', 'landscapeSpinSpeed', 'planeAspectRatio', 'planeOrientation', 
-            'deformationStrength', 'enablePeel', 'peelAmount', 'peelCurl', 'peelAnimationStyle', 
-            'peelDrift', 'peelTextureAmount', 'peelAudioSource', 'warpMode', 
-            'sagAmount', 'sagFalloffSharpness', 'sagAudioMod', 
-            'droopAmount', 'droopAudioMod', 'droopFalloffSharpness', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor',
-            'cylinderRadius', 'cylinderHeightScale', 'cylinderAxisAlignment', 'cylinderArcAngle', 'cylinderArcOffset',
-            'bendAngle', 'bendAudioMod', 'bendFalloffSharpness', 'bendAxis',
-            'foldAngle', 'foldDepth', 'foldRoundness', 'foldAudioMod', 'foldNudge',
-            'enableFoldCrease', 'foldCreaseDepth', 'foldCreaseSharpness',
-            'enableFoldTuck', 'foldTuckAmount', 'foldTuckReach'
+            'enableLandscape', 'landscapeSpinSpeed', 'planeAspectRatio', 'planeOrientation'
         ];
     
         landscapeKeys.forEach(key => {

@@ -135,100 +135,320 @@
         <div class="accordion-item" id="gpgpuEffectsAccordion">
             <button class="accordion-header" data-header-id="gpgpu-options">
                 <span class="header-title">GPGPU Options</span>
-                <span class="status-light" id="gpgpuStatusLight"></span>
             </button>
             <div class="accordion-content">
                 
-                <p class="sub-group-title">FUNDAMENTALS</p>
-                <label for="gpgpuGeometryMode">Geometry Mode</label>
-                <select id="gpgpuGeometryMode">
-                    <option value="continuous">Continuous</option>
-                    <option value="faceted">Faceted</option>
-                    <option value="geocube">GeoCube</option>
-                    <option value="particles">Particles</option>
-                </select>
+                <div class="segmented-control" id="gpgpuModeSelector">
+                    <button class="segmented-control-button" data-mode="deformation">Deformation</button>
+                    <button class="segmented-control-button" data-mode="geocube">GeoCube</button>
+                    <button class="segmented-control-button active" data-mode="particles">Particles</button>
+                    <button class="segmented-control-button" data-mode="fluidsim" disabled>Fluid Sim</button>
+                </div>
 
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">Particle System</span>
-                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
-                        </button>
+                <div id="deformationControlsContainer" style="display: none;">
+                    <div class="accordion-item">
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">
+                                <span class="header-title">Peel</span>
+                                <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                            </button>
+                            <input type="checkbox" id="gpgpu_enablePeel" class="header-toggle-checkbox">
+                        </div>
+                        <div class="accordion-content">
+                            <p class="sub-group-title">MAIN CONTROLS</p>
+                            <label>Amount: <span id="gpgpu_peelAmountValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_peelAmount" min="0.0" max="1.0" step="0.01" value="0.59">
+                            <label>Curl: <span id="gpgpu_peelCurlValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_peelCurl" min="0.0" max="1.0" step="0.01" value="0.83">
+                            <p class="sub-group-title">ANIMATION & AUDIO</p>
+                            <div class="checkbox-label-container">
+                                <label for="gpgpu_peelEnableAudio">Enable Audio</label>
+                                <input type="checkbox" id="gpgpu_peelEnableAudio" checked>
+                            </div>
+                            <label>Drift: <span id="gpgpu_peelDriftValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_peelDrift" min="0.0" max="0.2" step="0.005" value="0.09">
+                            <label>Texture: <span id="gpgpu_peelTextureAmountValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_peelTextureAmount" min="0.0" max="0.2" step="0.005" value="0.14">
+                        </div>
                     </div>
-                    <div class="accordion-content">
+                    <div class="accordion-item">
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">
+                                <span class="header-title">Water Ripple</span>
+                                <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                            </button>
+                            <input type="checkbox" id="gpgpu_enableWaterRipple" class="header-toggle-checkbox">
+                        </div>
+                        <div class="accordion-content">
+                            <label>Speed: <span id="gpgpu_rippleSpeedValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_rippleSpeed" min="0.0" max="2.0" step="0.05" value="0.5">
+                            <label>Strength: <span id="gpgpu_rippleStrengthValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_rippleStrength" min="0.0" max="5.0" step="0.1" value="1.0">
+                            <label>Frequency: <span id="gpgpu_rippleFrequencyValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_rippleFrequency" min="1.0" max="50.0" step="0.5" value="15.0">
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">
+                                <span class="header-title">EQ Ripple</span>
+                                <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                            </button>
+                            <input type="checkbox" id="gpgpu_enableEqRipple" class="header-toggle-checkbox">
+                        </div>
+                        <div class="accordion-content">
+                            <p class="sub-group-title">MAIN CONTROLS</p>
+                            <label>Strength: <span id="gpgpu_eqRippleStrengthValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_eqRippleStrength" min="0.0" max="10.0" step="0.1" value="2.0">
+                            <label>Smoothing: <span id="gpgpu_eqRippleSmoothingValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_eqRippleSmoothing" min="0.0" max="0.99" step="0.01" value="0.5">
+                            <p class="sub-group-title">SHAPE & STYLE</p>
+                            <label for="gpgpu_eqRippleStyle">Style</label>
+                            <select id="gpgpu_eqRippleStyle">
+                                <option value="Left" selected>Left</option>
+                                <option value="Center">Center</option>
+                                <option value="Full">Full (Stretch)</option>
+                            </select>
+                            <label>Bar Count: <span id="gpgpu_eqRippleBarCountValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_eqRippleBarCount" min="4" max="128" step="1" value="64">
+                            <label>Bar Width: <span id="gpgpu_eqRippleBarWidthValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_eqRippleBarWidth" min="0.1" max="1.0" step="0.01" value="0.8">
+                            <p class="sub-group-title">AUDIO FREQUENCY RANGE</p>
+                            <label>Range Start: <span id="gpgpu_eqRippleRangeStartValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_eqRippleRangeStart" min="0.0" max="1.0" step="0.01" value="0.0">
+                            <label>Range End: <span id="gpgpu_eqRippleRangeEndValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_eqRippleRangeEnd" min="0.0" max="1.0" step="0.01" value="1.0">
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">
+                                <span class="header-title">Fold</span>
+                                <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                            </button>
+                            <input type="checkbox" id="gpgpu_enableFold" class="header-toggle-checkbox">
+                        </div>
+                        <div class="accordion-content">
+                            <label>Angle: <span id="gpgpu_foldAngleValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_foldAngle" min="0" max="90" step="1" value="20">
+                            <label>Depth: <span id="gpgpu_foldDepthValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_foldDepth" min="0.01" max="0.49" step="0.01" value="0.38">
+                            <label>Roundness: <span id="gpgpu_foldRoundnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_foldRoundness" min="0.0" max="0.1" step="0.001" value="0.05">
+                            <label>Audio Strength: <span id="gpgpu_foldAudioModValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_foldAudioMod" min="0.0" max="45.0" step="1" value="31">
+                            <label>Nudge (Arch): <span id="gpgpu_foldNudgeValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_foldNudge" min="-0.6" max="0.6" step="0.01" value="0.60">
+                            <p class="sub-group-title">DETAILS</p>
+                            <div class="checkbox-label-container"><label for="gpgpu_enableFoldCrease">Enable Crease</label><input type="checkbox" id="gpgpu_enableFoldCrease" checked></div>
+                            <label>Crease Depth: <span id="gpgpu_foldCreaseDepthValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_foldCreaseDepth" min="-1.6" max="1.6" step="0.05" value="1.60">
+                            <label>Crease Sharpness: <span id="gpgpu_foldCreaseSharpnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_foldCreaseSharpness" min="1.0" max="10.0" step="0.1" value="1.0">
+                            <div class="checkbox-label-container"><label for="gpgpu_enableFoldTuck">Enable Tuck</label><input type="checkbox" id="gpgpu_enableFoldTuck" checked></div>
+                            <label>Tuck Amount: <span id="gpgpu_foldTuckAmountValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_foldTuckAmount" min="-1.0" max="1.0" step="0.05" value="-1.00">
+                            <label>Tuck Reach: <span id="gpgpu_foldTuckReachValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_foldTuckReach" min="0.01" max="0.4" step="0.005" value="0.40">
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">
+                                <span class="header-title">Cylinder</span>
+                                <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                            </button>
+                            <input type="checkbox" id="gpgpu_enableCylinder" class="header-toggle-checkbox">
+                        </div>
+                        <div class="accordion-content">
+                            <label>Radius: <span id="gpgpu_cylinderRadiusValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_cylinderRadius" min="0.5" max="20.0" step="0.1" value="5.0">
+                            <label>Height Scale: <span id="gpgpu_cylinderHeightScaleValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_cylinderHeightScale" min="0.1" max="5.0" step="0.1" value="1.0">
+                            <label>Axis:</label>
+                            <select id="gpgpu_cylinderAxisAlignment">
+                                <option value="y" selected>Y</option>
+                                <option value="x">X</option>
+                                <option value="z">Z</option>
+                            </select>
+                            <label>Arc Angle: <span id="gpgpu_cylinderArcAngleValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_cylinderArcAngle" min="1" max="360" step="1" value="360">
+                            <label>Arc Offset: <span id="gpgpu_cylinderArcOffsetValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_cylinderArcOffset" min="0" max="359" step="1" value="0">
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">
+                                <span class="header-title">Sag</span>
+                                <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                            </button>
+                            <input type="checkbox" id="gpgpu_enableSag" class="header-toggle-checkbox">
+                        </div>
+                        <div class="accordion-content">
+                            <label>Amount: <span id="gpgpu_sagAmountValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_sagAmount" min="0.0" max="10.0" step="0.1" value="2.0">
+                            <label>Falloff Sharpness: <span id="gpgpu_sagFalloffSharpnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_sagFalloffSharpness" min="0.1" max="5.0" step="0.1" value="1.5">
+                            <label>Audio Strength: <span id="gpgpu_sagAudioModValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_sagAudioMod" min="0.0" max="1.0" step="0.05" value="0.2">
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">
+                                <span class="header-title">Droop</span>
+                                <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                            </button>
+                            <input type="checkbox" id="gpgpu_enableDroop" class="header-toggle-checkbox">
+                        </div>
+                        <div class="accordion-content">
+                            <label>Amount: <span id="gpgpu_droopAmountValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_droopAmount" min="0.0" max="15.0" step="0.1" value="0.3">
+                            <label>Audio Strength: <span id="gpgpu_droopAudioModValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_droopAudioMod" min="0.0" max="5.0" step="0.1" value="1.0">
+                            <label>Falloff Sharpness: <span id="gpgpu_droopFalloffSharpnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_droopFalloffSharpness" min="0.1" max="10.0" step="0.1" value="2.5">
+                            <label>Supported Width: <span id="gpgpu_droopSupportedWidthFactorValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_droopSupportedWidthFactor" min="0.0" max="1.0" step="0.01" value="0.6">
+                            <label>Supported Depth: <span id="gpgpu_droopSupportedDepthFactorValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_droopSupportedDepthFactor" min="0.0" max="1.0" step="0.01" value="0.5">
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">
+                                <span class="header-title">Cloth Physics</span>
+                                <span class="header-engine-tag gpgpu-tag">GPGPU</span>
+                            </button>
+                            <input type="checkbox" id="gpgpu_enableCloth" class="header-toggle-checkbox">
+                        </div>
+                        <div class="accordion-content">
+                            <p class="sub-group-title">BASE PHYSICS</p>
+                            <label>Damping: <span id="gpgpu_clothDampingValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_clothDamping" min="0.9" max="1.0" step="0.001" value="1.0">
+                            <label>Stiffness: <span id="gpgpu_clothStiffnessValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_clothStiffness" min="0.0" max="1.0" step="0.05" value="0.8">
+                            <label>Iterations: <span id="gpgpu_clothIterationsValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_clothIterations" min="1" max="16" step="1" value="1.0">
+                            <label>Blend Time (s): <span id="gpgpu_clothBlendTimeValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_clothBlendTime" min="0.0" max="10.0" step="0.1" value="9.6">
+                            <p class="sub-group-title">TETHER</p>
+                            <label>Tether Strength: <span id="gpgpu_tetherStrengthValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_tetherStrength" min="0.0" max="100.0" step="0.5" value="82.0">
+                            <p class="sub-group-title">AMBIENT WIND (TURBULENCE)</p>
+                            <label>Strength: <span id="gpgpu_ambientWindStrengthValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_ambientWindStrength" min="0.0" max="5.0" step="0.05" value="4.0">
+                            <label>Speed: <span id="gpgpu_ambientWindSpeedValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_ambientWindSpeed" min="0.0" max="2.0" step="0.05" value="0.3">
+                            <label>Scale: <span id="gpgpu_ambientWindScaleValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_ambientWindScale" min="0.1" max="5.0" step="0.05" value="2.0">
+                            <p class="sub-group-title">DIRECTIONAL WIND</p>
+                            <label>Wind X: <span id="gpgpu_directionalWindXValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_directionalWindX" min="-20.0" max="20.0" step="0.2" value="0.0">
+                            <label>Wind Y (Up/Down): <span id="gpgpu_directionalWindYValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_directionalWindY" min="-20.0" max="20.0" step="0.2" value="1.6">
+                            <label>Wind Z: <span id="gpgpu_directionalWindZValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_directionalWindZ" min="-10.0" max="10.0" step="0.1" value="5.8">
+                            <p class="sub-group-title">ANCHORING</p>
+                            <label for="gpgpu_clothPinMode">Pinning</label>
+                            <select id="gpgpu_clothPinMode">
+                                <option value="none">None</option>
+                                <option value="corners" selected>Corners</option>
+                                <option value="top_edge">Top Edge</option>
+                                <option value="center">Center</option>
+                            </select>
+                            <p class="sub-group-title">AUDIO INTERACTION</p>
+                            <label>Audio Force: <span id="gpgpu_clothAudioForceValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_clothAudioForce" min="0.0" max="2000.0" step="10" value="500.0">
+                            <label>Force Radius: <span id="gpgpu_clothForceRadiusValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_clothForceRadius" min="0.0" max="1.0" step="0.01" value="0.3">
+                        </div>
+                    </div>
+                </div>
 
-                        <p class="sub-group-title">SHAPE & FORM</p>
-                        <div class="file-input-row">
-                            <button class="browse-btn" data-target="particleModelInput">Target Model...</button>
-                            <span id="particleModelName" class="file-name-display">No file selected.</span>
-                            <input type="file" id="particleModelInput" accept=".gltf,.glb" style="display:none;">
+                <div id="geocubeControlsContainer" style="display: none;">
+                    <div class="accordion-item">
+                        <div class="accordion-header-with-toggle">
+                            <button class="accordion-header">
+                                <span class="header-title">CubeWall</span>
+                                <span class="header-engine-tag geometry-tag">Geometry</span>
+                            </button>
+                            <input type="checkbox" id="gpgpu_enableCubeWall" class="header-toggle-checkbox">
                         </div>
-                        
-                        <label>Morph: <span id="particle_morphProgressValue" class="range-value-display"></span></label>
-                        <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
-                            <span>Canvas</span>
-                            <span>3D Model</span>
+                        <div class="accordion-content">
+                            <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
+                                <span>Flat</span>
+                                <span>Stepped</span>
+                            </div>
+                            <label>Morph: <span id="gpgpu_cubeWallMorphValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_cubeWallMorph" min="0.0" max="1.0" step="0.01" value="0.0">
+                            <div class="checkbox-label-container">
+                                <label for="gpgpu_cubeWallUseImageTexture">Use Image Texture</label>
+                                <input type="checkbox" id="gpgpu_cubeWallUseImageTexture">
+                            </div>
+                            <label for="gpgpu_cubeWallSideColor">Side Color:</label>
+                            <input type="color" id="gpgpu_cubeWallSideColor" value="#4a586a">
+                            <p class="sub-group-title">EDGE HIGHLIGHT</p>
+                            <label>Bevel Width: <span id="gpgpu_cubeWallBevelWidthValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_cubeWallBevelWidth" min="0.0" max="0.1" step="0.001" value="0.02">
+                            <label>Bevel Intensity: <span id="gpgpu_cubeWallBevelIntensityValue" class="range-value-display"></span></label>
+                            <input type="range" id="gpgpu_cubeWallBevelIntensity" min="0.0" max="1.0" step="0.01" value="0.5">
                         </div>
-                        <input type="range" id="particle_morphProgress" min="0.0" max="1.0" step="0.01" value="0.0">
+                    </div>
+                </div>
 
-                        <div class="button-row">
-                            <button id="goToCanvasButton">Go to Canvas</button>
-                            <button id="goTo3DModelButton">Go to 3D Model</button>
-                        </div>
-                        
-                        <p class="sub-group-title">TRANSITION FX</p>
-                        <div class="autopilot-preset-grid" id="particleTransitionPresetContainer">
-                            <button id="transitionPreset1" class="button-glow-effect">Default</button>
-                            <button id="transitionPreset2">Pour</button>
-                            <button id="transitionPreset3">Liquid</button>
-                            <button id="transitionPreset4">Explode</button>
-                            <button id="transitionPreset5">Nebula</button>
-                            <button id="transitionPreset6">Melt</button>
-                        </div>
-                        
-                        <!-- ** THE FIX IS HERE: Add Live FX buttons ** -->
-                        <p class="sub-group-title">LIVE FX (WHILE IDLE)</p>
-                        <div class="live-fx-preset-grid">
-                            <button id="liveFX1">Wavy</button>
-                            <button id="liveFX2">2</button>
-                            <button id="liveFX3">3</button>
-                        </div>
-                        
-                        <div class="button-row">
-                            <button id="runTransitionButton">Run Transition</button>
-                            <button id="resetFXButton" style="background-color: var(--reset-button-bg);">Reset FX</button>
-                        </div>
-                        
-                        <div id="particleTransitionEditor">
+                <div id="particleControlsContainer">
+                    <div class="file-input-row">
+                        <button class="browse-btn" data-target="particleModelInput">Upload GLB...</button>
+                        <span id="particleModelName" class="file-name-display">Devmodel.glb (Default)</span>
+                        <input type="file" id="particleModelInput" accept=".gltf,.glb" style="display:none;">
+                    </div>
+                    <label>Morph: <span id="particle_morphProgressValue" class="range-value-display"></span></label>
+                    <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
+                        <span>Canvas</span>
+                        <span>3D Model</span>
+                    </div>
+                    <input type="range" id="particle_morphProgress" min="0.0" max="1.0" step="0.01" value="0.0">
+                    <div class="button-row">
+                        <button id="goToCanvasButton">Go to Canvas</button>
+                        <button id="goTo3DModelButton">Go to 3D Model</button>
+                    </div>
+
+                    <p class="sub-group-title">TRANSITION FX</p>
+                    <div class="autopilot-preset-grid" id="particleTransitionPresetContainer" style="grid-template-columns: repeat(3, 1fr);">
+                        <button id="transitionPreset1" class="button-glow-effect">Default</button>
+                        <button id="transitionPreset2">Pour</button>
+                        <button id="transitionPreset3">Liquid</button>
+                        <button id="transitionPreset4">Explode</button>
+                        <button id="transitionPreset5">Nebula</button>
+                        <button id="transitionPreset6">Melt</button>
+                    </div>
+                    <button id="runTransitionButton">Run Transition</button>
+                    
+                    <div class="accordion-item" id="particleTransitionEditor">
+                        <button class="accordion-header">Effects Sliders</button>
+                        <div class="accordion-content">
                             <label>Flow Strength: <span id="particle_flowStrengthValue" class="range-value-display"></span></label>
                             <input type="range" id="particle_flowStrength" min="0.0" max="2.0" step="0.01" value="0.2">
-
                             <label>Flow Speed: <span id="particle_flowSpeedValue" class="range-value-display"></span></label>
                             <input type="range" id="particle_flowSpeed" min="0.0" max="2.0" step="0.01" value="0.2">
-
                             <label>Flow Scale: <span id="particle_flowScaleValue" class="range-value-display"></span></label>
                             <input type="range" id="particle_flowScale" min="0.0" max="1.0" step="0.01" value="0.1">
-
                             <label>Attraction: <span id="particle_attractionStrengthValue" class="range-value-display"></span></label>
                             <input type="range" id="particle_attractionStrength" min="0.0" max="1.0" step="0.01" value="0.1">
-                            
                             <hr style="border-color: #333; margin: 4px 0;">
-
                             <label>Base Size: <span id="particle_base_sizeValue" class="range-value-display"></span></label>
                             <input type="range" id="particle_base_size" min="0.1" max="10.0" step="0.1" value="3.0">
-                            
                             <label>Min Size: <span id="particle_min_sizeValue" class="range-value-display"></span></label>
                             <input type="range" id="particle_min_size" min="0.0" max="2.0" step="0.01" value="0.0">
-
                             <label>Size Mix: <span id="particle_size_mixValue" class="range-value-display"></span></label>
                             <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
                                 <span>Coarse</span>
                                 <span>Fine</span>
                             </div>
                             <input type="range" id="particle_size_mix" min="0.0" max="1.0" step="0.01" value="0.0">
-                            
                             <hr style="border-color: #333; margin: 4px 0;">
-
                             <label>Twinkle: <span id="particle_twinkleIntensityValue" class="range-value-display"></span></label>
                              <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
                                 <span>Off</span>
@@ -239,281 +459,13 @@
                     </div>
                 </div>
 
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">CubeWall</span>
-                            <span class="header-engine-tag geometry-tag">Geometry</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enableCubeWall" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
-                            <span>Flat</span>
-                            <span>Stepped</span>
-                        </div>
-                        <label>Morph: <span id="gpgpu_cubeWallMorphValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_cubeWallMorph" min="0.0" max="1.0" step="0.01" value="0.0">
-                        
-                        <div class="checkbox-label-container">
-                            <label for="gpgpu_cubeWallUseImageTexture">Use Image Texture</label>
-                            <input type="checkbox" id="gpgpu_cubeWallUseImageTexture">
-                        </div>
-                        
-                        <label for="gpgpu_cubeWallSideColor">Side Color:</label>
-                        <input type="color" id="gpgpu_cubeWallSideColor" value="#4a586a">
-                        
-                        <p class="sub-group-title">EDGE HIGHLIGHT</p>
-                        <label>Bevel Width: <span id="gpgpu_cubeWallBevelWidthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_cubeWallBevelWidth" min="0.0" max="0.1" step="0.001" value="0.02">
-                        
-                        <label>Bevel Intensity: <span id="gpgpu_cubeWallBevelIntensityValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_cubeWallBevelIntensity" min="0.0" max="1.0" step="0.01" value="0.5">
-                    </div>
+                <div id="fluidSimControlsContainer" style="display: none;">
+                    <p style="color: var(--label-color); text-align: center; padding: 20px 0;">Fluid Simulation controls will be here.</p>
                 </div>
                 
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">Peel</span>
-                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enablePeel" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <p class="sub-group-title">MAIN CONTROLS</p>
-                        <label>Amount: <span id="gpgpu_peelAmountValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_peelAmount" min="0.0" max="1.0" step="0.01" value="0.59">
-                        <label>Curl: <span id="gpgpu_peelCurlValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_peelCurl" min="0.0" max="1.0" step="0.01" value="0.83">
-                        
-                        <p class="sub-group-title">ANIMATION & AUDIO</p>
-                        <div class="checkbox-label-container">
-                            <label for="gpgpu_peelEnableAudio">Enable Audio</label>
-                            <input type="checkbox" id="gpgpu_peelEnableAudio" checked>
-                        </div>
-                        <label>Drift: <span id="gpgpu_peelDriftValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_peelDrift" min="0.0" max="0.2" step="0.005" value="0.09">
-                        <label>Texture: <span id="gpgpu_peelTextureAmountValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_peelTextureAmount" min="0.0" max="0.2" step="0.005" value="0.14">
-                    </div>
-                </div>
+                <!-- ** THE FIX IS HERE: New Master Reset Button ** -->
+                <button id="gpgpuResetButton">Reset GPGPU Sliders</button>
 
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">Water Ripple</span>
-                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enableWaterRipple" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <label>Speed: <span id="gpgpu_rippleSpeedValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_rippleSpeed" min="0.0" max="2.0" step="0.05" value="0.5">
-                        <label>Strength: <span id="gpgpu_rippleStrengthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_rippleStrength" min="0.0" max="5.0" step="0.1" value="1.0">
-                        <label>Frequency: <span id="gpgpu_rippleFrequencyValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_rippleFrequency" min="1.0" max="50.0" step="0.5" value="15.0">
-                    </div>
-                </div>
-
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">EQ Ripple</span>
-                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enableEqRipple" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <p class="sub-group-title">MAIN CONTROLS</p>
-                        <label>Strength: <span id="gpgpu_eqRippleStrengthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_eqRippleStrength" min="0.0" max="10.0" step="0.1" value="2.0">
-                        
-                        <label>Smoothing: <span id="gpgpu_eqRippleSmoothingValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_eqRippleSmoothing" min="0.0" max="0.99" step="0.01" value="0.5">
-                        
-                        <p class="sub-group-title">SHAPE & STYLE</p>
-                        <label for="gpgpu_eqRippleStyle">Style</label>
-                        <select id="gpgpu_eqRippleStyle">
-                            <option value="Left" selected>Left</option>
-                            <option value="Center">Center</option>
-                            <option value="Full">Full (Stretch)</option>
-                        </select>
-
-                        <label>Bar Count: <span id="gpgpu_eqRippleBarCountValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_eqRippleBarCount" min="4" max="128" step="1" value="64">
-                        
-                        <label>Bar Width: <span id="gpgpu_eqRippleBarWidthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_eqRippleBarWidth" min="0.1" max="1.0" step="0.01" value="0.8">
-                        
-                        <p class="sub-group-title">AUDIO FREQUENCY RANGE</p>
-                        <label>Range Start: <span id="gpgpu_eqRippleRangeStartValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_eqRippleRangeStart" min="0.0" max="1.0" step="0.01" value="0.0">
-
-                        <label>Range End: <span id="gpgpu_eqRippleRangeEndValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_eqRippleRangeEnd" min="0.0" max="1.0" step="0.01" value="1.0">
-                    </div>
-                </div>
-                
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">Fold</span>
-                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enableFold" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <label>Angle: <span id="gpgpu_foldAngleValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_foldAngle" min="0" max="90" step="1" value="20">
-                        <label>Depth: <span id="gpgpu_foldDepthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_foldDepth" min="0.01" max="0.49" step="0.01" value="0.38">
-                        <label>Roundness: <span id="gpgpu_foldRoundnessValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_foldRoundness" min="0.0" max="0.1" step="0.001" value="0.05">
-                        <label>Audio Strength: <span id="gpgpu_foldAudioModValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_foldAudioMod" min="0.0" max="45.0" step="1" value="31">
-                        <label>Nudge (Arch): <span id="gpgpu_foldNudgeValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_foldNudge" min="-0.6" max="0.6" step="0.01" value="0.60">
-                        
-                        <p class="sub-group-title">DETAILS</p>
-                        <div class="checkbox-label-container"><label for="gpgpu_enableFoldCrease">Enable Crease</label><input type="checkbox" id="gpgpu_enableFoldCrease" checked></div>
-                        <label>Crease Depth: <span id="gpgpu_foldCreaseDepthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_foldCreaseDepth" min="-1.6" max="1.6" step="0.05" value="1.60">
-                        <label>Crease Sharpness: <span id="gpgpu_foldCreaseSharpnessValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_foldCreaseSharpness" min="1.0" max="10.0" step="0.1" value="1.0">
-                        
-                        <div class="checkbox-label-container"><label for="gpgpu_enableFoldTuck">Enable Tuck</label><input type="checkbox" id="gpgpu_enableFoldTuck" checked></div>
-                        <label>Tuck Amount: <span id="gpgpu_foldTuckAmountValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_foldTuckAmount" min="-1.0" max="1.0" step="0.05" value="-1.00">
-                        <label>Tuck Reach: <span id="gpgpu_foldTuckReachValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_foldTuckReach" min="0.01" max="0.4" step="0.005" value="0.40">
-                    </div>
-                </div>
-
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">Cylinder</span>
-                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enableCylinder" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <label>Radius: <span id="gpgpu_cylinderRadiusValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_cylinderRadius" min="0.5" max="20.0" step="0.1" value="5.0">
-                        <label>Height Scale: <span id="gpgpu_cylinderHeightScaleValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_cylinderHeightScale" min="0.1" max="5.0" step="0.1" value="1.0">
-                        <label>Axis:</label>
-                        <select id="gpgpu_cylinderAxisAlignment">
-                            <option value="y" selected>Y</option>
-                            <option value="x">X</option>
-                            <option value="z">Z</option>
-                        </select>
-                        <label>Arc Angle: <span id="gpgpu_cylinderArcAngleValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_cylinderArcAngle" min="1" max="360" step="1" value="360">
-                        <label>Arc Offset: <span id="gpgpu_cylinderArcOffsetValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_cylinderArcOffset" min="0" max="359" step="1" value="0">
-                    </div>
-                </div>
-                
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">Sag</span>
-                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enableSag" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <label>Amount: <span id="gpgpu_sagAmountValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_sagAmount" min="0.0" max="10.0" step="0.1" value="2.0">
-                        <label>Falloff Sharpness: <span id="gpgpu_sagFalloffSharpnessValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_sagFalloffSharpness" min="0.1" max="5.0" step="0.1" value="1.5">
-                        <label>Audio Strength: <span id="gpgpu_sagAudioModValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_sagAudioMod" min="0.0" max="1.0" step="0.05" value="0.2">
-                    </div>
-                </div>
-
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">Droop</span>
-                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enableDroop" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <label>Amount: <span id="gpgpu_droopAmountValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_droopAmount" min="0.0" max="15.0" step="0.1" value="0.3">
-                        <label>Audio Strength: <span id="gpgpu_droopAudioModValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_droopAudioMod" min="0.0" max="5.0" step="0.1" value="1.0">
-                        <label>Falloff Sharpness: <span id="gpgpu_droopFalloffSharpnessValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_droopFalloffSharpness" min="0.1" max="10.0" step="0.1" value="2.5">
-                        <label>Supported Width: <span id="gpgpu_droopSupportedWidthFactorValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_droopSupportedWidthFactor" min="0.0" max="1.0" step="0.01" value="0.6">
-                        <label>Supported Depth: <span id="gpgpu_droopSupportedDepthFactorValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_droopSupportedDepthFactor" min="0.0" max="1.0" step="0.01" value="0.5">
-                    </div>
-                </div>
-
-                <div class="accordion-item">
-                    <div class="accordion-header-with-toggle">
-                        <button class="accordion-header">
-                            <span class="header-title">Cloth Physics</span>
-                            <span class="header-engine-tag gpgpu-tag">GPGPU</span>
-                        </button>
-                        <input type="checkbox" id="gpgpu_enableCloth" class="header-toggle-checkbox">
-                    </div>
-                    <div class="accordion-content">
-                        <p class="sub-group-title">BASE PHYSICS</p>
-                        <label>Damping: <span id="gpgpu_clothDampingValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothDamping" min="0.9" max="1.0" step="0.001" value="1.0">
-                        <label>Stiffness: <span id="gpgpu_clothStiffnessValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothStiffness" min="0.0" max="1.0" step="0.05" value="0.8">
-                        <label>Iterations: <span id="gpgpu_clothIterationsValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothIterations" min="1" max="16" step="1" value="1.0">
-                        <label>Blend Time (s): <span id="gpgpu_clothBlendTimeValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothBlendTime" min="0.0" max="10.0" step="0.1" value="9.6">
-                        
-                        <p class="sub-group-title">TETHER</p>
-                        <label>Tether Strength: <span id="gpgpu_tetherStrengthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_tetherStrength" min="0.0" max="100.0" step="0.5" value="82.0">
-
-                        <p class="sub-group-title">AMBIENT WIND (TURBULENCE)</p>
-                        <label>Strength: <span id="gpgpu_ambientWindStrengthValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_ambientWindStrength" min="0.0" max="5.0" step="0.05" value="4.0">
-                        <label>Speed: <span id="gpgpu_ambientWindSpeedValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_ambientWindSpeed" min="0.0" max="2.0" step="0.05" value="0.3">
-                        <label>Scale: <span id="gpgpu_ambientWindScaleValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_ambientWindScale" min="0.1" max="5.0" step="0.05" value="2.0">
-
-                        <p class="sub-group-title">DIRECTIONAL WIND</p>
-                        <label>Wind X: <span id="gpgpu_directionalWindXValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_directionalWindX" min="-20.0" max="20.0" step="0.2" value="0.0">
-                        <label>Wind Y (Up/Down): <span id="gpgpu_directionalWindYValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_directionalWindY" min="-20.0" max="20.0" step="0.2" value="1.6">
-                        <label>Wind Z: <span id="gpgpu_directionalWindZValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_directionalWindZ" min="-10.0" max="10.0" step="0.1" value="5.8">
-
-                        <p class="sub-group-title">ANCHORING</p>
-                        <label for="gpgpu_clothPinMode">Pinning</label>
-                        <select id="gpgpu_clothPinMode">
-                            <option value="none">None</option>
-                            <option value="corners" selected>Corners</option>
-                            <option value="top_edge">Top Edge</option>
-                            <option value="center">Center</option>
-                        </select>
-
-                        <p class="sub-group-title">AUDIO INTERACTION</p>
-                        <label>Audio Force: <span id="gpgpu_clothAudioForceValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothAudioForce" min="0.0" max="2000.0" step="10" value="500.0">
-                        
-                        <label>Force Radius: <span id="gpgpu_clothForceRadiusValue" class="range-value-display"></span></label>
-                        <input type="range" id="gpgpu_clothForceRadius" min="0.0" max="1.0" step="0.01" value="0.3">
-                    </div>
-                </div>
-                
             </div>
         </div>
 
