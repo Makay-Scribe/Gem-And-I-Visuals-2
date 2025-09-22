@@ -41,12 +41,6 @@ void main() {
         snoise(noise_coord + vec3(20.0))
     ) * particle_flowStrength;
     
-    // ** THE FIX IS HERE: Reverted to the original logic. **
-    // Turbulence is now ONLY active during a transition.
-    float turbulenceStrength = sin(particle_morphProgress * PI);
-    vec3 scaledFlowForce = flowForce * turbulenceStrength;
-
-
     // --- 2. Calculate Attraction Force ---
     vec3 targetPos = texture(u_targetPositionMap, uv).xyz;
     vec3 attractionForce = (targetPos - position) * particle_attractionStrength;
@@ -75,7 +69,19 @@ void main() {
 
 
     // --- 5. Combine Forces ---
-    vec3 finalForce = attractionForce + scaledFlowForce + gravityForce + vortexForce;
+    // ** THE FIX IS HERE: Make the force combination more robust. **
+    // The issue was that the continuous 'flowForce' could prevent particles from ever
+    // settling into their final positions. This new logic makes the flow force fade out
+    // as a particle gets closer to its target, ensuring the attraction force always wins.
+    float distToTarget = length(targetPos - position);
+    
+    // `smoothstep` creates a falloff. When the particle is far away ( > 2.0 units),
+    // flowFalloff is 1.0 (full strength). When it gets very close ( < 0.1 units),
+    // flowFalloff becomes 0.0, disabling the turbulence for that particle.
+    float flowFalloff = smoothstep(0.1, 2.0, distToTarget);
+    
+    vec3 finalForce = attractionForce + (flowForce * flowFalloff) + gravityForce + vortexForce;
+
 
     // --- 6. Apply Force and Damping ---
     velocity += finalForce;

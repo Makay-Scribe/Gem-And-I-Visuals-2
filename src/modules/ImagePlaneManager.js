@@ -213,6 +213,12 @@ export const ImagePlaneManager = {
 
         if (S.gpgpuGeometryMode === 'particles') {
             this._createParticleSystem();
+            // ** THE FIX IS HERE: Explicitly re-initialize the particle compute system **
+            // This ensures that even after the system was disposed by another mode,
+            // it gets properly rebuilt when we switch back to 'particles'.
+            if (CM && CM.initParticleSystem) {
+                CM.initParticleSystem();
+            }
             this.app.CubeWallManager.setActive(false);
         } else if (S.gpgpuGeometryMode === 'geocube') {
             this._createInstancedCubeMesh();

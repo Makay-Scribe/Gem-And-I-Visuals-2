@@ -43,7 +43,7 @@ export const ComputeManager = {
         this.app = appInstance;
         const renderer = this.app.renderer;
 
-        this.dispose();
+        this.disposeLandscapeSystem(); // Only dispose the landscape part
 
         this.WIDTH = planeResX;
         this.HEIGHT = planeResY;
@@ -185,14 +185,11 @@ export const ComputeManager = {
         } else {
             this.app.UIManager.logSuccess("GPGPU Compute Initialized.");
         }
-        
-        this.initParticleSystem();
     },
 
     initParticleSystem() {
-        if (this.particleGpuCompute) {
-            this.disposeParticleSystem();
-        }
+        // First, clean up any old particle simulation to prevent memory leaks
+        this.disposeParticleSimulation();
 
         const S = this.app.vizSettings;
         const resolution = S.particle_resolution;
@@ -201,12 +198,21 @@ export const ComputeManager = {
 
         this.particleGpuCompute = new GPUComputationRenderer(resolution, resolution, renderer);
 
+        // ** THE FIX IS HERE: Create baked data textures ONLY if they don't exist **
+        // This preserves our baked model data across mode switches.
+        if (!this.particleFlatPositionTexture) {
+            this.particleFlatPositionTexture = this.particleGpuCompute.createTexture();
+        }
+        if (!this.particleModelPositionTexture) {
+            this.particleModelPositionTexture = this.particleGpuCompute.createTexture(); 
+        }
+        if (!this.particleModelUVTexture) {
+            this.particleModelUVTexture = this.particleGpuCompute.createTexture();
+        }
+
         const dtPosition = this.particleGpuCompute.createTexture();
         const dtVelocity = this.particleGpuCompute.createTexture();
-        this.particleFlatPositionTexture = this.particleGpuCompute.createTexture();
-        this.particleModelPositionTexture = this.particleGpuCompute.createTexture(); 
-        this.particleModelUVTexture = this.particleGpuCompute.createTexture();
-
+        
         const posArray = dtPosition.image.data;
         const velArray = dtVelocity.image.data;
         const flatArray = this.particleFlatPositionTexture.image.data;
@@ -334,23 +340,35 @@ export const ComputeManager = {
     },
 
     disposeLandscapeSystem() {
-        if (this._passThruMaterial) this._passThruMaterial.dispose();
         if (this.gpuCompute) {
             if (this.positionVariable) this.positionVariable.renderTargets.forEach(rt => rt.dispose());
             if (this.previousPositionVariable) this.previousPositionVariable.renderTargets.forEach(rt => rt.dispose());
-            if (this.transitionVariable) this.transitionVariable.renderTargets.forEach(rt => rt.dispose());
             if (this.initialPositionTexture) this.initialPositionTexture.dispose();
 
             this.gpuCompute = null;
             this.positionVariable = null;
             this.previousPositionVariable = null;
             this.initialPositionTexture = null;
-            this.transitionVariable = null;
             console.log("Landscape GPGPU system disposed.");
         }
     },
 
     disposeParticleSystem() {
+        this.disposeParticleSimulation(); // Dispose the active simulation
+        // Also dispose the baked data textures
+        if (this.particleFlatPositionTexture) this.particleFlatPositionTexture.dispose();
+        if (this.particleModelPositionTexture) this.particleModelPositionTexture.dispose();
+        if (this.particleModelUVTexture) this.particleModelUVTexture.dispose();
+        this.particleFlatPositionTexture = null; 
+        this.particleModelPositionTexture = null;
+        this.particleModelUVTexture = null;
+        console.log("Full Particle GPGPU system (sim + baked data) disposed.");
+    },
+
+    // ** THE FIX IS HERE: A new, more specific disposal function **
+    // This function only disposes the active GPGPU simulation,
+    // but LEAVES the baked data textures intact.
+    disposeParticleSimulation() {
         if (this.particleGpuCompute) {
             const variables = [this.particlePositionVar, this.particleVelocityVar];
             variables.forEach(variable => {
@@ -358,19 +376,10 @@ export const ComputeManager = {
                     variable.renderTargets.forEach(rt => rt.dispose());
                 }
             });
-
-            if (this.particleFlatPositionTexture) this.particleFlatPositionTexture.dispose();
-            if (this.particleModelPositionTexture) this.particleModelPositionTexture.dispose();
-            if (this.particleModelUVTexture) this.particleModelUVTexture.dispose();
-            
             this.particleGpuCompute = null;
             this.particlePositionVar = null;
             this.particleVelocityVar = null;
-            this.particleFlatPositionTexture = null; 
-            this.particleModelPositionTexture = null;
-            this.particleModelUVTexture = null;
-
-            console.log("Particle GPGPU system disposed.");
+            console.log("Particle GPGPU *simulation* disposed. Baked data preserved.");
         }
     },
 
