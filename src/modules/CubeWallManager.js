@@ -40,28 +40,11 @@ export const CubeWallManager = {
     },
 
     _calculateGpgpuOffsetCPU() {
-        const S = this.app.vizSettings;
-        let totalOffset = 0;
-
-        const playerUv = this.app.ImagePlaneManager.getUvFromGridCoords(this.playerGridPos.x, this.playerGridPos.y);
-
-        if (S.gpgpu_enableWaterRipple) {
-            const dist = playerUv.distanceTo(new THREE.Vector2(0.5, 0.5));
-            const ripple = Math.sin(dist * S.gpgpu_rippleFrequency - this.app.currentTime * S.gpgpu_rippleSpeed) * (1.0 - dist);
-            const audioFactor = 1.0 + this.app.AudioProcessor.energy.low * 2.0;
-            totalOffset += ripple * S.gpgpu_rippleStrength * audioFactor;
-        }
-
-        if (S.gpgpu_enablePeel) {
-            const centeredUv = new THREE.Vector2(playerUv.x - 0.5, playerUv.y - 0.5);
-            const cornerStrength = Math.pow(centeredUv.length() * 1.414, 4.0);
-            const peelAnimation = (Math.sin(this.app.currentTime * 0.5) + 1.0) * 0.5;
-            const audioInfluence = S.gpgpu_peelEnableAudio ? this.app.AudioProcessor.energy.low : 0.0;
-            const totalAmount = S.gpgpu_peelAmount * peelAnimation * (1.0 + audioInfluence * 3.0);
-            totalOffset += cornerStrength * totalAmount * 10.0;
-        }
-
-        return totalOffset;
+        // ** THE FIX IS HERE: This function is being disabled. **
+        // This logic was causing effects from Faceted mode (like Water Ripple) to
+        // incorrectly influence the player cube's position in GeoCube mode.
+        // Returning 0 ensures the engines are properly decoupled.
+        return 0;
     },
 
     _createPlayerCube() {
@@ -99,7 +82,9 @@ export const CubeWallManager = {
             });
 
             material.onBeforeCompile = (shader) => {
-                shader.uniforms.u_gpgpu_enableCubeWall = { value: this.app.vizSettings.gpgpu_enableCubeWall };
+                // This uniform is used to enable beveling in the shader. It is now correctly
+                // tied to the player cube's own enabled flag.
+                shader.uniforms.u_gpgpu_enableCubeWall = { value: this.app.vizSettings.playerCube_enabled };
                 shader.uniforms.u_gpgpu_cubeWallBevelWidth = { value: this.app.vizSettings.gpgpu_cubeWallBevelWidth };
                 shader.uniforms.u_gpgpu_cubeWallBevelIntensity = { value: this.app.vizSettings.gpgpu_cubeWallBevelIntensity };
 
@@ -255,12 +240,18 @@ export const CubeWallManager = {
 
     update() {
         const S = this.app.vizSettings;
-        // ** THE FIX IS HERE: The player cube now hides itself if the main toggle is off. **
-        if (!this.playerCube || !S.gpgpu_enableCubeWall) {
-            if(this.playerCube) this.playerCube.visible = false;
+        const isGeoCubeMode = S.gpgpuGeometryMode === 'geocube';
+
+        // ** THE FIX IS HERE: This check is now robust. **
+        // The manager will only run if the player has enabled it AND the app is in the correct mode.
+        if (!this.playerCube || !S.playerCube_enabled || !isGeoCubeMode) {
+            if (this.playerCube) this.playerCube.visible = false;
+            if (this.moveTimeoutId) {
+                clearTimeout(this.moveTimeoutId);
+                this.moveTimeoutId = null;
+            }
             return;
         }
-        // ** THE FIX IS HERE: Explicitly make the cube visible if the toggle is on. **
         this.playerCube.visible = true;
 
         if (Array.isArray(this.playerCube.material)) {
@@ -271,7 +262,7 @@ export const CubeWallManager = {
 
                 if (material.userData.shader) {
                     const shaderUniforms = material.userData.shader.uniforms;
-                    shaderUniforms.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
+                    shaderUniforms.u_gpgpu_enableCubeWall.value = S.playerCube_enabled;
                     shaderUniforms.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
                     shaderUniforms.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;
                 }
@@ -279,7 +270,6 @@ export const CubeWallManager = {
         }
 
         const state = this.animationState;
-        const isSliderActive = false;
 
         const landscapeBasePos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
         const gpgpuOffset = this._calculateGpgpuOffsetCPU();
@@ -287,7 +277,7 @@ export const CubeWallManager = {
         const finalTargetZ = landscapeBasePos.z + gpgpuOffset + playerHeightOffset;
 
 
-        if (state.isMoving && !isSliderActive) {
+        if (state.isMoving) {
             const progress = Math.min(1, (performance.now() - state.startTime) / this.PLAYER_MOVE_DURATION);
             
             state.targetPosition.z = finalTargetZ;
@@ -305,7 +295,7 @@ export const CubeWallManager = {
                 this.playerCube.position.copy(state.targetPosition);
                 this.playerCube.quaternion.copy(state.targetQuaternion);
 
-                const pauseDuration = Math.random() < 0.15 ? 500 : 200;
+                const pauseDuration = Math.random() < 0.15 ? 2000 : 500;
                 this.moveTimeoutId = setTimeout(() => this.startNextMove(), pauseDuration);
             }
         } else {
@@ -313,8 +303,5 @@ export const CubeWallManager = {
                 this.playerCube.position.z = finalTargetZ;
             }
         }
-
-        const isComplexEffectActive = S.gpgpu_enableCloth;
-        this.playerCube.visible = !isComplexEffectActive;
     }
 };

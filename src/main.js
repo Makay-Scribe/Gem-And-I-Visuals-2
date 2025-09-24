@@ -182,12 +182,12 @@ const App = {
 
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
-        gpgpu_enableCubeWall: false,
+        playerCube_enabled: true,
         gpgpu_cubeWallMorph: 0.0,
-        gpgpu_cubeWallUseImageTexture: false,
+        gpgpu_cubeWallUseImageTexture: true,
         gpgpu_cubeWallSideColor: '#4a586a',
-        gpgpu_cubeWallBevelWidth: 0.1,
-        gpgpu_cubeWallBevelIntensity: 1.0,
+        gpgpu_cubeWallBevelWidth: 0.02,
+        gpgpu_cubeWallBevelIntensity: 0.5,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",

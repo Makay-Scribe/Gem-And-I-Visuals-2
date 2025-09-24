@@ -139,7 +139,8 @@
             <div class="accordion-content">
                 
                 <div class="segmented-control" id="gpgpuModeSelector">
-                    <button class="segmented-control-button" data-mode="deformation">Deformation</button>
+                    <!-- ** THE FIX IS HERE: Renamed button text for clarity ** -->
+                    <button class="segmented-control-button" data-mode="deformation">Faceted</button>
                     <button class="segmented-control-button" data-mode="geocube">GeoCube</button>
                     <button class="segmented-control-button active" data-mode="particles">Particles</button>
                     <button class="segmented-control-button" data-mode="fluidsim" disabled>Fluid Sim</button>
@@ -370,11 +371,13 @@
                 <div id="geocubeControlsContainer" style="display: none;">
                     <div class="accordion-item">
                         <div class="accordion-header-with-toggle">
+                            <!-- ** THE FIX IS HERE: Renamed for clarity ** -->
                             <button class="accordion-header">
-                                <span class="header-title">CubeWall</span>
+                                <span class="header-title">Player Cube</span>
                                 <span class="header-engine-tag geometry-tag">Geometry</span>
                             </button>
-                            <input type="checkbox" id="gpgpu_enableCubeWall" class="header-toggle-checkbox">
+                            <!-- ** THE FIX IS HERE: Renamed ID to match new settings property ** -->
+                            <input type="checkbox" id="playerCube_enabled" class="header-toggle-checkbox">
                         </div>
                         <div class="accordion-content">
                             <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
@@ -463,7 +466,6 @@
                     <p style="color: var(--label-color); text-align: center; padding: 20px 0;">Fluid Simulation controls will be here.</p>
                 </div>
                 
-                <!-- ** THE FIX IS HERE: New Master Reset Button ** -->
                 <button id="gpgpuResetButton">Reset GPGPU Sliders</button>
 
             </div>

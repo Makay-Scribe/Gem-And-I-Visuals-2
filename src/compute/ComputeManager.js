@@ -40,10 +40,16 @@ export const ComputeManager = {
     AREA: 0,
 
     init(appInstance, planeWidth, planeHeight, planeResX, planeResY) {
+        // ** THE FIX IS HERE: Prevent re-initialization if the simulation already exists and has the correct size. **
+        if (this.gpuCompute && this.WIDTH === planeResX && this.HEIGHT === planeResY) {
+            console.log("ComputeManager: GPGPU system already initialized with correct dimensions. Skipping re-init.");
+            return;
+        }
+
         this.app = appInstance;
         const renderer = this.app.renderer;
 
-        this.disposeLandscapeSystem(); // Only dispose the landscape part
+        this.disposeLandscapeSystem();
 
         this.WIDTH = planeResX;
         this.HEIGHT = planeResY;
@@ -188,7 +194,6 @@ export const ComputeManager = {
     },
 
     initParticleSystem() {
-        // First, clean up any old particle simulation to prevent memory leaks
         this.disposeParticleSimulation();
 
         const S = this.app.vizSettings;
@@ -198,8 +203,6 @@ export const ComputeManager = {
 
         this.particleGpuCompute = new GPUComputationRenderer(resolution, resolution, renderer);
 
-        // ** THE FIX IS HERE: Create baked data textures ONLY if they don't exist **
-        // This preserves our baked model data across mode switches.
         if (!this.particleFlatPositionTexture) {
             this.particleFlatPositionTexture = this.particleGpuCompute.createTexture();
         }
@@ -365,9 +368,6 @@ export const ComputeManager = {
         console.log("Full Particle GPGPU system (sim + baked data) disposed.");
     },
 
-    // ** THE FIX IS HERE: A new, more specific disposal function **
-    // This function only disposes the active GPGPU simulation,
-    // but LEAVES the baked data textures intact.
     disposeParticleSimulation() {
         if (this.particleGpuCompute) {
             const variables = [this.particlePositionVar, this.particleVelocityVar];

@@ -137,8 +137,6 @@ export const ImagePlaneManager = {
         }
         this.landscapeContainer.visible = true;
         
-        // ** THE FIX IS HERE: Correctly set visibility for all modes **
-        // This ensures the instancedMesh (the cubes) becomes visible in geocube mode.
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
         const isParticleMode = S.gpgpuGeometryMode === 'particles';
         const isDeformationMode = !isCubeMode && !isParticleMode;
@@ -220,13 +218,10 @@ export const ImagePlaneManager = {
             if (CM && CM.initParticleSystem) {
                 CM.initParticleSystem();
             }
-            this.app.CubeWallManager.setActive(false);
         } else if (S.gpgpuGeometryMode === 'geocube') {
             this._createInstancedCubeMesh();
-            this.app.CubeWallManager.setActive(true);
         } else { 
-            this._createPlaneMesh(S.gpgpuGeometryMode);
-            this.app.CubeWallManager.setActive(false);
+            this._createPlaneMesh('faceted');
         }
 
         if (S.gpgpuGeometryMode !== 'particles') {
@@ -422,7 +417,8 @@ export const ImagePlaneManager = {
             u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
             u_cameraPosition: { value: this.app.camera.position },
             t_envMap: { value: this.app.hdrTexture },
-            u_gpgpu_enableCubeWall: { value: S.gpgpu_enableCubeWall },
+            // ** THE FIX IS HERE: Uniform is now based purely on geometry mode **
+            u_gpgpu_enableCubeWall: { value: S.gpgpuGeometryMode === 'geocube' },
             u_gpgpu_cubeWallGridSize: { value: new this.app.THREE.Vector2(S.gpgpu_cubeWallGridSize, S.gpgpu_cubeWallGridSize) },
             u_gpgpu_cubeWallMorph: { value: S.gpgpu_cubeWallMorph },
             u_gpgpu_cubeWallSideColor: { value: new this.app.THREE.Color(S.gpgpu_cubeWallSideColor) },
@@ -513,7 +509,7 @@ export const ImagePlaneManager = {
                 U_PBR.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
             }
         } else { 
-            if (!this.landscapeMaterial) return;
+            if (!this.landscapeMaterial || !this.app.ComputeManager.gpuCompute) return;
             const U = this.landscapeMaterial.uniforms;
             const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
             U.u_positionTexture.value = positionTarget.texture;
@@ -528,7 +524,8 @@ export const ImagePlaneManager = {
             U.u_ambientLightColor.value.set(S.ambientLightColor);
             U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
             
-            U.u_gpgpu_enableCubeWall.value = S.gpgpu_enableCubeWall;
+            // ** THE FIX IS HERE: Uniform is now based purely on geometry mode **
+            U.u_gpgpu_enableCubeWall.value = S.gpgpuGeometryMode === 'geocube';
             U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;
             U.u_gpgpu_cubeWallSideColor.value.set(S.gpgpu_cubeWallSideColor);
             U.gpgpu_cubeWallUseImageTexture.value = S.gpgpu_cubeWallUseImageTexture;

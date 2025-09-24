@@ -441,7 +441,7 @@ export const UIManager = {
             let precision = 1;
              if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity'].includes(id)) {
                 precision = 2;
-            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size'].includes(id)) {
+            } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity'].includes(id)) {
                 precision = 2;
             } else if (id === 'butterchurnBlendTime' || id === 'butterchurnCycleTime' || ['actorX', 'actorY', 'actorDepth', 'cylinderArcAngle', 'cylinderArcOffset', 'bendAngle', 'foldAngle', 'foldAudioMod', 'gpgpu_eqRippleBarCount', 'gpgpu_foldAngle', 'gpgpu_foldAudioMod', 'gpgpu_cylinderArcAngle', 'gpgpu_cylinderArcOffset'].includes(id)) {
                 precision = 0;
@@ -579,6 +579,10 @@ export const UIManager = {
             btn.classList.toggle('button-glow-effect', isActive);
         });
         
+        const isCubeMode = S.gpgpuGeometryMode === 'geocube';
+        this.app.CubeWallManager.setActive(isCubeMode && S.playerCube_enabled);
+        
+        this._updateDeformationPanelStates();
         this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
     },
 
@@ -628,6 +632,8 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const D = this.app.defaultVisualizerSettings;
 
+        S.gpgpuGeometryMode = D.gpgpuGeometryMode;
+
         const gpgpuKeys = [
             'gpgpu_enableWaterRipple', 'gpgpu_rippleSpeed', 'gpgpu_rippleStrength', 'gpgpu_rippleFrequency',
             'gpgpu_enableEqRipple', 'gpgpu_eqRippleStrength', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleBarCount', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'gpgpu_eqRippleStyle',
@@ -638,7 +644,7 @@ export const UIManager = {
             'gpgpu_enableDroop', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor',
             'gpgpu_enablePeel', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelEnableAudio', 'gpgpu_peelTextureAmount', 'gpgpu_peelDrift',
             'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress',
-            'gpgpu_enableCubeWall', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity'
+            'playerCube_enabled', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity'
         ];
 
         gpgpuKeys.forEach(key => {
@@ -646,19 +652,17 @@ export const UIManager = {
                 S[key] = D[key];
                 const el = document.getElementById(key);
                 if (el) {
-                    if (el.type === 'checkbox') {
-                        el.checked = D[key];
-                    } else {
-                        el.value = D[key];
-                    }
-                    if (el.type === 'range') {
-                        this.updateRangeDisplay(key, D[key]);
-                    }
+                    if (el.type === 'checkbox') el.checked = D[key];
+                    else el.value = D[key];
+                    if (el.type === 'range') this.updateRangeDisplay(key, D[key]);
                 }
             }
         });
-
+        
+        this.app.ImagePlaneManager.createDefaultLandscape();
+        this._updateGpgpuModeVisibility();
         this._updateDeformationPanelStates();
+
         this.logSuccess("All GPGPU settings have been reset to default.");
     },
     
@@ -728,24 +732,56 @@ export const UIManager = {
 
                 this.app.ImagePlaneManager.createDefaultLandscape();
                 this._updateGpgpuModeVisibility();
-                this._updateDeformationPanelStates();
-
-                if (mode === 'geocube') {
-                    const cubeWallCheckbox = document.getElementById('gpgpu_enableCubeWall');
-                    if (cubeWallCheckbox && !cubeWallCheckbox.checked) {
-                        cubeWallCheckbox.checked = true;
-                        S.gpgpu_enableCubeWall = true;
-                    }
-                    const cubeWallContent = cubeWallCheckbox.closest('.accordion-item').querySelector('.accordion-content');
-                    if (cubeWallContent && !cubeWallContent.classList.contains('open')) {
-                        cubeWallCheckbox.closest('.accordion-header-with-toggle').querySelector('.accordion-header').click();
-                    }
-                }
             });
         });
         
+        const geocubeContainer = document.getElementById('geocubeControlsContainer');
+        if (geocubeContainer) {
+            geocubeContainer.querySelectorAll('input, select').forEach(control => {
+                control.addEventListener('input', (e) => {
+                    const id = e.target.id;
+                    if (!id || this.app.vizSettings[id] === undefined) return;
+                    
+                    const S = this.app.vizSettings;
+                    let value;
+
+                    switch (e.target.type) {
+                        case 'checkbox':
+                            value = e.target.checked;
+                            break;
+                        case 'range':
+                        case 'number':
+                            value = parseFloat(e.target.value);
+                            this.updateRangeDisplay(id, value);
+                            break;
+                        default: 
+                            value = e.target.value;
+                            break;
+                    }
+                    
+                    S[id] = value;
+                    
+                    if (id === 'playerCube_enabled') {
+                        this.app.CubeWallManager.setActive(value);
+                    }
+                });
+            });
+        }
+        
+        // ** THE FIX IS HERE: Updated query selector to include all particle sliders **
+        document.querySelectorAll('#particleControlsContainer input[type="range"]').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const S = this.app.vizSettings;
+                const id = e.target.id;
+                S[id] = parseFloat(e.target.value);
+                this.updateRangeDisplay(id, S[id]);
+
+                // ** THE FIX IS HERE: The inactivity timer has been removed. **
+            });
+        });
+
         document.querySelectorAll('input[type="range"], select').forEach(control => {
-            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleControlsContainer')) return;
+            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleControlsContainer') || control.closest('#geocubeControlsContainer')) return;
 
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -785,7 +821,6 @@ export const UIManager = {
         document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(0.95));
         document.getElementById('runTransitionButton').addEventListener('click', () => this.runTransition());
         
-        // ** THE FIX IS HERE: The morph slider now correctly calls handleMorphSlider **
         const morphSlider = document.getElementById('particle_morphProgress');
         if (morphSlider) {
             morphSlider.addEventListener('input', (e) => {
@@ -793,27 +828,10 @@ export const UIManager = {
                 const value = parseFloat(e.target.value);
                 S.particle_morphProgress = value;
                 this.updateRangeDisplay('particle_morphProgress', value);
-                this.handleMorphSlider(value); // This syncs the physics simulation
+                this.handleMorphSlider(value); 
             });
         }
         
-        document.querySelectorAll('#particleTransitionEditor input[type="range"]').forEach(slider => {
-            slider.addEventListener('input', (e) => {
-                const S = this.app.vizSettings;
-                const id = e.target.id;
-                S[id] = parseFloat(e.target.value);
-                this.updateRangeDisplay(id, S[id]);
-
-                if (this.sliderInactivityTimer) clearTimeout(this.sliderInactivityTimer);
-                
-                this.sliderInactivityTimer = setTimeout(() => {
-                    this.logSuccess('Resetting sliders to preset defaults due to inactivity.');
-                    this.loadPresetValues(this.activeTransitionPreset);
-                }, 5000);
-            });
-        });
-
-
         const presetContainer = document.getElementById('particleTransitionPresetContainer');
         if(presetContainer) {
             presetContainer.querySelectorAll('button').forEach(button => {
@@ -911,7 +929,6 @@ export const UIManager = {
                 } else {
                     content.style.maxHeight = '0px';
                 }
-                // ** THE FIX IS HERE: The refresh call now starts from the correct element. **
                 this.refreshAccordion(content); 
             });
         });
