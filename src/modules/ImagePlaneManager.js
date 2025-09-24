@@ -136,10 +136,14 @@ export const ImagePlaneManager = {
             return;
         }
         this.landscapeContainer.visible = true;
-
+        
+        // ** THE FIX IS HERE: Correctly set visibility for all modes **
+        // This ensures the instancedMesh (the cubes) becomes visible in geocube mode.
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
         const isParticleMode = S.gpgpuGeometryMode === 'particles';
-        if (this.landscape) this.landscape.visible = !isCubeMode && !isParticleMode;
+        const isDeformationMode = !isCubeMode && !isParticleMode;
+
+        if (this.landscape) this.landscape.visible = isDeformationMode;
         if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
         if (this.particleSystem) this.particleSystem.visible = isParticleMode;
         
@@ -219,10 +223,8 @@ export const ImagePlaneManager = {
             this.app.CubeWallManager.setActive(false);
         } else if (S.gpgpuGeometryMode === 'geocube') {
             this._createInstancedCubeMesh();
-            // ** THE FIX IS HERE: Activate the CubeWallManager **
             this.app.CubeWallManager.setActive(true);
         } else { 
-            // This now handles 'deformation' mode (which uses 'faceted' internally)
             this._createPlaneMesh(S.gpgpuGeometryMode);
             this.app.CubeWallManager.setActive(false);
         }
@@ -301,7 +303,6 @@ export const ImagePlaneManager = {
     _createPlaneMesh(mode) {
         let landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
 
-        // ** THE FIX IS HERE: The 'continuous' mode check is removed. It now defaults to non-indexed for 'faceted'. **
         if (mode === 'faceted') {
             landGeom = landGeom.toNonIndexed();
         }

@@ -194,8 +194,6 @@ export const CubeWallManager = {
     },
 
     startNextMove() {
-        // --- THE FIX IS HERE: The visibility check has been removed. ---
-        // The movement logic can now run even if the cube is not visible.
         if (this.animationState.isMoving || !this.playerCube) return;
 
         let nextMove = null;
@@ -257,10 +255,13 @@ export const CubeWallManager = {
 
     update() {
         const S = this.app.vizSettings;
+        // ** THE FIX IS HERE: The player cube now hides itself if the main toggle is off. **
         if (!this.playerCube || !S.gpgpu_enableCubeWall) {
             if(this.playerCube) this.playerCube.visible = false;
             return;
         }
+        // ** THE FIX IS HERE: Explicitly make the cube visible if the toggle is on. **
+        this.playerCube.visible = true;
 
         if (Array.isArray(this.playerCube.material)) {
             this.playerCube.material.forEach(material => {

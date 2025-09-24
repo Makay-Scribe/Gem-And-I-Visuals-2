@@ -18,7 +18,6 @@ export const UIManager = {
     activeTransitionPreset: 'default',
     sliderInactivityTimer: null,
 
-    // This is now only for conflicts WITHIN the 'deformation' mode
     gpgpuExclusiveGroups: [
         ['gpgpu_enableFold', 'gpgpu_enableCylinder'],
         ['gpgpu_enableCloth']
@@ -476,8 +475,6 @@ export const UIManager = {
     },
 
     updateImageEffectsVisibility(isInitial = false) {
-        // This function is now simplified, as the accordion logic handles visibility.
-        // We just need to trigger a refresh if a change happens.
         if (!isInitial) {
             this.refreshAccordion(document.getElementById('imageEffectsAccordion'));
         }
@@ -553,7 +550,6 @@ export const UIManager = {
         });
     },
 
-    // ** THE FIX IS HERE: Renamed and rewritten for the new UI **
     _updateGpgpuModeVisibility() {
         const S = this.app.vizSettings;
         const mode = S.gpgpuGeometryMode;
@@ -578,14 +574,11 @@ export const UIManager = {
 
         document.querySelectorAll('#gpgpuModeSelector .segmented-control-button').forEach(btn => {
             const btnMode = btn.dataset.mode;
-            // The active key can be either the direct mode name or 'deformation' for 'faceted'
             const isActive = (btnMode === activeContainerKey);
             btn.classList.toggle('active', isActive);
-            // ** THE FIX IS HERE: Add/remove glow effect **
             btn.classList.toggle('button-glow-effect', isActive);
         });
         
-        // ** THE FIX IS HERE: Force the parent accordion to resize after changing display **
         this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
     },
 
@@ -631,13 +624,11 @@ export const UIManager = {
         this.refreshAccordion(container);
     },
 
-    // ** THE FIX IS HERE: New function to reset all GPGPU settings **
     resetGpgpuSettings() {
         const S = this.app.vizSettings;
         const D = this.app.defaultVisualizerSettings;
 
         const gpgpuKeys = [
-            // Deformation Effects
             'gpgpu_enableWaterRipple', 'gpgpu_rippleSpeed', 'gpgpu_rippleStrength', 'gpgpu_rippleFrequency',
             'gpgpu_enableEqRipple', 'gpgpu_eqRippleStrength', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleBarCount', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'gpgpu_eqRippleStyle',
             'gpgpu_enableCloth', 'gpgpu_clothDamping', 'gpgpu_clothStiffness', 'gpgpu_clothAudioForce', 'gpgpu_clothForceRadius', 'gpgpu_clothIterations', 'gpgpu_clothPinMode', 'gpgpu_tetherStrength', 'gpgpu_ambientWindStrength', 'gpgpu_ambientWindSpeed', 'gpgpu_ambientWindScale', 'gpgpu_directionalWindX', 'gpgpu_directionalWindY', 'gpgpu_directionalWindZ', 'gpgpu_clothBlendTime',
@@ -646,9 +637,7 @@ export const UIManager = {
             'gpgpu_enableSag', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod',
             'gpgpu_enableDroop', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor',
             'gpgpu_enablePeel', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelEnableAudio', 'gpgpu_peelTextureAmount', 'gpgpu_peelDrift',
-            // Particle Effects
             'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress',
-            // CubeWall Effects
             'gpgpu_enableCubeWall', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity'
         ];
 
@@ -669,7 +658,6 @@ export const UIManager = {
             }
         });
 
-        // After resetting, re-evaluate the UI state
         this._updateDeformationPanelStates();
         this.logSuccess("All GPGPU settings have been reset to default.");
     },
@@ -702,8 +690,6 @@ export const UIManager = {
             } 
         });
         document.getElementById('landscapeResetButton').addEventListener('click', () => this.resetLandscapeSettings());
-        
-        // ** THE FIX IS HERE: Listener for the new master reset button **
         document.getElementById('gpgpuResetButton').addEventListener('click', () => this.resetGpgpuSettings());
         
         const fileInputIds = ['mainTextureInput', 'videoTextureInput', 'audioFileInput', 'gltfModelInput', 'hdriInput', 'iChannel0Input', 'iChannel1Input', 'iChannel2Input', 'iChannel3Input', 'particleModelInput'];
@@ -744,7 +730,6 @@ export const UIManager = {
                 this._updateGpgpuModeVisibility();
                 this._updateDeformationPanelStates();
 
-                // ** THE FIX IS HERE: Auto-enable and open CubeWall accordion **
                 if (mode === 'geocube') {
                     const cubeWallCheckbox = document.getElementById('gpgpu_enableCubeWall');
                     if (cubeWallCheckbox && !cubeWallCheckbox.checked) {
@@ -760,7 +745,7 @@ export const UIManager = {
         });
         
         document.querySelectorAll('input[type="range"], select').forEach(control => {
-            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleTransitionEditor')) return;
+            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleControlsContainer')) return;
 
             control.addEventListener('input', (e) => {
                 const id = e.target.id;
@@ -800,17 +785,24 @@ export const UIManager = {
         document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(0.95));
         document.getElementById('runTransitionButton').addEventListener('click', () => this.runTransition());
         
+        // ** THE FIX IS HERE: The morph slider now correctly calls handleMorphSlider **
+        const morphSlider = document.getElementById('particle_morphProgress');
+        if (morphSlider) {
+            morphSlider.addEventListener('input', (e) => {
+                const S = this.app.vizSettings;
+                const value = parseFloat(e.target.value);
+                S.particle_morphProgress = value;
+                this.updateRangeDisplay('particle_morphProgress', value);
+                this.handleMorphSlider(value); // This syncs the physics simulation
+            });
+        }
+        
         document.querySelectorAll('#particleTransitionEditor input[type="range"]').forEach(slider => {
             slider.addEventListener('input', (e) => {
                 const S = this.app.vizSettings;
                 const id = e.target.id;
                 S[id] = parseFloat(e.target.value);
                 this.updateRangeDisplay(id, S[id]);
-
-                if (S.particle_morphProgress < 0.01 && S.particle_morphProgress >= 0) {
-                    S.particle_morphProgress = 0.01;
-                    this.syncSlidersToSettings();
-                }
 
                 if (this.sliderInactivityTimer) clearTimeout(this.sliderInactivityTimer);
                 
@@ -919,7 +911,8 @@ export const UIManager = {
                 } else {
                     content.style.maxHeight = '0px';
                 }
-                this.refreshAccordion(headerContainer); 
+                // ** THE FIX IS HERE: The refresh call now starts from the correct element. **
+                this.refreshAccordion(content); 
             });
         });
         
