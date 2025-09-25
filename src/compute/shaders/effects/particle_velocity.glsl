@@ -16,7 +16,7 @@ uniform float particle_flowStrength;
 uniform float particle_morphProgress;
 uniform float particle_attractionStrength;
 
-// Uniforms for the new Melt/Vortex effect
+// ** THE FIX IS HERE: Uniforms for the new artistic transition effects **
 uniform vec3 u_gravity;
 uniform float u_vortexStrength;
 uniform vec2 u_vortexPosition; // Center of the vortex in world space
@@ -60,8 +60,10 @@ void main() {
     vec3 gravityForce = vec3(0.0);
     if (u_meltProgress > 0.0) {
         float topOfPlane = u_planeDimensions.y * 0.5;
+        // The melt front moves from top (1.0) to bottom (-1.0) as meltProgress goes from 0 to 1
         float meltFrontY = topOfPlane * (1.0 - u_meltProgress * 2.0); 
         
+        // Only apply gravity to particles whose *original* position is above the melt line
         if (initialPos.y > meltFrontY) {
             gravityForce = u_gravity;
         }
@@ -69,15 +71,10 @@ void main() {
 
 
     // --- 5. Combine Forces ---
-    // ** THE FIX IS HERE: Make the force combination more robust. **
-    // The issue was that the continuous 'flowForce' could prevent particles from ever
-    // settling into their final positions. This new logic makes the flow force fade out
-    // as a particle gets closer to its target, ensuring the attraction force always wins.
     float distToTarget = length(targetPos - position);
     
-    // `smoothstep` creates a falloff. When the particle is far away ( > 2.0 units),
-    // flowFalloff is 1.0 (full strength). When it gets very close ( < 0.1 units),
-    // flowFalloff becomes 0.0, disabling the turbulence for that particle.
+    // The flow field (turbulence) fades out as a particle gets closer to its target,
+    // ensuring the attraction force can win and the particle can settle.
     float flowFalloff = smoothstep(0.1, 2.0, distToTarget);
     
     vec3 finalForce = attractionForce + (flowForce * flowFalloff) + gravityForce + vortexForce;
@@ -85,7 +82,7 @@ void main() {
 
     // --- 6. Apply Force and Damping ---
     velocity += finalForce;
-    velocity *= 0.90; 
+    velocity *= 0.90; // Damping factor to prevent infinite acceleration
 
     gl_FragColor = vec4(velocity, 1.0);
 }

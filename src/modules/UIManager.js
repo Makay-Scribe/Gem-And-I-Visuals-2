@@ -71,7 +71,18 @@ export const UIManager = {
             particle_attractionStrength: 0.1,
             particle_size_mix: 0.0,
             particle_twinkleIntensity: 0.0,
-        }
+        },
+        'supernova': { // End state should match default
+            particle_flowStrength: 0.0,
+            particle_flowSpeed: 0.0,
+            particle_flowScale: 0.1,
+            particle_attractionStrength: 0.1,
+        },
+        'gravity_well': {},
+        'cosmic_dust': {},
+        'dissolve': {},
+        'swarm': {},
+        'flow': {}
     },
 
     demoShaderInterval: null,
@@ -768,15 +779,12 @@ export const UIManager = {
             });
         }
         
-        // ** THE FIX IS HERE: Updated query selector to include all particle sliders **
         document.querySelectorAll('#particleControlsContainer input[type="range"]').forEach(slider => {
             slider.addEventListener('input', (e) => {
                 const S = this.app.vizSettings;
                 const id = e.target.id;
                 S[id] = parseFloat(e.target.value);
                 this.updateRangeDisplay(id, S[id]);
-
-                // ** THE FIX IS HERE: The inactivity timer has been removed. **
             });
         });
 
@@ -832,32 +840,33 @@ export const UIManager = {
             });
         }
         
-        const presetContainer = document.getElementById('particleTransitionPresetContainer');
-        if(presetContainer) {
-            presetContainer.querySelectorAll('button').forEach(button => {
-                button.addEventListener('click', () => {
-                    const presetMap = { 
-                        'transitionPreset1': 'default', 
-                        'transitionPreset2': 'pour',
-                        'transitionPreset3': 'liquid',
-                        'transitionPreset4': 'explode',
-                        'transitionPreset5': 'nebula',
-                        'transitionPreset6': 'melt'
-                    };
-                    const presetId = presetMap[button.id];
-                    
-                    if (presetId && this.transitionPresets[presetId]) {
-                        this.activeTransitionPreset = presetId;
-                        presetContainer.querySelectorAll('button').forEach(btn => btn.classList.remove('button-glow-effect'));
-                        button.classList.add('button-glow-effect');
-                        this.logSuccess(`Transition style set to: ${this.activeTransitionPreset}`);
-                        this.loadPresetValues(this.activeTransitionPreset);
-                    } else {
-                        this.logError(`Preset for ${button.id} not yet implemented.`);
-                    }
+        const presetContainers = ['#particleTransitionPresetContainer', '#particleArtisticPresetContainer'];
+        presetContainers.forEach(selector => {
+            const container = document.querySelector(selector);
+            if(container) {
+                container.querySelectorAll('button').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const presetMap = { 
+                            'transitionPreset1': 'default', 'transitionPreset2': 'pour', 'transitionPreset3': 'liquid',
+                            'transitionPreset4': 'explode', 'transitionPreset5': 'nebula', 'transitionPreset6': 'melt',
+                            'artisticPreset1': 'supernova', 'artisticPreset2': 'gravity_well', 'artisticPreset3': 'cosmic_dust',
+                            'artisticPreset4': 'dissolve', 'artisticPreset5': 'swarm', 'artisticPreset6': 'flow'
+                        };
+                        const presetId = presetMap[button.id];
+                        
+                        if (presetId && this.transitionPresets[presetId]) {
+                            this.activeTransitionPreset = presetId;
+                            document.querySelectorAll('#particleTransitionPresetContainer button, #particleArtisticPresetContainer button').forEach(btn => btn.classList.remove('button-glow-effect'));
+                            button.classList.add('button-glow-effect');
+                            this.logSuccess(`Transition style set to: ${this.activeTransitionPreset}`);
+                            this.loadPresetValues(this.activeTransitionPreset);
+                        } else {
+                            this.logError(`Preset for ${button.id} not yet implemented.`);
+                        }
+                    });
                 });
-            });
-        }
+            }
+        });
         
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.closest('#gpgpuEffectsAccordion') || checkbox.closest('#butterchurnControls')) return;
@@ -1099,7 +1108,6 @@ export const UIManager = {
         
         const S = this.app.vizSettings;
         const ease = 1 - Math.pow(1 - progress, 4); 
-        const bellCurve = Math.sin(progress * Math.PI); 
         
         const pUniformsV = this.app.ComputeManager.particleVelocityVar.material.uniforms;
         
@@ -1108,39 +1116,35 @@ export const UIManager = {
 
         this.setMorphState(this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease));
 
+        // ** THE FIX IS HERE: The new Supernova logic is implemented **
         switch(anim.presetId) {
-            case 'explode':
+            case 'supernova': {
+                // Phase 1 & 2: Explosion. Peaks in the first half of the animation.
+                const explosionProgress = Math.min(1.0, progress / 0.5); 
+                const explosionBell = Math.sin(explosionProgress * Math.PI); 
+
                 const peakFlow = 5.0; 
-                S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startParams.particle_flowStrength, peakFlow, bellCurve);
-                
-                const attractionDelay = 0.7;
+                S.particle_flowScale = 0.05; 
+                S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startParams.particle_flowStrength, peakFlow, explosionBell);
+
+                // Phase 3: Re-formation. Happens in the second half.
+                const attractionDelay = 0.4;
                 const attractionProgress = Math.max(0.0, (progress - attractionDelay) / (1.0 - attractionDelay));
-                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.01, anim.targetParams.particle_attractionStrength, attractionProgress);
+                const finalAttraction = anim.targetParams.particle_attractionStrength;
+                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, finalAttraction, attractionProgress);
+                
+                // Also reset other flow params back to default during re-formation
+                S.particle_flowSpeed = this.app.THREE.MathUtils.lerp(S.particle_flowSpeed, anim.targetParams.particle_flowSpeed, attractionProgress);
+                S.particle_flowScale = this.app.THREE.MathUtils.lerp(S.particle_flowScale, anim.targetParams.particle_flowScale, attractionProgress);
                 break;
-
+            }
+            case 'explode':
             case 'melt':
-                S.particle_flowStrength = 0.0;
-                S.particle_attractionStrength = 0.0;
-
-                const meltPhaseProgress = Math.min(1.0, progress / 0.5); 
-                pUniformsV.u_meltProgress.value = meltPhaseProgress;
-                
-                const vortexPhaseProgress = Math.min(1.0, Math.max(0.0, (progress - 0.2) / 0.6)); 
-                pUniformsV.u_gravity.value.y = -0.1 * bellCurve; 
-                pUniformsV.u_vortexStrength.value = 5.0 * bellCurve;
-                
-                const reformPhaseProgress = Math.min(1.0, Math.max(0.0, (progress - 0.8) / 0.2)); 
-                if(reformPhaseProgress > 0) {
-                    pUniformsV.u_gravity.value.y = 0;
-                    pUniformsV.u_vortexStrength.value = 0;
-                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, anim.targetParams.particle_attractionStrength, reformPhaseProgress);
-                }
-                break;
-
             case 'liquid':
             case 'nebula':
             case 'pour':
             default:
+                // Fallback for all other presets uses the simple lerp
                 Object.keys(anim.targetParams).forEach(key => {
                     if (S[key] !== undefined && key !== 'particle_size_mix' && key !== 'particle_twinkleIntensity') {
                         S[key] = this.app.THREE.MathUtils.lerp(anim.startParams[key], anim.targetParams[key], ease);
@@ -1174,11 +1178,16 @@ export const UIManager = {
     },
     
     loadPresetValues(presetId) {
-        const preset = this.transitionPresets[presetId];
-        if (!preset) return;
+        if (!this.transitionPresets[presetId]) {
+            console.warn(`Attempted to load undefined preset: ${presetId}. Falling back to default.`);
+            presetId = 'default';
+        }
 
-        Object.keys(preset).forEach(key => {
-            this.app.vizSettings[key] = preset[key];
+        const preset = this.transitionPresets[presetId];
+        const defaultPreset = this.transitionPresets['default'];
+        
+        Object.keys(defaultPreset).forEach(key => {
+            this.app.vizSettings[key] = (preset[key] !== undefined) ? preset[key] : defaultPreset[key];
         });
         
         const currentMorph = this.app.vizSettings.particle_morphProgress;

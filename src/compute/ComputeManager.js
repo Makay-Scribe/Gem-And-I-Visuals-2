@@ -40,7 +40,6 @@ export const ComputeManager = {
     AREA: 0,
 
     init(appInstance, planeWidth, planeHeight, planeResX, planeResY) {
-        // ** THE FIX IS HERE: Prevent re-initialization if the simulation already exists and has the correct size. **
         if (this.gpuCompute && this.WIDTH === planeResX && this.HEIGHT === planeResY) {
             console.log("ComputeManager: GPGPU system already initialized with correct dimensions. Skipping re-init.");
             return;
@@ -261,6 +260,7 @@ export const ComputeManager = {
         velocityUniforms['particle_morphProgress'] = { value: S.particle_morphProgress };
         velocityUniforms['particle_attractionStrength'] = { value: S.particle_attractionStrength };
 
+        // ** THE FIX IS HERE: Initialize new uniforms with default values **
         velocityUniforms['u_gravity'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
         velocityUniforms['u_vortexStrength'] = { value: 0.0 };
         velocityUniforms['u_vortexPosition'] = { value: new this.app.THREE.Vector2(0, 0) };

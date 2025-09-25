@@ -139,7 +139,6 @@
             <div class="accordion-content">
                 
                 <div class="segmented-control" id="gpgpuModeSelector">
-                    <!-- ** THE FIX IS HERE: Renamed button text for clarity ** -->
                     <button class="segmented-control-button" data-mode="deformation">Faceted</button>
                     <button class="segmented-control-button" data-mode="geocube">GeoCube</button>
                     <button class="segmented-control-button active" data-mode="particles">Particles</button>
@@ -371,12 +370,10 @@
                 <div id="geocubeControlsContainer" style="display: none;">
                     <div class="accordion-item">
                         <div class="accordion-header-with-toggle">
-                            <!-- ** THE FIX IS HERE: Renamed for clarity ** -->
                             <button class="accordion-header">
                                 <span class="header-title">Player Cube</span>
                                 <span class="header-engine-tag geometry-tag">Geometry</span>
                             </button>
-                            <!-- ** THE FIX IS HERE: Renamed ID to match new settings property ** -->
                             <input type="checkbox" id="playerCube_enabled" class="header-toggle-checkbox">
                         </div>
                         <div class="accordion-content">
@@ -426,6 +423,15 @@
                         <button id="transitionPreset4">Explode</button>
                         <button id="transitionPreset5">Nebula</button>
                         <button id="transitionPreset6">Melt</button>
+                    </div>
+                    <!-- ** THE FIX IS HERE: Added new row of buttons ** -->
+                    <div class="autopilot-preset-grid" id="particleArtisticPresetContainer" style="grid-template-columns: repeat(3, 1fr);">
+                        <button id="artisticPreset1">Supernova</button>
+                        <button id="artisticPreset2">Gravity Well</button>
+                        <button id="artisticPreset3">Cosmic Dust</button>
+                        <button id="artisticPreset4">Dissolve</button>
+                        <button id="artisticPreset5">Swarm</button>
+                        <button id="artisticPreset6">Flow</button>
                     </div>
                     <button id="runTransitionButton">Run Transition</button>
                     
