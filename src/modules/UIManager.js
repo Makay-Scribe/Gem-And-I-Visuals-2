@@ -72,12 +72,7 @@ export const UIManager = {
             particle_size_mix: 0.0,
             particle_twinkleIntensity: 0.0,
         },
-        'supernova': { // End state should match default
-            particle_flowStrength: 0.0,
-            particle_flowSpeed: 0.0,
-            particle_flowScale: 0.1,
-            particle_attractionStrength: 0.1,
-        },
+        'supernova': {},
         'gravity_well': {},
         'cosmic_dust': {},
         'dissolve': {},
@@ -1075,6 +1070,11 @@ export const UIManager = {
 
         const duration = (this.activeTransitionPreset === 'pour' || this.activeTransitionPreset === 'melt') ? 7000 : 4000;
         const targetPresetId = (endValue > 0.5) ? this.activeTransitionPreset : 'default';
+        
+        if (!this.transitionPresets[targetPresetId]) {
+            console.error(`Attempted to run transition with undefined preset: ${targetPresetId}`);
+            return;
+        }
         const targetPreset = this.transitionPresets[targetPresetId];
 
         this.transitionAnimation = {
@@ -1087,9 +1087,10 @@ export const UIManager = {
             targetParams: {}
         };
 
-        Object.keys(targetPreset).forEach(key => {
+        const defaultPreset = this.transitionPresets['default'];
+        Object.keys(defaultPreset).forEach(key => {
             this.transitionAnimation.startParams[key] = S[key];
-            this.transitionAnimation.targetParams[key] = targetPreset[key];
+            this.transitionAnimation.targetParams[key] = (targetPreset[key] !== undefined) ? targetPreset[key] : defaultPreset[key];
         });
         
         this.transitionAnimation.targetParams.particle_size_mix = (endValue > 0.5) ? 0.75 : 0.0;
@@ -1098,6 +1099,7 @@ export const UIManager = {
         this.updateTransitionAnimation();
     },
 
+    // ** THE FIX IS HERE: The entire animation engine has been restored and enhanced **
     updateTransitionAnimation() {
         if (!this.transitionAnimation) return;
 
@@ -1116,35 +1118,44 @@ export const UIManager = {
 
         this.setMorphState(this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease));
 
-        // ** THE FIX IS HERE: The new Supernova logic is implemented **
         switch(anim.presetId) {
-            case 'supernova': {
-                // Phase 1 & 2: Explosion. Peaks in the first half of the animation.
-                const explosionProgress = Math.min(1.0, progress / 0.5); 
-                const explosionBell = Math.sin(explosionProgress * Math.PI); 
-
+            case 'explode': {
+                const bellCurve = Math.sin(progress * Math.PI); 
                 const peakFlow = 5.0; 
-                S.particle_flowScale = 0.05; 
-                S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startParams.particle_flowStrength, peakFlow, explosionBell);
-
-                // Phase 3: Re-formation. Happens in the second half.
-                const attractionDelay = 0.4;
-                const attractionProgress = Math.max(0.0, (progress - attractionDelay) / (1.0 - attractionDelay));
-                const finalAttraction = anim.targetParams.particle_attractionStrength;
-                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, finalAttraction, attractionProgress);
+                S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startParams.particle_flowStrength, peakFlow, bellCurve);
                 
-                // Also reset other flow params back to default during re-formation
-                S.particle_flowSpeed = this.app.THREE.MathUtils.lerp(S.particle_flowSpeed, anim.targetParams.particle_flowSpeed, attractionProgress);
-                S.particle_flowScale = this.app.THREE.MathUtils.lerp(S.particle_flowScale, anim.targetParams.particle_flowScale, attractionProgress);
+                const attractionDelay = 0.7;
+                const attractionProgress = Math.max(0.0, (progress - attractionDelay) / (1.0 - attractionDelay));
+                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.01, anim.targetParams.particle_attractionStrength, attractionProgress);
                 break;
             }
-            case 'explode':
-            case 'melt':
+            case 'melt': {
+                S.particle_flowStrength = 0.0;
+                S.particle_attractionStrength = 0.0;
+
+                const bellCurve = Math.sin(progress * Math.PI);
+                const meltPhaseProgress = Math.min(1.0, progress / 0.5); 
+                pUniformsV.u_meltProgress.value = meltPhaseProgress;
+                
+                const reformPhaseProgress = Math.min(1.0, Math.max(0.0, (progress - 0.8) / 0.2)); 
+                if(reformPhaseProgress > 0) {
+                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, anim.targetParams.particle_attractionStrength, reformPhaseProgress);
+                } else {
+                     pUniformsV.u_gravity.value.y = -0.1 * bellCurve; 
+                     pUniformsV.u_vortexStrength.value = 5.0 * bellCurve;
+                }
+                break;
+            }
             case 'liquid':
             case 'nebula':
             case 'pour':
+            case 'supernova':
+            case 'gravity_well':
+            case 'cosmic_dust':
+            case 'dissolve':
+            case 'swarm':
+            case 'flow':
             default:
-                // Fallback for all other presets uses the simple lerp
                 Object.keys(anim.targetParams).forEach(key => {
                     if (S[key] !== undefined && key !== 'particle_size_mix' && key !== 'particle_twinkleIntensity') {
                         S[key] = this.app.THREE.MathUtils.lerp(anim.startParams[key], anim.targetParams[key], ease);
@@ -1153,9 +1164,10 @@ export const UIManager = {
                 break;
         }
 
+        const twinkleDelay = 0.2;
+        const twinkleProgress = Math.max(0.0, (progress - twinkleDelay) / (1.0 - twinkleDelay));
+        S.particle_twinkleIntensity = this.app.THREE.MathUtils.lerp(anim.startParams.particle_twinkleIntensity, anim.targetParams.particle_twinkleIntensity, twinkleProgress);
         S.particle_size_mix = this.app.THREE.MathUtils.lerp(anim.startParams.particle_size_mix, anim.targetParams.particle_size_mix, ease);
-        S.particle_twinkleIntensity = this.app.THREE.MathUtils.lerp(anim.startParams.particle_twinkleIntensity, anim.targetParams.particle_twinkleIntensity, ease);
-
 
         this.syncSlidersToSettings();
 
