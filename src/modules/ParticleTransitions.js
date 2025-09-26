@@ -68,7 +68,7 @@ export const ParticleTransitions = {
         'nebula': {},
         'melt': {},
         'supernova': {},
-        'gravity_well': {},
+        'gravity_well': {}, // ** THE FIX IS HERE: Added new preset **
         'cosmic_dust': {},
         'dissolve': {},
         'swarm': {},
@@ -103,7 +103,7 @@ export const ParticleTransitions = {
             endValue = 0.0;
         }
 
-        const duration = (this.activeTransitionPreset === 'pour' || this.activeTransitionPreset === 'melt') ? 7000 : 4000;
+        const duration = (this.activeTransitionPreset === 'pour' || this.activeTransitionPreset === 'melt' || this.activeTransitionPreset === 'gravity_well') ? 7000 : 4000;
         const targetPresetId = (endValue > 0.5) ? this.activeTransitionPreset : 'default';
         
         if (!this.transitionPresets[targetPresetId]) {
@@ -132,6 +132,8 @@ export const ParticleTransitions = {
         // Special-case parameters that depend on direction
         this.transitionAnimation.targetParams.particle_size_mix = (endValue > 0.5) ? 0.75 : 0.0;
         this.transitionAnimation.targetParams.particle_twinkleIntensity = (endValue > 0.5) ? 0.5 : 0.0;
+        
+        if (this.app.UIManager) this.app.UIManager.disableParticleSliders();
     },
 
     // This is the "Conductor" that runs every frame during a transition
@@ -144,77 +146,119 @@ export const ParticleTransitions = {
         let progress = Math.min(1.0, elapsedTime / anim.duration);
         
         const S = this.app.vizSettings;
+        const CM = this.app.ComputeManager;
+
+        // Use an ease-out function for smooth deceleration
         const ease = 1 - Math.pow(1 - progress, 4); 
         
-        const pUniformsV = this.app.ComputeManager.particleVelocityVar.material.uniforms;
-        
-        // UIManager handles disabling the sliders
-        this.app.UIManager.setMorphState(this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease));
+        // Update the main morph progress
+        S.particle_morphProgress = this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease);
+        if (this.app.UIManager) this.app.UIManager.handleMorphSlider(S.particle_morphProgress);
 
-        switch(anim.presetId) {
-            case 'explode': {
-                const bellCurve = Math.sin(progress * Math.PI); 
-                const peakFlow = 5.0; 
-                S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startParams.particle_flowStrength, peakFlow, bellCurve);
-                
-                const attractionDelay = 0.7;
-                const attractionProgress = Math.max(0.0, (progress - attractionDelay) / (1.0 - attractionDelay));
-                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.01, anim.targetParams.particle_attractionStrength, attractionProgress);
-                break;
+
+        // --- GENERIC PARAMETER ANIMATION ---
+        // This is the new generic engine. It animates all parameters found in the preset.
+        Object.keys(anim.targetParams).forEach(key => {
+            if (S[key] !== undefined && key.startsWith('particle_')) {
+                S[key] = this.app.THREE.MathUtils.lerp(anim.startParams[key], anim.targetParams[key], ease);
             }
-            case 'melt': {
-                S.particle_flowStrength = 0.0;
-                S.particle_attractionStrength = 0.0;
+        });
 
-                const bellCurve = Math.sin(progress * Math.PI);
-                const meltPhaseProgress = Math.min(1.0, progress / 0.5); 
-                pUniformsV.u_meltProgress.value = meltPhaseProgress;
-                
-                const reformPhaseProgress = Math.min(1.0, Math.max(0.0, (progress - 0.8) / 0.2)); 
-                if(reformPhaseProgress > 0) {
-                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, anim.targetParams.particle_attractionStrength, reformPhaseProgress);
-                } else {
-                     pUniformsV.u_gravity.value.y = -0.1 * bellCurve; 
-                     pUniformsV.u_vortexStrength.value = 5.0 * bellCurve;
+        // --- SPECIAL CASE LOGIC FOR COMPLEX PRESETS ---
+        // This is where we handle presets that do more than just lerp values.
+        if(CM.particleVelocityVar) {
+            const pUniformsV = CM.particleVelocityVar.material.uniforms;
+            
+            switch(anim.presetId) {
+                case 'explode': {
+                    const bellCurve = Math.sin(progress * Math.PI); 
+                    const peakFlow = 5.0; 
+                    S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startParams.particle_flowStrength, peakFlow, bellCurve);
+                    
+                    const attractionDelay = 0.7;
+                    const attractionProgress = Math.max(0.0, (progress - attractionDelay) / (1.0 - attractionDelay));
+                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.01, anim.targetParams.particle_attractionStrength, attractionProgress);
+                    break;
                 }
-                break;
-            }
-            case 'liquid':
-            case 'nebula':
-            case 'pour':
-            case 'supernova':
-            case 'gravity_well':
-            case 'cosmic_dust':
-            case 'dissolve':
-            case 'swarm':
-            case 'flow':
-            default:
-                Object.keys(anim.targetParams).forEach(key => {
-                    if (S[key] !== undefined && key.startsWith('particle_')) {
-                        S[key] = this.app.THREE.MathUtils.lerp(anim.startParams[key], anim.targetParams[key], ease);
+                case 'melt': {
+                    S.particle_flowStrength = 0.0;
+                    S.particle_attractionStrength = 0.0;
+
+                    const bellCurve = Math.sin(progress * Math.PI);
+                    const meltPhaseProgress = Math.min(1.0, progress / 0.5); 
+                    pUniformsV.u_meltProgress.value = meltPhaseProgress;
+                    
+                    const reformPhaseProgress = Math.min(1.0, Math.max(0.0, (progress - 0.8) / 0.2)); 
+                    if(reformPhaseProgress > 0) {
+                        S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, anim.targetParams.particle_attractionStrength, reformPhaseProgress);
+                    } else {
+                         pUniformsV.u_gravity.value.y = -0.1 * bellCurve; 
+                         pUniformsV.u_vortexStrength.value = 5.0 * bellCurve;
                     }
-                });
-                break;
+                    break;
+                }
+                // ** THE FIX IS HERE: Add the new logic for the gravity well **
+                case 'gravity_well': {
+                    S.particle_flowStrength = 0.2; // Keep a little turbulence for a cosmic feel
+                    
+                    // The center of the gravity well is the model's home position
+                    pUniformsV.u_gravityWellPosition.value.copy(this.app.ModelManager.state.homePosition);
+
+                    // Stage 1: Push particles out a bit (first 10% of animation)
+                    const pushProgress = Math.min(1.0, progress / 0.1);
+                    const pushCurve = Math.sin(pushProgress * Math.PI); // A single curve up and down
+                    pUniformsV.u_gravityWellStrength.value = -0.5 * pushCurve; // Negative strength = push
+                    pUniformsV.u_orbitalStrength.value = 0.0;
+                    S.particle_attractionStrength = 0.0;
+
+                    // Stage 2: Pull into orbit (from 10% to 70%)
+                    const orbitDelay = 0.1;
+                    if (progress > orbitDelay) {
+                        const orbitProgress = Math.min(1.0, (progress - orbitDelay) / 0.6);
+                        const orbitCurve = Math.sin(orbitProgress * Math.PI);
+                        pUniformsV.u_gravityWellStrength.value = 0.4 * orbitCurve; // Positive strength = pull
+                        pUniformsV.u_orbitalStrength.value = 1.0 * orbitCurve;
+                    }
+
+                    // Stage 3: Decay orbit and attract to final positions (last 30%)
+                    const settleDelay = 0.7;
+                    if (progress > settleDelay) {
+                        const settleProgress = (progress - settleDelay) / (1.0 - settleDelay);
+                        pUniformsV.u_gravityWellStrength.value = this.app.THREE.MathUtils.lerp(pUniformsV.u_gravityWellStrength.value, 0.0, settleProgress);
+                        pUniformsV.u_orbitalStrength.value = this.app.THREE.MathUtils.lerp(pUniformsV.u_orbitalStrength.value, 0.0, settleProgress);
+                        S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, anim.targetParams.particle_attractionStrength, settleProgress);
+                    }
+                    break;
+                }
+            }
         }
 
-        const twinkleDelay = 0.2;
-        const twinkleProgress = Math.max(0.0, (progress - twinkleDelay) / (1.0 - twinkleDelay));
-        S.particle_twinkleIntensity = this.app.THREE.MathUtils.lerp(anim.startParams.particle_twinkleIntensity, anim.targetParams.particle_twinkleIntensity, twinkleProgress);
-        S.particle_size_mix = this.app.THREE.MathUtils.lerp(anim.startParams.particle_size_mix, anim.targetParams.particle_size_mix, ease);
 
-        this.app.UIManager.syncSlidersToSettings();
+        // Update the UI to reflect the new values
+        if (this.app.UIManager) this.app.UIManager.syncSlidersToSettings();
 
+        // --- CLEANUP ---
         if (progress >= 1) {
-            this.app.UIManager.setMorphState(anim.endValue);
+            // Ensure final state is set perfectly
             Object.keys(anim.targetParams).forEach(key => {
                 S[key] = anim.targetParams[key];
             });
-            pUniformsV.u_gravity.value.y = 0.0;
-            pUniformsV.u_vortexStrength.value = 0.0;
-            pUniformsV.u_meltProgress.value = 0.0;
+            S.particle_morphProgress = anim.endValue;
             
-            this.app.UIManager.enableParticleSliders(); // Re-enable sliders
-            this.app.UIManager.syncSlidersToSettings();
+            // Reset any temporary shader uniforms
+            if(CM.particleVelocityVar) {
+                const pUniformsV = CM.particleVelocityVar.material.uniforms;
+                pUniformsV.u_gravity.value.y = 0.0;
+                pUniformsV.u_vortexStrength.value = 0.0;
+                pUniformsV.u_meltProgress.value = 0.0;
+                pUniformsV.u_gravityWellStrength.value = 0.0;
+                pUniformsV.u_orbitalStrength.value = 0.0;
+            }
+            
+            if (this.app.UIManager) {
+                this.app.UIManager.enableParticleSliders();
+                this.app.UIManager.syncSlidersToSettings();
+            }
             this.transitionAnimation = null;
         }
     }

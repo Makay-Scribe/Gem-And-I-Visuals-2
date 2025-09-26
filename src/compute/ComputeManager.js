@@ -260,12 +260,16 @@ export const ComputeManager = {
         velocityUniforms['particle_morphProgress'] = { value: S.particle_morphProgress };
         velocityUniforms['particle_attractionStrength'] = { value: S.particle_attractionStrength };
 
-        // ** THE FIX IS HERE: Initialize new uniforms with default values **
         velocityUniforms['u_gravity'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
         velocityUniforms['u_vortexStrength'] = { value: 0.0 };
         velocityUniforms['u_vortexPosition'] = { value: new this.app.THREE.Vector2(0, 0) };
         velocityUniforms['u_meltProgress'] = { value: 0.0 };
         
+        // ** THE FIX IS HERE: Initialize new uniforms for the Gravity Well **
+        velocityUniforms['u_gravityWellPosition'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
+        velocityUniforms['u_gravityWellStrength'] = { value: 0.0 };
+        velocityUniforms['u_orbitalStrength'] = { value: 0.0 };
+
         const positionUniforms = this.particlePositionVar.material.uniforms;
         positionUniforms['u_delta'] = { value: 0.0 };
 

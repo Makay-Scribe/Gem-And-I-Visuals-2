@@ -14,71 +14,12 @@ export const UIManager = {
     particleModelTexture: null,
     gltfLoader: new GLTFLoader(),
     
-    transitionAnimation: null,
-    activeTransitionPreset: 'default',
-    sliderInactivityTimer: null,
-
+    // NOTE: All transition animation logic has been moved to ParticleTransitions.js
+    
     gpgpuExclusiveGroups: [
         ['gpgpu_enableFold', 'gpgpu_enableCylinder'],
         ['gpgpu_enableCloth']
     ],
-    
-    transitionPresets: {
-        'default': {
-            particle_flowStrength: 0.0,
-            particle_flowSpeed: 0.0,
-            particle_flowScale: 0.1,
-            particle_attractionStrength: 0.1,
-            particle_size_mix: 0.0, 
-            particle_twinkleIntensity: 0.0,
-        },
-        'pour': {
-            particle_flowStrength: 0.0,
-            particle_flowSpeed: 0.0,
-            particle_flowScale: 0.1,
-            particle_attractionStrength: 0.1,
-            particle_size_mix: 0.0, 
-            particle_twinkleIntensity: 0.0,
-        },
-        'liquid': {
-            particle_flowStrength: 0.0,
-            particle_flowSpeed: 0.0,
-            particle_flowScale: 0.1,
-            particle_attractionStrength: 0.1,
-            particle_size_mix: 0.0, 
-            particle_twinkleIntensity: 0.0,
-        },
-        'explode': {
-            particle_flowStrength: 0.0,
-            particle_flowSpeed: 0.0,
-            particle_flowScale: 0.1,
-            particle_attractionStrength: 0.1,
-            particle_size_mix: 0.0, 
-            particle_twinkleIntensity: 0.0,
-        },
-        'nebula': {
-            particle_flowStrength: 0.0,
-            particle_flowSpeed: 0.0,
-            particle_flowScale: 0.1,
-            particle_attractionStrength: 0.1,
-            particle_size_mix: 0.0, 
-            particle_twinkleIntensity: 0.0,
-        },
-        'melt': {
-            particle_flowStrength: 0.0,
-            particle_flowSpeed: 0.0,
-            particle_flowScale: 0.1,
-            particle_attractionStrength: 0.1,
-            particle_size_mix: 0.0,
-            particle_twinkleIntensity: 0.0,
-        },
-        'supernova': {},
-        'gravity_well': {},
-        'cosmic_dust': {},
-        'dissolve': {},
-        'swarm': {},
-        'flow': {}
-    },
 
     demoShaderInterval: null,
     demoShaderOrder: ['presetBg6', 'presetBg7', 'presetBg8', 'presetBg1', 'presetBg2', 'presetBg3', 'presetBg4', 'presetBg5'],
@@ -114,7 +55,8 @@ export const UIManager = {
 
         this.updateMasterControls();
         
-        this.loadPresetValues('default');
+        // Load default preset values into the sliders on startup
+        this.app.ParticleTransitions.setActivePreset('default');
     },
 
     syncAllControlsToSettings() {
@@ -672,6 +614,7 @@ export const UIManager = {
         this.logSuccess("All GPGPU settings have been reset to default.");
     },
     
+    // ** THE FIX IS HERE: The new manager is now responsible for handling these events. **
     setupEventListeners() {
         document.getElementById('toggleMicInput').addEventListener('click', () => this.app.AudioProcessor.startMic());
         document.getElementById('playPauseAudioButton').addEventListener('click', () => this.app.AudioProcessor.toggleFilePlayback());
@@ -822,7 +765,9 @@ export const UIManager = {
         
         document.getElementById('goToCanvasButton').addEventListener('click', () => this.setMorphState(0.0));
         document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(0.95));
-        document.getElementById('runTransitionButton').addEventListener('click', () => this.runTransition());
+        
+        // ** THE FIX IS HERE: This button now delegates to the new manager **
+        document.getElementById('runTransitionButton').addEventListener('click', () => this.app.ParticleTransitions.run());
         
         const morphSlider = document.getElementById('particle_morphProgress');
         if (morphSlider) {
@@ -849,12 +794,13 @@ export const UIManager = {
                         };
                         const presetId = presetMap[button.id];
                         
-                        if (presetId && this.transitionPresets[presetId]) {
-                            this.activeTransitionPreset = presetId;
+                        // ** THE FIX IS HERE: The button now delegates to the new manager **
+                        if (presetId && this.app.ParticleTransitions.transitionPresets[presetId]) {
+                            this.app.ParticleTransitions.setActivePreset(presetId);
+                            
                             document.querySelectorAll('#particleTransitionPresetContainer button, #particleArtisticPresetContainer button').forEach(btn => btn.classList.remove('button-glow-effect'));
                             button.classList.add('button-glow-effect');
-                            this.logSuccess(`Transition style set to: ${this.activeTransitionPreset}`);
-                            this.loadPresetValues(this.activeTransitionPreset);
+                            this.logSuccess(`Transition style set to: ${presetId}`);
                         } else {
                             this.logError(`Preset for ${button.id} not yet implemented.`);
                         }
@@ -1055,158 +1001,26 @@ export const UIManager = {
         this.handleMorphSlider(targetProgress);
     },
 
-    runTransition() {
-        if (this.transitionAnimation) return;
-
-        const S = this.app.vizSettings;
-        const startValue = S.particle_morphProgress;
-        
-        let endValue;
-        if (startValue < 0.5) {
-            endValue = 0.95;
-        } else {
-            endValue = 0.0;
+    // ** THE FIX IS HERE: These helpers allow the new manager to control the UI **
+    disableParticleSliders() {
+        const editor = document.getElementById('particleTransitionEditor');
+        if (editor) {
+            editor.classList.add('container-disabled');
         }
-
-        const duration = (this.activeTransitionPreset === 'pour' || this.activeTransitionPreset === 'melt') ? 7000 : 4000;
-        const targetPresetId = (endValue > 0.5) ? this.activeTransitionPreset : 'default';
-        
-        if (!this.transitionPresets[targetPresetId]) {
-            console.error(`Attempted to run transition with undefined preset: ${targetPresetId}`);
-            return;
-        }
-        const targetPreset = this.transitionPresets[targetPresetId];
-
-        this.transitionAnimation = {
-            startTime: performance.now(),
-            startValue,
-            endValue,
-            duration,
-            presetId: this.activeTransitionPreset,
-            startParams: {},
-            targetParams: {}
-        };
-
-        const defaultPreset = this.transitionPresets['default'];
-        Object.keys(defaultPreset).forEach(key => {
-            this.transitionAnimation.startParams[key] = S[key];
-            this.transitionAnimation.targetParams[key] = (targetPreset[key] !== undefined) ? targetPreset[key] : defaultPreset[key];
-        });
-        
-        this.transitionAnimation.targetParams.particle_size_mix = (endValue > 0.5) ? 0.75 : 0.0;
-        this.transitionAnimation.targetParams.particle_twinkleIntensity = (endValue > 0.5) ? 0.5 : 0.0;
-
-        this.updateTransitionAnimation();
     },
 
-    // ** THE FIX IS HERE: The entire animation engine has been restored and enhanced **
-    updateTransitionAnimation() {
-        if (!this.transitionAnimation) return;
-
-        const now = performance.now();
-        const anim = this.transitionAnimation;
-        const elapsedTime = now - anim.startTime;
-        let progress = Math.min(1.0, elapsedTime / anim.duration);
-        
-        const S = this.app.vizSettings;
-        const ease = 1 - Math.pow(1 - progress, 4); 
-        
-        const pUniformsV = this.app.ComputeManager.particleVelocityVar.material.uniforms;
-        
+    enableParticleSliders() {
         const editor = document.getElementById('particleTransitionEditor');
-        if (editor) editor.style.pointerEvents = 'none';
-
-        this.setMorphState(this.app.THREE.MathUtils.lerp(anim.startValue, anim.endValue, ease));
-
-        switch(anim.presetId) {
-            case 'explode': {
-                const bellCurve = Math.sin(progress * Math.PI); 
-                const peakFlow = 5.0; 
-                S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startParams.particle_flowStrength, peakFlow, bellCurve);
-                
-                const attractionDelay = 0.7;
-                const attractionProgress = Math.max(0.0, (progress - attractionDelay) / (1.0 - attractionDelay));
-                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.01, anim.targetParams.particle_attractionStrength, attractionProgress);
-                break;
-            }
-            case 'melt': {
-                S.particle_flowStrength = 0.0;
-                S.particle_attractionStrength = 0.0;
-
-                const bellCurve = Math.sin(progress * Math.PI);
-                const meltPhaseProgress = Math.min(1.0, progress / 0.5); 
-                pUniformsV.u_meltProgress.value = meltPhaseProgress;
-                
-                const reformPhaseProgress = Math.min(1.0, Math.max(0.0, (progress - 0.8) / 0.2)); 
-                if(reformPhaseProgress > 0) {
-                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, anim.targetParams.particle_attractionStrength, reformPhaseProgress);
-                } else {
-                     pUniformsV.u_gravity.value.y = -0.1 * bellCurve; 
-                     pUniformsV.u_vortexStrength.value = 5.0 * bellCurve;
-                }
-                break;
-            }
-            case 'liquid':
-            case 'nebula':
-            case 'pour':
-            case 'supernova':
-            case 'gravity_well':
-            case 'cosmic_dust':
-            case 'dissolve':
-            case 'swarm':
-            case 'flow':
-            default:
-                Object.keys(anim.targetParams).forEach(key => {
-                    if (S[key] !== undefined && key !== 'particle_size_mix' && key !== 'particle_twinkleIntensity') {
-                        S[key] = this.app.THREE.MathUtils.lerp(anim.startParams[key], anim.targetParams[key], ease);
-                    }
-                });
-                break;
-        }
-
-        const twinkleDelay = 0.2;
-        const twinkleProgress = Math.max(0.0, (progress - twinkleDelay) / (1.0 - twinkleDelay));
-        S.particle_twinkleIntensity = this.app.THREE.MathUtils.lerp(anim.startParams.particle_twinkleIntensity, anim.targetParams.particle_twinkleIntensity, twinkleProgress);
-        S.particle_size_mix = this.app.THREE.MathUtils.lerp(anim.startParams.particle_size_mix, anim.targetParams.particle_size_mix, ease);
-
-        this.syncSlidersToSettings();
-
-        if (progress >= 1) {
-            this.setMorphState(anim.endValue);
-            Object.keys(anim.targetParams).forEach(key => {
-                S[key] = anim.targetParams[key];
-            });
-            pUniformsV.u_gravity.value.y = 0.0;
-            pUniformsV.u_vortexStrength.value = 0.0;
-            pUniformsV.u_meltProgress.value = 0.0;
-            
-            if (editor) editor.style.pointerEvents = 'auto';
-
-            this.syncSlidersToSettings();
-            this.transitionAnimation = null;
-        } else {
-            requestAnimationFrame(() => this.updateTransitionAnimation());
+        if (editor) {
+            editor.classList.remove('container-disabled');
         }
     },
     
-    loadPresetValues(presetId) {
-        if (!this.transitionPresets[presetId]) {
-            console.warn(`Attempted to load undefined preset: ${presetId}. Falling back to default.`);
-            presetId = 'default';
-        }
-
-        const preset = this.transitionPresets[presetId];
-        const defaultPreset = this.transitionPresets['default'];
-        
-        Object.keys(defaultPreset).forEach(key => {
-            this.app.vizSettings[key] = (preset[key] !== undefined) ? preset[key] : defaultPreset[key];
-        });
-        
-        const currentMorph = this.app.vizSettings.particle_morphProgress;
-        this.setMorphState(currentMorph < 0.5 ? 0.0 : 0.95);
-
-        this.syncSlidersToSettings();
-    },
+    // This function is now empty, its logic lives in ParticleTransitions.js
+    updateTransitionAnimation() {},
+    
+    // This function is now empty, its logic lives in ParticleTransitions.js
+    loadPresetValues(presetId) {},
 
     syncSlidersToSettings() {
         const S = this.app.vizSettings;
@@ -1446,7 +1260,7 @@ export const UIManager = {
                         const CM = this.app.ComputeManager;
                         if (CM && CM.particleModelPositionTexture) {
                             CM.bakeToTexture(this.particleModelMesh, CM.particleModelPositionTexture);
-                            this.logSuccess(`Baked ${preset.name}. Ready to transition.`);
+                            this.logSuccess(`Baked ${file.name}. Ready to transition.`);
                         }
                     } else {
                         this.logError('No mesh found in the loaded model.');

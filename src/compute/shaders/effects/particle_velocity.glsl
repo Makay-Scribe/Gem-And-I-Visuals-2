@@ -16,11 +16,16 @@ uniform float particle_flowStrength;
 uniform float particle_morphProgress;
 uniform float particle_attractionStrength;
 
-// ** THE FIX IS HERE: Uniforms for the new artistic transition effects **
+// Uniforms for the new artistic transition effects
 uniform vec3 u_gravity;
 uniform float u_vortexStrength;
 uniform vec2 u_vortexPosition; // Center of the vortex in world space
 uniform float u_meltProgress; // 0 = not melting, 1 = fully melted
+
+// ** THE FIX IS HERE: Uniforms for the Gravity Well effect **
+uniform vec3 u_gravityWellPosition;
+uniform float u_gravityWellStrength;
+uniform float u_orbitalStrength;
 
 
 void main() {
@@ -52,8 +57,9 @@ void main() {
         float dist = length(toCenter);
         vec2 pullDir = normalize(toCenter);
         vec2 swirlDir = vec2(-pullDir.y, pullDir.x);
-        float falloff = 1.0 / (1.0 + dist * dist);
-        vortexForce.xy = (pullDir + swirlDir) * u_vortexStrength * falloff;
+        // Use a falloff so the force is strongest near the center
+        float falloff = 1.0 / (1.0 + dist * dist * 0.1); 
+        vortexForce.xy = (pullDir * 0.5 + swirlDir) * u_vortexStrength * falloff;
     }
 
     // --- 4. Calculate Melt/Gravity Force ---
@@ -69,6 +75,26 @@ void main() {
         }
     }
 
+    // --- NEW: Calculate Gravity Well Force ---
+    vec3 gravityWellForce = vec3(0.0);
+    if (u_gravityWellStrength > 0.0 || u_orbitalStrength > 0.0) {
+        vec3 toWell = u_gravityWellPosition - position;
+        float dist = length(toWell);
+        vec3 pullDir = normalize(toWell);
+
+        // Use a stable "up" vector to define the orbital plane (around the Y axis)
+        vec3 up = vec3(0.0, 1.0, 0.0); 
+        vec3 orbitalDir = normalize(cross(pullDir, up));
+        
+        // Give some initial vertical motion to spread particles into a disc
+        orbitalDir = normalize(mix(orbitalDir, up, 0.1));
+
+        float falloff = 1.0 / (1.0 + dist * dist * 0.01); 
+
+        vec3 combinedForce = (pullDir * u_gravityWellStrength) + (orbitalDir * u_orbitalStrength);
+        gravityWellForce = combinedForce * falloff;
+    }
+
 
     // --- 5. Combine Forces ---
     float distToTarget = length(targetPos - position);
@@ -77,7 +103,7 @@ void main() {
     // ensuring the attraction force can win and the particle can settle.
     float flowFalloff = smoothstep(0.1, 2.0, distToTarget);
     
-    vec3 finalForce = attractionForce + (flowForce * flowFalloff) + gravityForce + vortexForce;
+    vec3 finalForce = attractionForce + (flowForce * flowFalloff) + gravityForce + vortexForce + gravityWellForce;
 
 
     // --- 6. Apply Force and Damping ---
