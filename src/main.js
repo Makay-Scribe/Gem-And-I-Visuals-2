@@ -15,8 +15,10 @@ import { GPGPUDebugger } from './modules/GPGPUDebugger.js';
 import { CubeWallManager } from './modules/CubeWallManager.js';
 import { DirectorManager } from './modules/DirectorManager.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-// ** THE FIX IS HERE: Import the new manager **
 import { ParticleTransitions } from './modules/ParticleTransitions.js';
+// ** STEP 1: Import the new container **
+import { FluidSimulationContainer } from './compute/FluidSimulationContainer.js';
+
 
 const App = {
     THREE: THREE, 
@@ -74,8 +76,9 @@ const App = {
     CubeWallManager: CubeWallManager,
     Debugger: Debugger,
     DirectorManager: DirectorManager,
-    // ** THE FIX IS HERE: Add the new manager to the app object **
     ParticleTransitions: ParticleTransitions,
+    // ** STEP 2: Add the new manager to the App object **
+    FluidSimulationContainer: FluidSimulationContainer,
 
     defaultVisualizerSettings: {
         activeControl: 'landscape',
@@ -434,8 +437,9 @@ const App = {
         this.ImagePlaneManager.init(this); 
         this.CubeWallManager.init(this);
         this.DirectorManager.init(this);
-        // ** THE FIX IS HERE: Initialize the new manager **
         this.ParticleTransitions.init(this);
+        // ** STEP 3: Initialize the new manager **
+        this.FluidSimulationContainer.init(this);
         
         this.ComputeManager.init(this, 
             this.ImagePlaneManager.planeDimensions.x, 
@@ -602,8 +606,9 @@ const App = {
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
         this.CubeWallManager.update();
-        // ** THE FIX IS HERE: Call the new manager's update loop **
         this.ParticleTransitions.update();
+        // ** STEP 4: Call the new manager's update loop **
+        this.FluidSimulationContainer.update(cappedDelta);
         
         this.CameraManager.update(cappedDelta); 
         

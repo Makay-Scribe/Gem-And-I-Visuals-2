@@ -265,7 +265,6 @@ export const ComputeManager = {
         velocityUniforms['u_vortexPosition'] = { value: new this.app.THREE.Vector2(0, 0) };
         velocityUniforms['u_meltProgress'] = { value: 0.0 };
         
-        // ** THE FIX IS HERE: Initialize new uniforms for the Gravity Well **
         velocityUniforms['u_gravityWellPosition'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
         velocityUniforms['u_gravityWellStrength'] = { value: 0.0 };
         velocityUniforms['u_orbitalStrength'] = { value: 0.0 };
@@ -391,8 +390,11 @@ export const ComputeManager = {
         const S = this.app.vizSettings;
         const A = this.app.AudioProcessor;
         
-        // --- UPDATE ORIGINAL GPGPU SYSTEM ---
-        if (this.gpuCompute && S.gpgpuGeometryMode !== 'particles') {
+        // ** THE FIX IS HERE: Add explicit checks for the active GPGPU mode **
+        const isDeformationMode = S.gpgpuGeometryMode === 'faceted' || S.gpgpuGeometryMode === 'geocube';
+        
+        // --- UPDATE LANDSCAPE/DEFORMATION GPGPU SYSTEM ---
+        if (this.gpuCompute && isDeformationMode) {
             const uniforms = this.positionVariable.material.uniforms;
             
             if (S.gpgpu_enableCloth && this.clothEnableTime < 0) {
@@ -484,8 +486,8 @@ export const ComputeManager = {
             this.gpuCompute.compute();
         }
 
-        // --- UPDATE PARTICLE GPGPU SYSTEM (if it exists) ---
-        if (this.particleGpuCompute) {
+        // --- UPDATE PARTICLE GPGPU SYSTEM ---
+        if (this.particleGpuCompute && S.gpgpuGeometryMode === 'particles') {
             const pUniformsV = this.particleVelocityVar.material.uniforms;
             const pUniformsP = this.particlePositionVar.material.uniforms;
 

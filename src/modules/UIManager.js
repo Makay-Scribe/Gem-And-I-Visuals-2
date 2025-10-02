@@ -522,13 +522,15 @@ export const UIManager = {
 
         document.querySelectorAll('#gpgpuModeSelector .segmented-control-button').forEach(btn => {
             const btnMode = btn.dataset.mode;
-            const isActive = (btnMode === activeContainerKey);
+            let isActive = false;
+            if (mode === 'faceted' && btnMode === 'deformation') {
+                isActive = true;
+            } else if (mode === btnMode) {
+                isActive = true;
+            }
             btn.classList.toggle('active', isActive);
             btn.classList.toggle('button-glow-effect', isActive);
         });
-        
-        const isCubeMode = S.gpgpuGeometryMode === 'geocube';
-        this.app.CubeWallManager.setActive(isCubeMode && S.playerCube_enabled);
         
         this._updateDeformationPanelStates();
         this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
@@ -614,7 +616,6 @@ export const UIManager = {
         this.logSuccess("All GPGPU settings have been reset to default.");
     },
     
-    // ** THE FIX IS HERE: The new manager is now responsible for handling these events. **
     setupEventListeners() {
         document.getElementById('toggleMicInput').addEventListener('click', () => this.app.AudioProcessor.startMic());
         document.getElementById('playPauseAudioButton').addEventListener('click', () => this.app.AudioProcessor.toggleFilePlayback());
@@ -658,28 +659,37 @@ export const UIManager = {
             });
         }
         
+        // ** THE FIX IS HERE: The GPGPU mode selector logic is rewritten for clarity and correctness **
         document.querySelectorAll('#gpgpuModeSelector button').forEach(button => {
             button.addEventListener('click', () => {
                 const mode = button.dataset.mode;
-                if (!mode || button.disabled) return;
-
+                if (!mode) return;
+        
                 const S = this.app.vizSettings;
-                
-                let systemMode = mode;
-                if (mode === 'deformation') {
-                    systemMode = 'faceted'; 
+        
+                // --- 1. Deactivate ALL visual containers first ---
+                this.app.ImagePlaneManager.landscapeContainer.visible = false;
+                this.app.FluidSimulationContainer.setActive(false);
+        
+                // --- 2. Activate ONLY the selected container and set the mode ---
+                if (mode === 'fluidsim') {
+                    S.gpgpuGeometryMode = 'fluidsim';
+                    this.app.FluidSimulationContainer.setActive(true);
+                } else {
+                    // This is one of the original modes ('particles', 'geocube', 'deformation'/'faceted')
+                    this.app.ImagePlaneManager.landscapeContainer.visible = true;
+                    
+                    // Convert UI 'deformation' mode to system 'faceted' mode
+                    let systemMode = (mode === 'deformation') ? 'faceted' : mode;
+                    
+                    // Only recreate geometry if the system mode has actually changed
+                    if (S.gpgpuGeometryMode !== systemMode) {
+                        S.gpgpuGeometryMode = systemMode;
+                        this.app.ImagePlaneManager.createDefaultLandscape();
+                    }
                 }
                 
-                if (S.gpgpuGeometryMode === systemMode) return; 
-
-                S.gpgpuGeometryMode = systemMode;
-                
-                document.querySelectorAll('#deformationControlsContainer .header-toggle-checkbox').forEach(cb => {
-                    cb.checked = false;
-                    if (S[cb.id] !== undefined) S[cb.id] = false;
-                });
-
-                this.app.ImagePlaneManager.createDefaultLandscape();
+                // --- 3. Update the UI to reflect the new state ---
                 this._updateGpgpuModeVisibility();
             });
         });
@@ -711,7 +721,7 @@ export const UIManager = {
                     S[id] = value;
                     
                     if (id === 'playerCube_enabled') {
-                        this.app.CubeWallManager.setActive(value);
+                        this.app.CubeWallManager.setActive(S.gpgpuGeometryMode === 'geocube' && value);
                     }
                 });
             });
@@ -766,7 +776,6 @@ export const UIManager = {
         document.getElementById('goToCanvasButton').addEventListener('click', () => this.setMorphState(0.0));
         document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(0.95));
         
-        // ** THE FIX IS HERE: This button now delegates to the new manager **
         document.getElementById('runTransitionButton').addEventListener('click', () => this.app.ParticleTransitions.run());
         
         const morphSlider = document.getElementById('particle_morphProgress');
@@ -794,7 +803,6 @@ export const UIManager = {
                         };
                         const presetId = presetMap[button.id];
                         
-                        // ** THE FIX IS HERE: The button now delegates to the new manager **
                         if (presetId && this.app.ParticleTransitions.transitionPresets[presetId]) {
                             this.app.ParticleTransitions.setActivePreset(presetId);
                             
@@ -1001,7 +1009,6 @@ export const UIManager = {
         this.handleMorphSlider(targetProgress);
     },
 
-    // ** THE FIX IS HERE: These helpers allow the new manager to control the UI **
     disableParticleSliders() {
         const editor = document.getElementById('particleTransitionEditor');
         if (editor) {
@@ -1016,10 +1023,8 @@ export const UIManager = {
         }
     },
     
-    // This function is now empty, its logic lives in ParticleTransitions.js
     updateTransitionAnimation() {},
     
-    // This function is now empty, its logic lives in ParticleTransitions.js
     loadPresetValues(presetId) {},
 
     syncSlidersToSettings() {
