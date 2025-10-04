@@ -10,6 +10,7 @@ export const ImagePlaneManager = {
     landscape: null, 
     instancedMesh: null,
     particleSystem: null,
+    fluidSystem: null, 
     
     // --- Materials ---
     landscapeMaterial: null,
@@ -81,10 +82,19 @@ export const ImagePlaneManager = {
         this.state.targetPosition.copy(this.state.homePosition);
         this.landscapeContainer = new this.app.THREE.Group();
         this.app.scene.add(this.landscapeContainer);
+
+        if (this.app.FluidSimulationContainer && this.app.FluidSimulationContainer.fluidMesh) {
+            this.fluidSystem = this.app.FluidSimulationContainer.fluidMesh;
+            // The initial re-parenting is still a good practice.
+            this.landscapeContainer.add(this.fluidSystem);
+            console.log("ImagePlaneManager has successfully re-parented the FluidSystem mesh during init.");
+        } else {
+            console.error("ImagePlaneManager: Could not find FluidSimulationContainer's mesh on init!");
+        }
     },
 
     startAutopilot(presetId) {
-        if (!this.landscape && !this.instancedMesh && !this.particleSystem) return;
+        if (!this.landscapeContainer.visible) return;
         const ap = this.autopilot;
         ap.active = true;
         ap.preset = presetId;
@@ -131,19 +141,28 @@ export const ImagePlaneManager = {
         if (!this.landscapeContainer) return;
         const S = this.app.vizSettings;
         
-        if (!S.enableLandscape) {
-            this.landscapeContainer.visible = false;
-            return;
+        // ** THE FIX IS HERE: Brute-force re-parenting every frame. **
+        // This check ensures that if the fluidSystem exists and is NOT a child of the
+        // landscapeContainer, it will be added immediately. This overrides any
+        // conflicting logic that might be removing it elsewhere.
+        if (this.fluidSystem && this.fluidSystem.parent !== this.landscapeContainer) {
+            this.landscapeContainer.add(this.fluidSystem);
+            console.warn("ImagePlaneManager: Detected and corrected fluidSystem re-parenting issue.");
         }
-        this.landscapeContainer.visible = true;
         
+        this.landscapeContainer.visible = S.enableLandscape;
+        
+        if (!S.enableLandscape) return;
+
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
         const isParticleMode = S.gpgpuGeometryMode === 'particles';
-        const isDeformationMode = !isCubeMode && !isParticleMode;
+        const isDeformationMode = S.gpgpuGeometryMode === 'faceted';
+        const isFluidMode = S.gpgpuGeometryMode === 'fluidsim';
 
         if (this.landscape) this.landscape.visible = isDeformationMode;
         if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
         if (this.particleSystem) this.particleSystem.visible = isParticleMode;
+        if (this.fluidSystem) this.fluidSystem.visible = isFluidMode;
         
         const state = this.state;
         const ap = this.autopilot;
@@ -220,11 +239,11 @@ export const ImagePlaneManager = {
             }
         } else if (S.gpgpuGeometryMode === 'geocube') {
             this._createInstancedCubeMesh();
-        } else { 
+        } else if (S.gpgpuGeometryMode === 'faceted') { 
             this._createPlaneMesh('faceted');
         }
 
-        if (S.gpgpuGeometryMode !== 'particles') {
+        if (S.gpgpuGeometryMode !== 'particles' && S.gpgpuGeometryMode !== 'fluidsim') {
             if (CM && CM.init) {
                 CM.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
             }
@@ -344,11 +363,10 @@ export const ImagePlaneManager = {
     },
 
     applyAndStoreHomeOrientation() {
-        if (!this.landscape && !this.instancedMesh && !this.particleSystem) return;
         const S = this.app.vizSettings;
         
-        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles') {
-            this.state.homeQuaternion.identity(); 
+        this.state.homeQuaternion.identity(); 
+        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
         } else {
             const tempObject = new this.app.THREE.Object3D();
             if (S.planeOrientation === 'xz') { tempObject.rotateX(-Math.PI / 2); } 
@@ -417,7 +435,6 @@ export const ImagePlaneManager = {
             u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
             u_cameraPosition: { value: this.app.camera.position },
             t_envMap: { value: this.app.hdrTexture },
-            // ** THE FIX IS HERE: Uniform is now based purely on geometry mode **
             u_gpgpu_enableCubeWall: { value: S.gpgpuGeometryMode === 'geocube' },
             u_gpgpu_cubeWallGridSize: { value: new this.app.THREE.Vector2(S.gpgpu_cubeWallGridSize, S.gpgpu_cubeWallGridSize) },
             u_gpgpu_cubeWallMorph: { value: S.gpgpu_cubeWallMorph },
@@ -508,7 +525,7 @@ export const ImagePlaneManager = {
                 U_PBR.u_time.value = this.app.currentTime;
                 U_PBR.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
             }
-        } else { 
+        } else if (S.gpgpuGeometryMode !== 'fluidsim') { 
             if (!this.landscapeMaterial || !this.app.ComputeManager.gpuCompute) return;
             const U = this.landscapeMaterial.uniforms;
             const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
@@ -524,7 +541,6 @@ export const ImagePlaneManager = {
             U.u_ambientLightColor.value.set(S.ambientLightColor);
             U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
             
-            // ** THE FIX IS HERE: Uniform is now based purely on geometry mode **
             U.u_gpgpu_enableCubeWall.value = S.gpgpuGeometryMode === 'geocube';
             U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;
             U.u_gpgpu_cubeWallSideColor.value.set(S.gpgpu_cubeWallSideColor);
@@ -537,6 +553,7 @@ export const ImagePlaneManager = {
     updateBoundingBox() {
         const mesh = this.app.vizSettings.gpgpuGeometryMode === 'geocube' ? this.instancedMesh : 
                      this.app.vizSettings.gpgpuGeometryMode === 'particles' ? this.particleSystem : 
+                     this.app.vizSettings.gpgpuGeometryMode === 'fluidsim' ? this.fluidSystem :
                      this.landscape;
         if (!mesh) return;
         this.landscapeContainer.updateWorldMatrix(true, false);

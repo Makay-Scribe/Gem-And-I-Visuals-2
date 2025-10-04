@@ -659,37 +659,30 @@ export const UIManager = {
             });
         }
         
-        // ** THE FIX IS HERE: The GPGPU mode selector logic is rewritten for clarity and correctness **
+        // ** THE FIX IS HERE: The GPGPU mode selector logic is simplified. **
         document.querySelectorAll('#gpgpuModeSelector button').forEach(button => {
             button.addEventListener('click', () => {
                 const mode = button.dataset.mode;
                 if (!mode) return;
         
                 const S = this.app.vizSettings;
+                
+                // Convert UI 'deformation' mode to system 'faceted' mode
+                let systemMode = (mode === 'deformation') ? 'faceted' : mode;
         
-                // --- 1. Deactivate ALL visual containers first ---
-                this.app.ImagePlaneManager.landscapeContainer.visible = false;
-                this.app.FluidSimulationContainer.setActive(false);
-        
-                // --- 2. Activate ONLY the selected container and set the mode ---
-                if (mode === 'fluidsim') {
-                    S.gpgpuGeometryMode = 'fluidsim';
-                    this.app.FluidSimulationContainer.setActive(true);
+                // Activate/Deactivate the Fluid Sim manager
+                const isFluid = systemMode === 'fluidsim';
+                this.app.FluidSimulationContainer.setActive(isFluid);
+                
+                // Only recreate the landscape if the mode has changed *and* it's not the fluid sim.
+                if (S.gpgpuGeometryMode !== systemMode && !isFluid) {
+                    S.gpgpuGeometryMode = systemMode;
+                    this.app.ImagePlaneManager.createDefaultLandscape();
                 } else {
-                    // This is one of the original modes ('particles', 'geocube', 'deformation'/'faceted')
-                    this.app.ImagePlaneManager.landscapeContainer.visible = true;
-                    
-                    // Convert UI 'deformation' mode to system 'faceted' mode
-                    let systemMode = (mode === 'deformation') ? 'faceted' : mode;
-                    
-                    // Only recreate geometry if the system mode has actually changed
-                    if (S.gpgpuGeometryMode !== systemMode) {
-                        S.gpgpuGeometryMode = systemMode;
-                        this.app.ImagePlaneManager.createDefaultLandscape();
-                    }
+                    S.gpgpuGeometryMode = systemMode;
                 }
                 
-                // --- 3. Update the UI to reflect the new state ---
+                // Update the UI to reflect the new state.
                 this._updateGpgpuModeVisibility();
             });
         });

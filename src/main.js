@@ -16,7 +16,6 @@ import { CubeWallManager } from './modules/CubeWallManager.js';
 import { DirectorManager } from './modules/DirectorManager.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ParticleTransitions } from './modules/ParticleTransitions.js';
-// ** STEP 1: Import the new container **
 import { FluidSimulationContainer } from './compute/FluidSimulationContainer.js';
 
 
@@ -77,7 +76,6 @@ const App = {
     Debugger: Debugger,
     DirectorManager: DirectorManager,
     ParticleTransitions: ParticleTransitions,
-    // ** STEP 2: Add the new manager to the App object **
     FluidSimulationContainer: FluidSimulationContainer,
 
     defaultVisualizerSettings: {
@@ -434,12 +432,14 @@ const App = {
         this.ButterchurnManager.init(this);
         this.ModelManager.init(this);
         this.Debugger.init(this);
-        this.ImagePlaneManager.init(this); 
         this.CubeWallManager.init(this);
         this.DirectorManager.init(this);
         this.ParticleTransitions.init(this);
-        // ** STEP 3: Initialize the new manager **
+        
+        // ** THE FIX IS HERE: Changed initialization order. **
+        // FluidSimulationContainer must be initialized BEFORE ImagePlaneManager.
         this.FluidSimulationContainer.init(this);
+        this.ImagePlaneManager.init(this); 
         
         this.ComputeManager.init(this, 
             this.ImagePlaneManager.planeDimensions.x, 
@@ -607,7 +607,6 @@ const App = {
         this.ModelManager.update(cappedDelta);
         this.CubeWallManager.update();
         this.ParticleTransitions.update();
-        // ** STEP 4: Call the new manager's update loop **
         this.FluidSimulationContainer.update(cappedDelta);
         
         this.CameraManager.update(cappedDelta); 

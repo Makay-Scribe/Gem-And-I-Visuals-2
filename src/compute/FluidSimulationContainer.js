@@ -85,11 +85,12 @@ export const FluidSimulationContainer = {
         this.fluidMesh = new THREE.Points(geometry, material);
         this.fluidMesh.visible = false;
         
-        // THE FIX IS HERE: Add the mesh to the correct, controllable container.
-        this.app.ImagePlaneManager.landscapeContainer.add(this.fluidMesh);
+        // ** THE FIX IS HERE: Revert to adding the mesh to the main scene temporarily. **
+        // This prevents the initialization crash. The ImagePlaneManager will move it later.
+        this.app.scene.add(this.fluidMesh);
 
         this.isInitialized = true;
-        console.log("FluidSimulationContainer initialized with GPU rendering.");
+        console.log("FluidSimulationContainer initialized and mesh created.");
     },
 
     _setupSimulation() {
