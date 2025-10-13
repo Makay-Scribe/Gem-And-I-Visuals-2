@@ -4,38 +4,6 @@ import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer
 import sphVelocityShader from './shaders/sph_velocity.glsl?raw';
 import sphPositionShader from './shaders/sph_position.glsl?raw';
 
-// --- RENDER SHADERS ---
-const fluidRenderVertexShader = `
-    uniform sampler2D u_positionTexture;
-    uniform float u_pointSize;
-    
-    // Three.js provides the 'uv' attribute automatically.
-
-    void main() {
-        // Read the particle's 3D position from the GPGPU texture.
-        vec3 pos = texture2D(u_positionTexture, uv).xyz;
-        
-        // Standard model-view-projection transformation.
-        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-        gl_Position = projectionMatrix * mvPosition;
-
-        // Set the particle size, making it smaller as it gets further away.
-        gl_PointSize = u_pointSize * (200.0 / -mvPosition.z);
-    }
-`;
-
-const fluidRenderFragmentShader = `
-    void main() {
-        float dist = distance(gl_PointCoord, vec2(0.5));
-        float alpha = 1.0 - smoothstep(0.45, 0.5, dist);
-        if (alpha <= 0.0) {
-            discard;
-        }
-        gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
-    }
-`;
-
-
 export const FluidSimulationContainer = {
     app: null,
     
@@ -47,50 +15,14 @@ export const FluidSimulationContainer = {
     WORLD_SIZE: 40, 
     PARTICLE_COUNT: 128 * 128,
 
-    // --- Visual Properties ---
-    fluidMesh: null, 
-    
     isInitialized: false,
 
     init(appInstance) {
         this.app = appInstance;
         this.PARTICLE_COUNT = this.PARTICLE_RESOLUTION * this.PARTICLE_RESOLUTION;
-
-        const geometry = new THREE.BufferGeometry();
         
-        const uvs = new Float32Array(this.PARTICLE_COUNT * 2);
-        for (let y = 0; y < this.PARTICLE_RESOLUTION; y++) {
-            for (let x = 0; x < this.PARTICLE_RESOLUTION; x++) {
-                const i = (y * this.PARTICLE_RESOLUTION + x);
-                uvs[i * 2 + 0] = x / (this.PARTICLE_RESOLUTION - 1);
-                uvs[i * 2 + 1] = y / (this.PARTICLE_RESOLUTION - 1);
-            }
-        }
-        geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-        
-        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.PARTICLE_COUNT * 3), 3));
-        
-        const material = new THREE.ShaderMaterial({
-            uniforms: {
-                u_positionTexture: { value: null },
-                u_pointSize: { value: 2.0 }
-            },
-            vertexShader: fluidRenderVertexShader,
-            fragmentShader: fluidRenderFragmentShader,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        });
-
-        this.fluidMesh = new THREE.Points(geometry, material);
-        this.fluidMesh.visible = false;
-        
-        // ** THE FIX IS HERE: Revert to adding the mesh to the main scene temporarily. **
-        // This prevents the initialization crash. The ImagePlaneManager will move it later.
-        this.app.scene.add(this.fluidMesh);
-
         this.isInitialized = true;
-        console.log("FluidSimulationContainer initialized and mesh created.");
+        console.log("FluidSimulationContainer initialized (Physics only).");
     },
 
     _setupSimulation() {
@@ -114,8 +46,13 @@ export const FluidSimulationContainer = {
         this.gpuCompute.setVariableDependencies(this.velocityVariable, [this.positionVariable, this.velocityVariable]);
         this.gpuCompute.setVariableDependencies(this.positionVariable, [this.positionVariable, this.velocityVariable]);
         
-        this.velocityVariable.material.uniforms['u_time'] = { value: 0.0 };
-        this.positionVariable.material.uniforms['u_delta'] = { value: 0.0 };
+        const velocityUniforms = this.velocityVariable.material.uniforms;
+        velocityUniforms['u_time'] = { value: 0.0 };
+        velocityUniforms['u_delta'] = { value: 0.0 };
+        velocityUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
+
+        const positionUniforms = this.positionVariable.material.uniforms;
+        positionUniforms['u_delta'] = { value: 0.0 };
 
         const error = this.gpuCompute.init();
         if (error !== null) {
@@ -170,8 +107,6 @@ export const FluidSimulationContainer = {
     setActive(isActive) {
         if (!this.isInitialized) return;
 
-        this.fluidMesh.visible = isActive;
-
         if (isActive) {
             this._setupSimulation();
         } else {
@@ -180,14 +115,14 @@ export const FluidSimulationContainer = {
     },
 
     update(delta) {
-        if (!this.isInitialized || !this.fluidMesh.visible || !this.gpuCompute) return;
-
-        this.gpuCompute.compute();
+        // ** THE FIX IS HERE: The condition now only checks if the simulation is active. **
+        // It no longer depends on the old, removed fluidMesh property.
+        if (!this.gpuCompute) return;
         
         this.velocityVariable.material.uniforms['u_time'].value = this.app.currentTime;
+        this.velocityVariable.material.uniforms['u_delta'].value = delta;
         this.positionVariable.material.uniforms['u_delta'].value = delta;
 
-        const positionTexture = this.gpuCompute.getCurrentRenderTarget(this.positionVariable).texture;
-        this.fluidMesh.material.uniforms.u_positionTexture.value = positionTexture;
+        this.gpuCompute.compute();
     }
 };

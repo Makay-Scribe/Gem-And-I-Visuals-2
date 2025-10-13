@@ -1,29 +1,105 @@
-// src/compute/shaders/sph_velocity.glsl
+// Smoothed Particle Hydrodynamics (SPH) Velocity Shader
+// This shader calculates forces between particles to simulate fluid dynamics.
 
-// This shader implements a stable, spring-like attraction force
-// to gently pull particles toward the world origin (0,0,0).
+const float PI = 3.14159265359;
 
-// This uniform MUST be declared to match the data sent from JavaScript,
-// even if it is not used in this specific physics calculation.
 uniform float u_time;
+uniform float u_delta;
+
+// SPH Parameters
+const float GRAVITY = -0.5;
+const float PARTICLE_MASS = 1.0;
+const float SMOOTHING_RADIUS = 3.0; // h - How far to look for neighbors
+// ** THE FIX IS HERE: Increased stiffness for more energetic splashing. **
+const float STIFFNESS = 8.0;       // k - Pressure multiplier
+const float REST_DENSITY = 1.0;     // rho_0 - Target density
+// ** THE FIX IS HERE: Greatly reduced viscosity to make the fluid more "water-like". **
+const float VISCOSITY = 0.05;      // mu - How "thick" the fluid is
+const float WALL_DAMPING = -0.5;    // How much particles bounce off walls
+
+// Simulation world properties
+uniform vec2 u_planeDimensions;
+
+// Pre-calculated kernel constants to optimize calculations
+const float POLY6 = 315.0 / (64.0 * PI * pow(SMOOTHING_RADIUS, 9.0));
+const float SPIKY_GRAD = -45.0 / (PI * pow(SMOOTHING_RADIUS, 6.0));
+const float VISC_LAP = 45.0 / (PI * pow(SMOOTHING_RADIUS, 6.0));
 
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
     vec3 position = texture(texturePosition, uv).xyz;
     vec3 velocity = texture(textureVelocity, uv).xyz;
 
-    // A stable spring-like force
-    // Calculate the vector pointing from the particle to the center.
-    vec3 toCenter = -position;
-    
-    // The force is directly proportional to the distance, but with a very small constant.
-    vec3 attractionForce = toCenter * 0.005;
-    
-    // Apply the force to the velocity for this frame.
-    velocity += attractionForce;
+    // --- STAGE 1: DENSITY CALCULATION ---
+    float density = 0.0;
+    for (int y = -4; y <= 4; y++) {
+        for (int x = -4; x <= 4; x++) {
+            vec2 neighborUV = uv + vec2(float(x), float(y)) / resolution.xy;
+            if (neighborUV.x < 0.0 || neighborUV.x > 1.0 || neighborUV.y < 0.0 || neighborUV.y > 1.0) continue;
 
-    // Apply damping to act like friction and allow particles to settle.
-    velocity *= 0.98;
+            vec3 neighborPos = texture(texturePosition, neighborUV).xyz;
+            vec3 r = position - neighborPos;
+            float r2 = dot(r, r);
+
+            if (r2 < SMOOTHING_RADIUS * SMOOTHING_RADIUS) {
+                density += PARTICLE_MASS * POLY6 * pow(SMOOTHING_RADIUS * SMOOTHING_RADIUS - r2, 3.0);
+            }
+        }
+    }
+
+    // --- STAGE 2: FORCE CALCULATION ---
+    vec3 pressureForce = vec3(0.0);
+    vec3 viscosityForce = vec3(0.0);
+    vec3 externalForce = vec3(0.0, GRAVITY, 0.0) * PARTICLE_MASS;
+
+    for (int y = -4; y <= 4; y++) {
+        for (int x = -4; x <= 4; x++) {
+            vec2 neighborUV = uv + vec2(float(x), float(y)) / resolution.xy;
+            if (neighborUV.x < 0.0 || neighborUV.x > 1.0 || neighborUV.y < 0.0 || neighborUV.y > 1.0) continue;
+
+            vec3 neighborPos = texture(texturePosition, neighborUV).xyz;
+            vec3 r = position - neighborPos;
+            float r2 = dot(r, r);
+
+            if (r2 < SMOOTHING_RADIUS * SMOOTHING_RADIUS) {
+                float r_len = sqrt(r2);
+                
+                if (r_len > 0.0) {
+                     float pressureFactor = PARTICLE_MASS * STIFFNESS * (density - REST_DENSITY) * SPIKY_GRAD * pow(SMOOTHING_RADIUS - r_len, 2.0) / r_len;
+                     pressureForce += pressureFactor * r;
+                }
+
+                vec3 neighborVel = texture(textureVelocity, neighborUV).xyz;
+                viscosityForce += VISCOSITY * PARTICLE_MASS * (neighborVel - velocity) * VISC_LAP * (SMOOTHING_RADIUS - r_len);
+            }
+        }
+    }
+    
+    // --- Combine Forces & Integrate ---
+    vec3 totalForce = pressureForce + viscosityForce;
+    vec3 acceleration = vec3(0.0);
+
+    if (density > 0.0) {
+        acceleration = totalForce / density;
+    }
+    acceleration += externalForce / PARTICLE_MASS;
+
+    // Clamp acceleration to prevent explosions.
+    float maxAccel = 50.0;
+    if (length(acceleration) > maxAccel) {
+        acceleration = normalize(acceleration) * maxAccel;
+    }
+
+    velocity += acceleration * u_delta;
+
+    // --- Boundary Conditions (Collision with walls) ---
+    vec3 halfBounds = vec3(u_planeDimensions.x / 2.0, u_planeDimensions.y / 2.0, u_planeDimensions.x / 2.0);
+    if (position.x < -halfBounds.x) { velocity.x *= WALL_DAMPING; }
+    if (position.x > halfBounds.x)  { velocity.x *= WALL_DAMPING; }
+    if (position.y < -halfBounds.y) { velocity.y *= WALL_DAMPING; }
+    if (position.y > halfBounds.y)  { velocity.y *= WALL_DAMPING; }
+    if (position.z < -halfBounds.z) { velocity.z *= WALL_DAMPING; }
+    if (position.z > halfBounds.z)  { velocity.z *= WALL_DAMPING; }
 
     gl_FragColor = vec4(velocity, 1.0);
 }

@@ -142,7 +142,6 @@
                     <button class="segmented-control-button" data-mode="deformation">Faceted</button>
                     <button class="segmented-control-button" data-mode="geocube">GeoCube</button>
                     <button class="segmented-control-button active" data-mode="particles">Particles</button>
-                    <!-- ** THE FIX IS HERE: The 'disabled' attribute is removed ** -->
                     <button class="segmented-control-button" data-mode="fluidsim">Fluid Sim</button>
                 </div>
 
@@ -425,7 +424,6 @@
                         <button id="transitionPreset5">Nebula</button>
                         <button id="transitionPreset6">Melt</button>
                     </div>
-                    <!-- ** THE FIX IS HERE: Added new row of buttons ** -->
                     <div class="autopilot-preset-grid" id="particleArtisticPresetContainer" style="grid-template-columns: repeat(3, 1fr);">
                         <button id="artisticPreset1">Supernova</button>
                         <button id="artisticPreset2">Gravity Well</button>
@@ -769,10 +767,24 @@
                     <option value="yz">YZ (Side Wall)</option>
                 </select>
                 
-                <label for="gpgpuDebugViewSelect">Debug View</label>
+                <label for="gpgpuDebugSystemSelect">System</label>
+                <select id="gpgpuDebugSystemSelect">
+                    <option value="landscape" selected>Landscape/Deformation</option>
+                    <option value="particles">Particles</option>
+                    <option value="fluidsim">Fluid Sim</option>
+                </select>
+
+                <label for="gpgpuDebugTextureSelect">Texture</label>
+                <select id="gpgpuDebugTextureSelect">
+                    <!-- Options will be populated by GPGPUDebugger.js -->
+                </select>
+
+                <label for="gpgpuDebugViewSelect">View Mode</label>
                 <select id="gpgpuDebugViewSelect">
-                    <option value="position" selected>Position Data</option>
-                    <option value="custom">Custom Value</option>
+                    <option value="world" selected>Position (World)</option>
+                    <option value="vector">Velocity (Vector)</option>
+                    <option value="raw">Raw Data</option>
+                    <option value="alpha">Alpha Channel</option>
                 </select>
 
                 <p class="sub-group-title">PIXEL INSPECTOR</p>
@@ -784,6 +796,9 @@
                     <label for="enableOnScreenDebugger">Enable On-Screen Text</label>
                     <input type="checkbox" id="enableOnScreenDebugger" checked>
                 </div>
+
+                <!-- ** THE FIX IS HERE: New button for isolating the scene. ** -->
+                <button id="isolateFluidSimButton" style="margin-top: 8px;">Isolate Fluid Sim</button>
             </div>
         </div>
         

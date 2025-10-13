@@ -616,6 +616,26 @@ export const UIManager = {
         this.logSuccess("All GPGPU settings have been reset to default.");
     },
     
+    // ** THE FIX IS HERE: A new, unified function for switching GPGPU modes. **
+    _switchGpgpuMode(newUiMode) {
+        const S = this.app.vizSettings;
+        const newSystemMode = (newUiMode === 'deformation') ? 'faceted' : newUiMode;
+
+        if (S.gpgpuGeometryMode === newSystemMode) return; // No change needed
+
+        S.gpgpuGeometryMode = newSystemMode;
+
+        // Activate/deactivate the physics simulation ONLY if the mode is 'fluidsim' or was 'fluidsim'
+        const isFluid = newSystemMode === 'fluidsim';
+        this.app.FluidSimulationContainer.setActive(isFluid);
+
+        // Recreate the visual mesh for the new mode
+        this.app.ImagePlaneManager.createDefaultLandscape();
+
+        // Update the UI
+        this._updateGpgpuModeVisibility();
+    },
+
     setupEventListeners() {
         document.getElementById('toggleMicInput').addEventListener('click', () => this.app.AudioProcessor.startMic());
         document.getElementById('playPauseAudioButton').addEventListener('click', () => this.app.AudioProcessor.toggleFilePlayback());
@@ -659,31 +679,31 @@ export const UIManager = {
             });
         }
         
-        // ** THE FIX IS HERE: The GPGPU mode selector logic is simplified. **
+        const isolateButton = document.getElementById('isolateFluidSimButton');
+        if (isolateButton) {
+            isolateButton.addEventListener('click', () => {
+                const S = this.app.vizSettings;
+
+                S.enableModel = false;
+                S.backgroundMode = 'black';
+                
+                // Use the new unified function to switch modes
+                this._switchGpgpuMode('fluidsim');
+                
+                this.syncAllControlsToSettings();
+                this.updateBackgroundControlsVisibility();
+
+                this.logSuccess("Scene isolated for Fluid Sim debug.");
+            });
+        }
+        
+        // ** THE FIX IS HERE: The segmented control now uses the unified switch function. **
         document.querySelectorAll('#gpgpuModeSelector button').forEach(button => {
             button.addEventListener('click', () => {
                 const mode = button.dataset.mode;
-                if (!mode) return;
-        
-                const S = this.app.vizSettings;
-                
-                // Convert UI 'deformation' mode to system 'faceted' mode
-                let systemMode = (mode === 'deformation') ? 'faceted' : mode;
-        
-                // Activate/Deactivate the Fluid Sim manager
-                const isFluid = systemMode === 'fluidsim';
-                this.app.FluidSimulationContainer.setActive(isFluid);
-                
-                // Only recreate the landscape if the mode has changed *and* it's not the fluid sim.
-                if (S.gpgpuGeometryMode !== systemMode && !isFluid) {
-                    S.gpgpuGeometryMode = systemMode;
-                    this.app.ImagePlaneManager.createDefaultLandscape();
-                } else {
-                    S.gpgpuGeometryMode = systemMode;
+                if (mode) {
+                    this._switchGpgpuMode(mode);
                 }
-                
-                // Update the UI to reflect the new state.
-                this._updateGpgpuModeVisibility();
             });
         });
         

@@ -15,6 +15,7 @@ export const ImagePlaneManager = {
     // --- Materials ---
     landscapeMaterial: null,
     particlePBRMaterial: null,
+    fluidMaterial: null,
 
     // --- State & Containers ---
     landscapeContainer: null, 
@@ -82,15 +83,6 @@ export const ImagePlaneManager = {
         this.state.targetPosition.copy(this.state.homePosition);
         this.landscapeContainer = new this.app.THREE.Group();
         this.app.scene.add(this.landscapeContainer);
-
-        if (this.app.FluidSimulationContainer && this.app.FluidSimulationContainer.fluidMesh) {
-            this.fluidSystem = this.app.FluidSimulationContainer.fluidMesh;
-            // The initial re-parenting is still a good practice.
-            this.landscapeContainer.add(this.fluidSystem);
-            console.log("ImagePlaneManager has successfully re-parented the FluidSystem mesh during init.");
-        } else {
-            console.error("ImagePlaneManager: Could not find FluidSimulationContainer's mesh on init!");
-        }
     },
 
     startAutopilot(presetId) {
@@ -140,24 +132,15 @@ export const ImagePlaneManager = {
     update(cappedDelta) {
         if (!this.landscapeContainer) return;
         const S = this.app.vizSettings;
-        
-        // ** THE FIX IS HERE: Brute-force re-parenting every frame. **
-        // This check ensures that if the fluidSystem exists and is NOT a child of the
-        // landscapeContainer, it will be added immediately. This overrides any
-        // conflicting logic that might be removing it elsewhere.
-        if (this.fluidSystem && this.fluidSystem.parent !== this.landscapeContainer) {
-            this.landscapeContainer.add(this.fluidSystem);
-            console.warn("ImagePlaneManager: Detected and corrected fluidSystem re-parenting issue.");
-        }
-        
+
         this.landscapeContainer.visible = S.enableLandscape;
         
         if (!S.enableLandscape) return;
 
+        const isFluidMode = S.gpgpuGeometryMode === 'fluidsim';
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
         const isParticleMode = S.gpgpuGeometryMode === 'particles';
         const isDeformationMode = S.gpgpuGeometryMode === 'faceted';
-        const isFluidMode = S.gpgpuGeometryMode === 'fluidsim';
 
         if (this.landscape) this.landscape.visible = isDeformationMode;
         if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
@@ -217,7 +200,11 @@ export const ImagePlaneManager = {
         this.landscapeContainer.quaternion.slerp(finalTargetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
-        if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta); 
+        // ** THE FIX IS HERE: The ComputeManager update is now outside the conditional blocks. **
+        // This ensures physics simulations (like FluidSim) run even if their GPGPU compute instance
+        // is managed by a different container.
+        if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta);
+        if (this.app.FluidSimulationContainer) this.app.FluidSimulationContainer.update(cappedDelta);
         
         this.updateDeformationUniforms();
         
@@ -234,15 +221,18 @@ export const ImagePlaneManager = {
 
         if (S.gpgpuGeometryMode === 'particles') {
             this._createParticleSystem();
-            if (CM && CM.initParticleSystem) {
-                CM.initParticleSystem();
-            }
         } else if (S.gpgpuGeometryMode === 'geocube') {
             this._createInstancedCubeMesh();
         } else if (S.gpgpuGeometryMode === 'faceted') { 
             this._createPlaneMesh('faceted');
+        } else if (S.gpgpuGeometryMode === 'fluidsim') {
+            this._createFluidSystem();
         }
 
+        if (S.gpgpuGeometryMode === 'particles' && CM && CM.initParticleSystem) {
+            CM.initParticleSystem();
+        }
+        
         if (S.gpgpuGeometryMode !== 'particles' && S.gpgpuGeometryMode !== 'fluidsim') {
             if (CM && CM.init) {
                 CM.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
@@ -274,6 +264,11 @@ export const ImagePlaneManager = {
             this.landscapeContainer.remove(this.particleSystem);
             this.particleSystem = null;
         }
+        if (this.fluidSystem) {
+            this.fluidSystem.geometry.dispose();
+            this.landscapeContainer.remove(this.fluidSystem);
+            this.fluidSystem = null;
+        }
 
         if (this.landscapeMaterial) {
             this.landscapeMaterial.dispose();
@@ -283,6 +278,35 @@ export const ImagePlaneManager = {
             this.particlePBRMaterial.dispose();
             this.particlePBRMaterial = null;
         }
+        if (this.fluidMaterial) {
+            this.fluidMaterial.dispose();
+            this.fluidMaterial = null;
+        }
+    },
+
+    _createFluidSystem() {
+        const FSIM = this.app.FluidSimulationContainer;
+        const count = FSIM.PARTICLE_COUNT;
+        const resolution = FSIM.PARTICLE_RESOLUTION;
+
+        const geometry = new this.app.THREE.BufferGeometry();
+        geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
+
+        const uvs = new Float32Array(count * 2);
+        for (let y = 0; y < resolution; y++) {
+            for (let x = 0; x < resolution; x++) {
+                const i = (y * resolution + x) * 2;
+                uvs[i * 2 + 0] = x / (resolution - 1);
+                uvs[i * 2 + 1] = y / (resolution - 1);
+            }
+        }
+        geometry.setAttribute('uv', new this.app.THREE.BufferAttribute(uvs, 2));
+
+        this._createFluidPBRMaterial();
+
+        this.fluidSystem = new this.app.THREE.Points(geometry, this.fluidMaterial);
+        this.fluidSystem.frustumCulled = false;
+        this.landscapeContainer.add(this.fluidSystem);
     },
 
     _createParticleSystem() {
@@ -313,29 +337,8 @@ export const ImagePlaneManager = {
         this.particleSystem.frustumCulled = false;
         this.landscapeContainer.add(this.particleSystem);
     },
-
-    _createPlaneMesh(mode) {
-        let landGeom = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x - 1, this.planeResolution.y - 1);
-
-        if (mode === 'faceted') {
-            landGeom = landGeom.toNonIndexed();
-        }
-        
-        const gpgpuUvs = new Float32Array(landGeom.attributes.position.count * 2);
-        const originalUvs = landGeom.attributes.uv.array;
-        for (let i = 0; i < gpgpuUvs.length / 2; i++) {
-            gpgpuUvs[i * 2] = originalUvs[i * 2];
-            gpgpuUvs[i * 2 + 1] = 1.0 - originalUvs[i * 2 + 1];
-        }
-        landGeom.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
-
-        this.createGPGPUMaterial();
-
-        this.landscape = new this.app.THREE.Mesh(landGeom, this.landscapeMaterial);
-        this.landscape.frustumCulled = false;
-        this.landscapeContainer.add(this.landscape);
-    },
-
+    
+    // ** THE FIX IS HERE: Renamed function for clarity. This now correctly creates the cube mesh.**
     _createInstancedCubeMesh() {
         const GRID_SIZE = this.app.vizSettings.gpgpu_cubeWallGridSize;
         const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
@@ -367,12 +370,48 @@ export const ImagePlaneManager = {
         
         this.state.homeQuaternion.identity(); 
         if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
+            // These modes are always flat XY planes, so they use the default identity quaternion.
         } else {
             const tempObject = new this.app.THREE.Object3D();
             if (S.planeOrientation === 'xz') { tempObject.rotateX(-Math.PI / 2); } 
             else if (S.planeOrientation === 'yz') { tempObject.rotateY(Math.PI / 2); }
             this.state.homeQuaternion.copy(tempObject.quaternion);
         }
+    },
+    
+    _createFluidPBRMaterial() {
+        const S = this.app.vizSettings;
+        const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
+        if(!this.currentTexture) textureToUse.needsUpdate = true;
+
+        this.fluidMaterial = new this.app.THREE.ShaderMaterial({
+            defines: { 'USE_ENVMAP': '' },
+            uniforms: {
+                u_map: { value: textureToUse },
+                u_positionTexture: { value: null }, // This will be set in the update loop
+                u_particleModelUVTexture: { value: null }, // Not used by fluid sim
+                u_particleModelTexture: { value: null }, // Not used by fluid sim
+                u_particleColorMix: { value: 0.0 }, // Fluid sim is always 100% texture color
+                particle_base_size: { value: 2.0 }, // Start with a default size
+                particle_min_size: { value: 2.0 }, 
+                u_particle_size_mix: { value: 0.0 }, 
+                u_metalness: { value: S.metalness },
+                u_roughness: { value: S.roughness },
+                u_envMapIntensity: { value: S.reflectionStrength },
+                u_lightColor: { value: new this.app.THREE.Color(S.lightColor) },
+                u_ambientLightColor: { value: new this.app.THREE.Color(S.ambientLightColor) },
+                u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
+                u_cameraPosition: { value: this.app.camera.position },
+                t_envMap: { value: this.app.hdrTexture },
+                u_time: { value: 0.0 },
+                u_pixelRatio: { value: window.devicePixelRatio },
+                u_particle_twinkleIntensity: { value: 0.0 }, // Twinkle is off for fluid sim
+            },
+            vertexShader: particleRenderVertexShader,
+            fragmentShader: particleRenderFragmentShader,
+            transparent: true,
+            depthWrite: false
+        });
     },
     
     _createParticlePBRMaterial() {
@@ -382,9 +421,7 @@ export const ImagePlaneManager = {
         if(!this.currentTexture) textureToUse.needsUpdate = true;
 
         this.particlePBRMaterial = new this.app.THREE.ShaderMaterial({
-            defines: {
-                'USE_ENVMAP': ''
-            },
+            defines: { 'USE_ENVMAP': '' },
             uniforms: {
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: null },
@@ -464,6 +501,7 @@ export const ImagePlaneManager = {
             
             if (this.landscapeMaterial) this.landscapeMaterial.uniforms.u_map.value = texture;
             if (this.particlePBRMaterial) this.particlePBRMaterial.uniforms.u_map.value = texture;
+            if (this.fluidMaterial) this.fluidMaterial.uniforms.u_map.value = texture;
             
             this.currentTexture = texture;
         };
@@ -486,49 +524,60 @@ export const ImagePlaneManager = {
 
     updateDeformationUniforms() {
         const S = this.app.vizSettings;
+        const CM = this.app.ComputeManager;
         
         if (S.gpgpuGeometryMode === 'particles') {
-            const CM = this.app.ComputeManager;
             if (!CM || !CM.particleGpuCompute) return;
-
             const posTarget = CM.particleGpuCompute.getCurrentRenderTarget(CM.particlePositionVar);
             
             if(this.particlePBRMaterial) {
-                const U_PBR = this.particlePBRMaterial.uniforms;
-                U_PBR.u_positionTexture.value = posTarget.texture;
-
+                const U = this.particlePBRMaterial.uniforms;
+                U.u_positionTexture.value = posTarget.texture;
                 const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
                 const fineSize = S.particle_min_size;
-                const finalBaseSize = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
-
-                U_PBR.particle_base_size.value = finalBaseSize;
-                U_PBR.particle_min_size.value = finalBaseSize;
-                U_PBR.u_particle_size_mix.value = 0.0;
-
-                U_PBR.u_pixelRatio.value = window.devicePixelRatio;
-                U_PBR.u_particleColorMix.value = S.particle_morphProgress;
-                
+                U.particle_base_size.value = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
+                U.particle_min_size.value = U.particle_base_size.value;
+                U.u_particle_size_mix.value = 0.0;
+                U.u_pixelRatio.value = window.devicePixelRatio;
+                U.u_particleColorMix.value = S.particle_morphProgress;
                 if (this.app.UIManager.particleModelTexture) {
-                    U_PBR.u_particleModelTexture.value = this.app.UIManager.particleModelTexture;
+                    U.u_particleModelTexture.value = this.app.UIManager.particleModelTexture;
                 }
-                
-                U_PBR.u_metalness.value = S.metalness;
-                U_PBR.u_roughness.value = S.roughness;
-                
-                U_PBR.u_envMapIntensity.value = S.reflectionStrength;
-                U_PBR.t_envMap.value = this.app.hdrTexture; 
-                U_PBR.u_cameraPosition.value = this.app.camera.position;
-                U_PBR.u_lightColor.value.set(S.lightColor);
-                U_PBR.u_ambientLightColor.value.set(S.ambientLightColor);
-                U_PBR.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-                
-                U_PBR.u_time.value = this.app.currentTime;
-                U_PBR.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
+                U.u_metalness.value = S.metalness;
+                U.u_roughness.value = S.roughness;
+                U.u_envMapIntensity.value = S.reflectionStrength;
+                U.t_envMap.value = this.app.hdrTexture; 
+                U.u_cameraPosition.value = this.app.camera.position;
+                U.u_lightColor.value.set(S.lightColor);
+                U.u_ambientLightColor.value.set(S.ambientLightColor);
+                U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+                U.u_time.value = this.app.currentTime;
+                U.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
             }
-        } else if (S.gpgpuGeometryMode !== 'fluidsim') { 
-            if (!this.landscapeMaterial || !this.app.ComputeManager.gpuCompute) return;
+        } else if (S.gpgpuGeometryMode === 'fluidsim') {
+            const FSIM = this.app.FluidSimulationContainer;
+            if (!FSIM || !FSIM.gpuCompute) return;
+            const posTarget = FSIM.gpuCompute.getCurrentRenderTarget(FSIM.positionVariable);
+
+            if (this.fluidMaterial) {
+                const U = this.fluidMaterial.uniforms;
+                U.u_positionTexture.value = posTarget.texture;
+                U.particle_base_size.value = 2.0; 
+                U.u_pixelRatio.value = window.devicePixelRatio;
+                U.u_metalness.value = S.metalness;
+                U.u_roughness.value = S.roughness;
+                U.u_envMapIntensity.value = S.reflectionStrength;
+                U.t_envMap.value = this.app.hdrTexture; 
+                U.u_cameraPosition.value = this.app.camera.position;
+                U.u_lightColor.value.set(S.lightColor);
+                U.u_ambientLightColor.value.set(S.ambientLightColor);
+                U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+                U.u_time.value = this.app.currentTime;
+            }
+        } else { 
+            if (!this.landscapeMaterial || !CM.gpuCompute) return;
             const U = this.landscapeMaterial.uniforms;
-            const positionTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+            const positionTarget = CM.gpuCompute.getCurrentRenderTarget(CM.positionVariable);
             U.u_positionTexture.value = positionTarget.texture;
             
             U.u_time.value = this.app.currentTime;
