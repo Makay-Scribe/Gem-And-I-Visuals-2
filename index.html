@@ -468,8 +468,13 @@
                 </div>
 
                 <div id="fluidSimControlsContainer" style="display: none;">
-                    <!-- ** THE FIX IS HERE: New button to toggle physics. ** -->
-                    <button id="toggleFluidPhysicsButton">Start Physics</button>
+                    <!-- ** THE FIX IS HERE: Add a container for preset buttons and rename the toggle. ** -->
+                    <p class="sub-group-title">FLUID TRANSITIONS</p>
+                    <div class="button-row" id="fluid-preset-buttons">
+                        <button id="fluidMeltAndReform">Melt & Reform</button>
+                        <button id="fluidResetToCanvas">Reset to Canvas</button>
+                    </div>
+                    <button id="startFluidPhysicsButton">Start Physics</button>
                     <label>Gravity: <span id="fluid_gravityValue" class="range-value-display"></span></label>
                     <input type="range" id="fluid_gravity" min="-2.0" max="2.0" step="0.05" value="0.0">
                 </div>

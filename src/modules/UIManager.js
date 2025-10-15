@@ -701,32 +701,29 @@ export const UIManager = {
             });
         });
         
-        // ** THE FIX IS HERE: The "Start/Stop" button is now a "Reset to Canvas" button. **
-        const toggleFluidPhysicsButton = document.getElementById('toggleFluidPhysicsButton');
-        if (toggleFluidPhysicsButton) {
-            toggleFluidPhysicsButton.addEventListener('click', () => {
-                const FSIM = this.app.FluidSimulationContainer;
-                
-                // If the physics are running, this button will now trigger a reset.
-                if (FSIM.physicsState === 'running') {
-                    FSIM.resetToCanvas();
-                } 
-                // If they are stopped or resetting, it will start them.
-                else {
-                    FSIM.startPhysics();
-                }
-
-                // Update UI based on the new state
-                const button = document.getElementById('toggleFluidPhysicsButton');
-                if (FSIM.physicsState === 'running') {
-                    button.textContent = 'Reset to Canvas';
-                    button.classList.add('button-solid-glow');
-                } else {
-                    button.textContent = 'Start Physics';
-                    button.classList.remove('button-solid-glow');
-                }
+        // ** THE FIX IS HERE: Connect all fluid sim buttons to the new Director. **
+        const startFluidPhysicsButton = document.getElementById('startFluidPhysicsButton');
+        if (startFluidPhysicsButton) {
+            startFluidPhysicsButton.addEventListener('click', () => {
+                this.app.FluidSimulationContainer.startPhysics();
+                this.logSuccess("Fluid physics started.");
             });
         }
+        const fluidMeltAndReformButton = document.getElementById('fluidMeltAndReform');
+        if(fluidMeltAndReformButton) {
+            fluidMeltAndReformButton.addEventListener('click', () => {
+                this.app.FluidDirector.run('meltAndReform');
+                this.logSuccess("Running 'Melt & Reform' script...");
+            });
+        }
+        const fluidResetToCanvasButton = document.getElementById('fluidResetToCanvas');
+        if(fluidResetToCanvasButton) {
+            fluidResetToCanvasButton.addEventListener('click', () => {
+                this.app.FluidDirector.stop();
+                this.logSuccess("Resetting fluid to canvas.");
+            });
+        }
+        
         
         const geocubeContainer = document.getElementById('geocubeControlsContainer');
         if (geocubeContainer) {
