@@ -14,6 +14,7 @@ export const FluidSimulationContainer = {
     PARTICLE_RESOLUTION: 128,
     WORLD_SIZE: 40, 
     PARTICLE_COUNT: 128 * 128,
+    simulationStartTime: -1,
 
     isInitialized: false,
 
@@ -36,6 +37,8 @@ export const FluidSimulationContainer = {
 
         this.gpuCompute = new GPUComputationRenderer(this.PARTICLE_RESOLUTION, this.PARTICLE_RESOLUTION, renderer);
 
+        this.simulationStartTime = this.app.currentTime;
+
         const dtPosition = this.gpuCompute.createTexture();
         const dtVelocity = this.gpuCompute.createTexture();
         this.fillInitialParticleData(dtPosition.image.data, dtVelocity.image.data);
@@ -50,6 +53,8 @@ export const FluidSimulationContainer = {
         velocityUniforms['u_time'] = { value: 0.0 };
         velocityUniforms['u_delta'] = { value: 0.0 };
         velocityUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
+        velocityUniforms['u_fluid_gravity'] = { value: this.app.vizSettings.fluid_gravity };
+
 
         const positionUniforms = this.positionVariable.material.uniforms;
         positionUniforms['u_delta'] = { value: 0.0 };
@@ -76,6 +81,7 @@ export const FluidSimulationContainer = {
         this.gpuCompute = null;
         this.positionVariable = null;
         this.velocityVariable = null;
+        this.simulationStartTime = -1;
         console.log("Fluid GPGPU simulation disposed.");
     },
 
@@ -115,12 +121,15 @@ export const FluidSimulationContainer = {
     },
 
     update(delta) {
-        // ** THE FIX IS HERE: The condition now only checks if the simulation is active. **
-        // It no longer depends on the old, removed fluidMesh property.
         if (!this.gpuCompute) return;
         
-        this.velocityVariable.material.uniforms['u_time'].value = this.app.currentTime;
+        const simTime = this.simulationStartTime > 0 ? this.app.currentTime - this.simulationStartTime : 0;
+        
+        // ** THE FIX IS HERE: This manager now updates its own uniforms. **
+        this.velocityVariable.material.uniforms['u_fluid_gravity'].value = this.app.vizSettings.fluid_gravity;
+        this.velocityVariable.material.uniforms['u_time'].value = simTime;
         this.velocityVariable.material.uniforms['u_delta'].value = delta;
+        
         this.positionVariable.material.uniforms['u_delta'].value = delta;
 
         this.gpuCompute.compute();

@@ -8,7 +8,7 @@ varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
 varying vec3 vLocalNormal;
-varying float vTriangleId; // ** THE FIX IS HERE: Added the missing varying **
+varying float vTriangleId;
 
 // A "safe" normalize function to prevent NaN values if vertices are co-linear.
 vec3 safeNormalize(vec3 v) {
@@ -20,10 +20,10 @@ vec3 safeNormalize(vec3 v) {
 
 
 void main() {
-    // Pass the original geometry's UVs to the fragment shader for texture mapping.
-    vUv = uv;
+    // ** THE FIX IS HERE: Flip the v-coordinate of the UV to correct the texture orientation. **
+    // Pass the corrected UVs to the fragment shader for texture mapping.
+    vUv = vec2(uv.x, 1.0 - uv.y);
     
-    // ** THE FIX IS HERE: Pass a default value for vTriangleId **
     // This varying is required by the fragment shader but not used in this mode.
     // We pass 0.0 to ensure the shader links correctly.
     vTriangleId = 0.0;

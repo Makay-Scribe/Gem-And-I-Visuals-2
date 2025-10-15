@@ -1,3 +1,4 @@
+import THREE from '../three-singleton.js';
 import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import cubewallRenderVertexShader from '../shaders/cubewall_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
@@ -200,12 +201,6 @@ export const ImagePlaneManager = {
         this.landscapeContainer.quaternion.slerp(finalTargetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
         
-        // ** THE FIX IS HERE: The ComputeManager update is now outside the conditional blocks. **
-        // This ensures physics simulations (like FluidSim) run even if their GPGPU compute instance
-        // is managed by a different container.
-        if (this.app.ComputeManager) this.app.ComputeManager.update(cappedDelta);
-        if (this.app.FluidSimulationContainer) this.app.FluidSimulationContainer.update(cappedDelta);
-        
         this.updateDeformationUniforms();
         
         this.updateBoundingBox();
@@ -284,6 +279,28 @@ export const ImagePlaneManager = {
         }
     },
 
+    _createPlaneMesh(mode) {
+        const geometry = new this.app.THREE.PlaneGeometry(
+            this.planeDimensions.x, 
+            this.planeDimensions.y, 
+            this.planeResolution.x, 
+            this.planeResolution.y
+        );
+
+        const gpgpuUvs = new Float32Array(geometry.attributes.position.count * 2);
+        for (let i = 0; i < geometry.attributes.uv.count; i++) {
+            gpgpuUvs[i * 2] = geometry.attributes.uv.getX(i);
+            gpgpuUvs[i * 2 + 1] = geometry.attributes.uv.getY(i);
+        }
+        geometry.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
+
+        this.createGPGPUMaterial();
+
+        this.landscape = new this.app.THREE.Mesh(geometry, this.landscapeMaterial);
+        this.landscape.frustumCulled = false;
+        this.landscapeContainer.add(this.landscape);
+    },
+
     _createFluidSystem() {
         const FSIM = this.app.FluidSimulationContainer;
         const count = FSIM.PARTICLE_COUNT;
@@ -295,7 +312,7 @@ export const ImagePlaneManager = {
         const uvs = new Float32Array(count * 2);
         for (let y = 0; y < resolution; y++) {
             for (let x = 0; x < resolution; x++) {
-                const i = (y * resolution + x) * 2;
+                const i = (y * resolution + x);
                 uvs[i * 2 + 0] = x / (resolution - 1);
                 uvs[i * 2 + 1] = y / (resolution - 1);
             }
@@ -338,7 +355,6 @@ export const ImagePlaneManager = {
         this.landscapeContainer.add(this.particleSystem);
     },
     
-    // ** THE FIX IS HERE: Renamed function for clarity. This now correctly creates the cube mesh.**
     _createInstancedCubeMesh() {
         const GRID_SIZE = this.app.vizSettings.gpgpu_cubeWallGridSize;
         const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
@@ -383,17 +399,21 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
+        
+        const FSIM = this.app.FluidSimulationContainer;
+        const fluidCellSize = this.planeDimensions.x / (FSIM.PARTICLE_RESOLUTION - 1);
+        const fluidBaseSize = fluidCellSize * Math.sqrt(2);
 
         this.fluidMaterial = new this.app.THREE.ShaderMaterial({
             defines: { 'USE_ENVMAP': '' },
             uniforms: {
                 u_map: { value: textureToUse },
-                u_positionTexture: { value: null }, // This will be set in the update loop
-                u_particleModelUVTexture: { value: null }, // Not used by fluid sim
-                u_particleModelTexture: { value: null }, // Not used by fluid sim
-                u_particleColorMix: { value: 0.0 }, // Fluid sim is always 100% texture color
-                particle_base_size: { value: 2.0 }, // Start with a default size
-                particle_min_size: { value: 2.0 }, 
+                u_positionTexture: { value: null }, 
+                u_particleModelUVTexture: { value: null }, 
+                u_particleModelTexture: { value: null }, 
+                u_particleColorMix: { value: 0.0 }, 
+                particle_base_size: { value: fluidBaseSize }, 
+                particle_min_size: { value: fluidBaseSize }, 
                 u_particle_size_mix: { value: 0.0 }, 
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
@@ -405,7 +425,7 @@ export const ImagePlaneManager = {
                 t_envMap: { value: this.app.hdrTexture },
                 u_time: { value: 0.0 },
                 u_pixelRatio: { value: window.devicePixelRatio },
-                u_particle_twinkleIntensity: { value: 0.0 }, // Twinkle is off for fluid sim
+                u_particle_twinkleIntensity: { value: 0.0 },
             },
             vertexShader: particleRenderVertexShader,
             fragmentShader: particleRenderFragmentShader,
@@ -557,12 +577,16 @@ export const ImagePlaneManager = {
         } else if (S.gpgpuGeometryMode === 'fluidsim') {
             const FSIM = this.app.FluidSimulationContainer;
             if (!FSIM || !FSIM.gpuCompute) return;
+
             const posTarget = FSIM.gpuCompute.getCurrentRenderTarget(FSIM.positionVariable);
 
             if (this.fluidMaterial) {
                 const U = this.fluidMaterial.uniforms;
                 U.u_positionTexture.value = posTarget.texture;
-                U.particle_base_size.value = 2.0; 
+                
+                const fluidCellSize = this.planeDimensions.x / (FSIM.PARTICLE_RESOLUTION - 1);
+                U.particle_base_size.value = fluidCellSize * Math.sqrt(2);
+
                 U.u_pixelRatio.value = window.devicePixelRatio;
                 U.u_metalness.value = S.metalness;
                 U.u_roughness.value = S.roughness;
@@ -572,7 +596,7 @@ export const ImagePlaneManager = {
                 U.u_lightColor.value.set(S.lightColor);
                 U.u_ambientLightColor.value.set(S.ambientLightColor);
                 U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-                U.u_time.value = this.app.currentTime;
+                // ** THE FIX IS HERE: Removed the conflicting u_time update. **
             }
         } else { 
             if (!this.landscapeMaterial || !CM.gpuCompute) return;

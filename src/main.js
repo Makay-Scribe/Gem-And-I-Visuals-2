@@ -39,11 +39,11 @@ const App = {
         'modelPreset2': { id: 'modelPreset2', name: 'Bee', path: '/3dmodel/converted/Bee.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
         'modelPreset3': { id: 'modelPreset3', name: 'Dancing Planet', path: '/3dmodel/converted/Dancing planet.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
         'modelPreset4': { id: 'modelPreset4', name: 'Flying Bee', path: '/3dmodel/converted/Flying bee.glb', homeOffset: new THREE.Vector3(0, -1, -10) },
-        'modelPreset5': { id: 'modelPreset5', name: 'Flying Pterodactyl', path: '/3dmodel/converted/Flying pterodactyl.glb', homeOffset: new THREE.Vector3(0, 0, 0) },
-        'modelPreset6': { id: 'modelPreset6', name: 'Martial Arts Character', path: '/3dmodel/converted/Martial arts character.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
+        'modelPreset5': { id: 'modelPreset5', name: 'Flying pterodactyl', path: '/3dmodel/converted/Flying pterodactyl.glb', homeOffset: new THREE.Vector3(0, 0, 0) },
+        'modelPreset6': { id: 'modelPreset6', name: 'Martial arts character', path: '/3dmodel/converted/Martial arts character.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
         'modelPreset7': { id: 'modelPreset7', name: 'Retro UFO', path: '/3dmodel/converted/Retro UFO.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
         'modelPreset8': { id: 'modelPreset8', name: 'Rose', path: '/3dmodel/converted/Rose.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
-        'modelPreset9': { id: 'modelPreset9', name: 'School of Fish', path: '/3dmodel/converted/School of fish.glb', homeOffset: new THREE.Vector3(-5, 0, -10) },
+        'modelPreset9': { id: 'modelPreset9', name: 'School of fish', path: '/3dmodel/converted/School of fish.glb', homeOffset: new THREE.Vector3(-5, 0, -10) },
         'modelPreset10': { id: 'modelPreset10', name: 'Steampunk Dirigible', path: '/3dmodel/converted/Steampunk Dirigible with Ship.glb', homeOffset: new THREE.Vector3(3, 0, -10) },
         'modelPreset11': { id: 'modelPreset11', name: 'Swimming shark', path: '/3dmodel/converted/Swimming shark.glb', homeOffset: new THREE.Vector3(0, 0, -10) },
         'modelPreset12': { id: 'modelPreset12', name: 'Walking astronaut', path: '/3dmodel/converted/Walking astronaut.glb', homeOffset: new THREE.Vector3(0, -3, -10) },
@@ -193,6 +193,7 @@ const App = {
         gpgpu_cubeWallSideColor: '#4a586a',
         gpgpu_cubeWallBevelWidth: 0.02,
         gpgpu_cubeWallBevelIntensity: 0.5,
+        fluid_gravity: 0.0,
         // --- END GPGPU SETTINGS ---
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
@@ -436,10 +437,8 @@ const App = {
         this.DirectorManager.init(this);
         this.ParticleTransitions.init(this);
         
-        // ** THE FIX IS HERE: Changed initialization order. **
-        // FluidSimulationContainer must be initialized BEFORE ImagePlaneManager.
-        this.FluidSimulationContainer.init(this);
         this.ImagePlaneManager.init(this); 
+        this.FluidSimulationContainer.init(this);
         
         this.ComputeManager.init(this, 
             this.ImagePlaneManager.planeDimensions.x, 
@@ -597,17 +596,20 @@ const App = {
             positions[5] = laserEnd.z;
             this.guideLaser.geometry.attributes.position.needsUpdate = true;
         }
-
         
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
+        // ** THE FIX IS HERE: The update order has been corrected. **
+        // Physics simulations MUST run before the managers that render their results.
+        this.ComputeManager.update(cappedDelta);
+        this.FluidSimulationContainer.update(cappedDelta);
+
         this.DirectorManager.update(cappedDelta);
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
         this.CubeWallManager.update();
         this.ParticleTransitions.update();
-        this.FluidSimulationContainer.update(cappedDelta);
         
         this.CameraManager.update(cappedDelta); 
         

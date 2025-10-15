@@ -468,7 +468,9 @@
                 </div>
 
                 <div id="fluidSimControlsContainer" style="display: none;">
-                    <p style="color: var(--label-color); text-align: center; padding: 20px 0;">Fluid Simulation controls will be here.</p>
+                    <!-- ** THE FIX IS HERE: New controls for the fluid simulation. ** -->
+                    <label>Gravity: <span id="fluid_gravityValue" class="range-value-display"></span></label>
+                    <input type="range" id="fluid_gravity" min="-2.0" max="2.0" step="0.05" value="0.0">
                 </div>
                 
                 <button id="gpgpuResetButton">Reset GPGPU Sliders</button>
@@ -797,7 +799,6 @@
                     <input type="checkbox" id="enableOnScreenDebugger" checked>
                 </div>
 
-                <!-- ** THE FIX IS HERE: New button for isolating the scene. ** -->
                 <button id="isolateFluidSimButton" style="margin-top: 8px;">Isolate Fluid Sim</button>
             </div>
         </div>
