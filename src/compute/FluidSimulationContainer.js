@@ -11,17 +11,19 @@ export const FluidSimulationContainer = {
     gpuCompute: null,
     positionVariable: null,
     velocityVariable: null,
-    PARTICLE_RESOLUTION: 128,
+    // ** THE FIX IS HERE: Resolution is now dynamic, not hardcoded. **
+    PARTICLE_RESOLUTION: 0,
     WORLD_SIZE: 40, 
-    PARTICLE_COUNT: 128 * 128,
+    PARTICLE_COUNT: 0,
     simulationStartTime: -1,
 
-    // ** THE FIX IS HERE: Add a master switch for the physics **
     isPhysicsRunning: false,
     isInitialized: false,
 
     init(appInstance) {
         this.app = appInstance;
+        // ** THE FIX IS HERE: Read the resolution from the shared settings. **
+        this.PARTICLE_RESOLUTION = this.app.vizSettings.particle_resolution;
         this.PARTICLE_COUNT = this.PARTICLE_RESOLUTION * this.PARTICLE_RESOLUTION;
         
         this.isInitialized = true;
@@ -56,7 +58,6 @@ export const FluidSimulationContainer = {
         velocityUniforms['u_delta'] = { value: 0.0 };
         velocityUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
         velocityUniforms['u_fluid_gravity'] = { value: this.app.vizSettings.fluid_gravity };
-        // ** THE FIX IS HERE: Add the new uniform for the on/off switch **
         velocityUniforms['u_isPhysicsRunning'] = { value: this.isPhysicsRunning };
 
 
@@ -129,7 +130,6 @@ export const FluidSimulationContainer = {
         
         const simTime = this.simulationStartTime > 0 ? this.app.currentTime - this.simulationStartTime : 0;
         
-        // ** THE FIX IS HERE: Update the on/off switch uniform every frame **
         this.velocityVariable.material.uniforms['u_isPhysicsRunning'].value = this.isPhysicsRunning;
         this.velocityVariable.material.uniforms['u_fluid_gravity'].value = this.app.vizSettings.fluid_gravity;
         this.velocityVariable.material.uniforms['u_time'].value = simTime;
