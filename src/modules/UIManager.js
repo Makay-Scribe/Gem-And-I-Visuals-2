@@ -701,6 +701,25 @@ export const UIManager = {
             });
         });
         
+        // ** THE FIX IS HERE: Add the event listener for the new button. **
+        const toggleFluidPhysicsButton = document.getElementById('toggleFluidPhysicsButton');
+        if (toggleFluidPhysicsButton) {
+            toggleFluidPhysicsButton.addEventListener('click', () => {
+                const FSIM = this.app.FluidSimulationContainer;
+                FSIM.isPhysicsRunning = !FSIM.isPhysicsRunning;
+
+                if (FSIM.isPhysicsRunning) {
+                    // When starting the physics, reset the simulation's internal clock for the settle-in period.
+                    FSIM.simulationStartTime = this.app.currentTime;
+                    toggleFluidPhysicsButton.textContent = 'Stop Physics';
+                    toggleFluidPhysicsButton.classList.add('button-solid-glow');
+                } else {
+                    toggleFluidPhysicsButton.textContent = 'Start Physics';
+                    toggleFluidPhysicsButton.classList.remove('button-solid-glow');
+                }
+            });
+        }
+        
         const geocubeContainer = document.getElementById('geocubeControlsContainer');
         if (geocubeContainer) {
             geocubeContainer.querySelectorAll('input, select').forEach(control => {
@@ -743,7 +762,6 @@ export const UIManager = {
             });
         });
         
-        // ** THE FIX IS HERE: Added listener for the fluid_gravity slider. **
         const fluidSimContainer = document.getElementById('fluidSimControlsContainer');
         if (fluidSimContainer) {
             fluidSimContainer.querySelectorAll('input[type="range"]').forEach(slider => {

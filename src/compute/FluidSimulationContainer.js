@@ -16,6 +16,8 @@ export const FluidSimulationContainer = {
     PARTICLE_COUNT: 128 * 128,
     simulationStartTime: -1,
 
+    // ** THE FIX IS HERE: Add a master switch for the physics **
+    isPhysicsRunning: false,
     isInitialized: false,
 
     init(appInstance) {
@@ -54,6 +56,8 @@ export const FluidSimulationContainer = {
         velocityUniforms['u_delta'] = { value: 0.0 };
         velocityUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
         velocityUniforms['u_fluid_gravity'] = { value: this.app.vizSettings.fluid_gravity };
+        // ** THE FIX IS HERE: Add the new uniform for the on/off switch **
+        velocityUniforms['u_isPhysicsRunning'] = { value: this.isPhysicsRunning };
 
 
         const positionUniforms = this.positionVariable.material.uniforms;
@@ -125,7 +129,8 @@ export const FluidSimulationContainer = {
         
         const simTime = this.simulationStartTime > 0 ? this.app.currentTime - this.simulationStartTime : 0;
         
-        // ** THE FIX IS HERE: This manager now updates its own uniforms. **
+        // ** THE FIX IS HERE: Update the on/off switch uniform every frame **
+        this.velocityVariable.material.uniforms['u_isPhysicsRunning'].value = this.isPhysicsRunning;
         this.velocityVariable.material.uniforms['u_fluid_gravity'].value = this.app.vizSettings.fluid_gravity;
         this.velocityVariable.material.uniforms['u_time'].value = simTime;
         this.velocityVariable.material.uniforms['u_delta'].value = delta;
