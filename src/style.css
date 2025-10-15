@@ -218,7 +218,7 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
 .accordion-content.open { padding: 4px; }
 
 
-/* --- ** THE FIX IS HERE: New styles for Disabled Accordions/Containers ** --- */
+/* --- Styles for Disabled Accordions/Containers --- */
 .container-disabled {
     pointer-events: none;
     opacity: 0.4;
@@ -624,7 +624,7 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     opacity: 0.7; /* Make it slightly more faded */
 }
 
-/* ** THE FIX IS HERE: New style for the master GPGPU reset button ** */
+/* New style for the master GPGPU reset button */
 #gpgpuResetButton {
     background-color: var(--reset-button-bg);
     font-weight: bold;
@@ -637,7 +637,7 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
     background-color: var(--reset-button-hover-bg);
 }
 
-/* ** THE FIX IS HERE: New style for the Run Transition button ** */
+/* New style for the Run Transition button */
 #runTransitionButton {
     background-color: var(--button-secondary-bg);
 }
