@@ -701,21 +701,29 @@ export const UIManager = {
             });
         });
         
-        // ** THE FIX IS HERE: Add the event listener for the new button. **
+        // ** THE FIX IS HERE: The "Start/Stop" button is now a "Reset to Canvas" button. **
         const toggleFluidPhysicsButton = document.getElementById('toggleFluidPhysicsButton');
         if (toggleFluidPhysicsButton) {
             toggleFluidPhysicsButton.addEventListener('click', () => {
                 const FSIM = this.app.FluidSimulationContainer;
-                FSIM.isPhysicsRunning = !FSIM.isPhysicsRunning;
+                
+                // If the physics are running, this button will now trigger a reset.
+                if (FSIM.physicsState === 'running') {
+                    FSIM.resetToCanvas();
+                } 
+                // If they are stopped or resetting, it will start them.
+                else {
+                    FSIM.startPhysics();
+                }
 
-                if (FSIM.isPhysicsRunning) {
-                    // When starting the physics, reset the simulation's internal clock for the settle-in period.
-                    FSIM.simulationStartTime = this.app.currentTime;
-                    toggleFluidPhysicsButton.textContent = 'Stop Physics';
-                    toggleFluidPhysicsButton.classList.add('button-solid-glow');
+                // Update UI based on the new state
+                const button = document.getElementById('toggleFluidPhysicsButton');
+                if (FSIM.physicsState === 'running') {
+                    button.textContent = 'Reset to Canvas';
+                    button.classList.add('button-solid-glow');
                 } else {
-                    toggleFluidPhysicsButton.textContent = 'Start Physics';
-                    toggleFluidPhysicsButton.classList.remove('button-solid-glow');
+                    button.textContent = 'Start Physics';
+                    button.classList.remove('button-solid-glow');
                 }
             });
         }
