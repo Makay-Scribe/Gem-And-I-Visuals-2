@@ -10,12 +10,9 @@ varying vec3 vWorldPosition;
 varying vec3 vNormal;
 varying vec2 vGpgpuUV;
 
-// ** THE FIX IS HERE: A "safe" normalize function **
-// This function checks if a vector is zero before normalizing to prevent NaN errors.
+// A "safe" normalize function to prevent NaN errors.
 vec3 safeNormalize(vec3 v) {
     if (length(v) == 0.0) {
-        // If the vector is zero, return a default "up" direction.
-        // This prevents the renderer from crashing and is a safe fallback.
         return vec3(0.0, 0.0, 1.0);
     }
     return normalize(v);
@@ -27,13 +24,11 @@ void main() {
     vGpgpuUV = gpgpu_uv;
 
     vec3 pos_center = texture(u_positionTexture, gpgpu_uv).xyz;
-    // UNUSED: vec3 velocity = texture(u_velocityTexture, gpgpu_uv).xyz;
-
+    
     vec2 texelSize = 1.0 / vec2(textureSize(u_positionTexture, 0));
     vec3 pos_right = texture(u_positionTexture, gpgpu_uv + vec2(texelSize.x, 0.0)).xyz;
     vec3 pos_up = texture(u_positionTexture, gpgpu_uv - vec2(0.0, texelSize.y)).xyz;
     
-    // ** THE FIX IS HERE: Use the safeNormalize function **
     vNormal = safeNormalize(cross(pos_right - pos_center, pos_up - pos_center));
     
     vWorldPosition = pos_center;
@@ -41,7 +36,10 @@ void main() {
     
     gl_Position = projectionMatrix * mvPosition;
     
+    // ** THE FIX IS HERE: Implement perspective-correct particle sizing. **
+    // This formula is now identical to the one used by the main particle engine.
+    // It calculates the size the point *should* be in pixels on the screen,
+    // taking into account its distance from the camera (`-mvPosition.z`).
     float targetSize = mix(particle_base_size, particle_min_size, u_particle_size_mix);
-    
     gl_PointSize = targetSize * (300.0 / -mvPosition.z) * u_pixelRatio;
 }

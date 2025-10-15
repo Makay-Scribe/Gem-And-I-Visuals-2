@@ -84,8 +84,18 @@ float snoise(vec3 v) {
 }
 
 void main() {
-    // The particle will be a solid square with full alpha.
-    float alpha = 1.0;
+    // ** THE FIX IS HERE: Make the point circular to fix alignment. **
+    // `gl_PointCoord` is a 2D vector that goes from (0,0) at the bottom-left of the point
+    // to (1,1) at the top-right. The center is at (0.5, 0.5).
+    float dist = distance(gl_PointCoord, vec2(0.5));
+
+    // If the pixel is more than half the point's width from the center, discard it.
+    if (dist > 0.5) {
+        discard;
+    }
+    // Create a smooth falloff to the edge for anti-aliasing.
+    float alpha = 1.0 - smoothstep(0.45, 0.5, dist);
+
 
     // --- Step 2: Determine Albedo (base color) ---
     vec3 imageWrapColor = texture(u_map, vUv).rgb;
@@ -120,22 +130,13 @@ void main() {
     // --- Step 4: Advanced Twinkle Effect ---
     vec3 final_color = pbr_color;
     if (u_particle_twinkleIntensity > 0.0) {
-        // ** THE FIX IS HERE: Use Simplex noise instead of random noise **
-        // Sample a 3D noise field that moves over time. The scale (10.0) and speed (0.3) can be tweaked.
         float noiseVal = snoise(vec3(vUv * 10.0, u_time * 0.3));
-        // Remap the noise from [-1, 1] to [0, 1]
         noiseVal = (noiseVal + 1.0) * 0.5;
 
-        // ** THE FIX IS HERE: Adjust the activation logic **
-        // Only the very brightest peaks of the noise field will activate the twinkle.
-        // The twinkleIntensity slider makes the threshold lower, making twinkling more likely.
         float activation_threshold = 0.95;
         float adjusted_threshold = activation_threshold - (u_particle_twinkleIntensity * 0.2);
 
         if (noiseVal > adjusted_threshold) {
-            // This particle is "active" for this frame.
-
-            // The original starburst effect is great, let's keep it.
             vec2 coord = (gl_PointCoord - 0.5) * 2.0; 
             float starburst = 0.0;
             starburst = max(starburst, 1.0 - abs(coord.x)); 
@@ -144,16 +145,13 @@ void main() {
             starburst = max(starburst, 1.0 - abs(coord.x + coord.y)); 
             starburst = pow(starburst, 15.0); 
             
-            float dist = distance(gl_PointCoord, vec2(0.5));
             float core_flash = 1.0 - dist * 2.0; 
             core_flash = pow(core_flash, 3.0);
             
-            // ** THE FIX IS HERE: Modulate flash strength by how much it passed the threshold **
-            // This makes the twinkle effect smoother, not just on/off.
             float flash_strength = smoothstep(adjusted_threshold, 1.0, noiseVal);
             
             float combined_flash = (core_flash * 2.0 + starburst) * flash_strength;
-            final_color += vec3(combined_flash * 50.0); // Make it very bright for bloom
+            final_color += vec3(combined_flash * 50.0);
         }
     }
 

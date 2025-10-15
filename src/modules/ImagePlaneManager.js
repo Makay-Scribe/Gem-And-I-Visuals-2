@@ -400,9 +400,7 @@ export const ImagePlaneManager = {
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
         
-        const FSIM = this.app.FluidSimulationContainer;
-        const fluidCellSize = this.planeDimensions.x / (FSIM.PARTICLE_RESOLUTION - 1);
-        const fluidBaseSize = fluidCellSize * Math.sqrt(2);
+        this.calculatedParticleBaseSize = this.planeDimensions.x / (this.app.FluidSimulationContainer.PARTICLE_RESOLUTION - 1) * Math.sqrt(2);
 
         this.fluidMaterial = new this.app.THREE.ShaderMaterial({
             defines: { 'USE_ENVMAP': '' },
@@ -412,8 +410,8 @@ export const ImagePlaneManager = {
                 u_particleModelUVTexture: { value: null }, 
                 u_particleModelTexture: { value: null }, 
                 u_particleColorMix: { value: 0.0 }, 
-                particle_base_size: { value: fluidBaseSize }, 
-                particle_min_size: { value: fluidBaseSize }, 
+                particle_base_size: { value: 1.0 }, 
+                particle_min_size: { value: 0.0 }, 
                 u_particle_size_mix: { value: 0.0 }, 
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
@@ -584,8 +582,13 @@ export const ImagePlaneManager = {
                 const U = this.fluidMaterial.uniforms;
                 U.u_positionTexture.value = posTarget.texture;
                 
-                const fluidCellSize = this.planeDimensions.x / (FSIM.PARTICLE_RESOLUTION - 1);
-                U.particle_base_size.value = fluidCellSize * Math.sqrt(2);
+                // ** THE FIX IS HERE: The fluid particle size now uses the same logic as the main particle engine. **
+                const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
+                const fineSize = S.particle_min_size; // Use the shared min_size for consistency
+                U.particle_base_size.value = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
+                U.particle_min_size.value = U.particle_base_size.value;
+                U.u_particle_size_mix.value = 0.0;
+
 
                 U.u_pixelRatio.value = window.devicePixelRatio;
                 U.u_metalness.value = S.metalness;
@@ -596,7 +599,6 @@ export const ImagePlaneManager = {
                 U.u_lightColor.value.set(S.lightColor);
                 U.u_ambientLightColor.value.set(S.ambientLightColor);
                 U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-                // ** THE FIX IS HERE: Removed the conflicting u_time update. **
             }
         } else { 
             if (!this.landscapeMaterial || !CM.gpuCompute) return;
