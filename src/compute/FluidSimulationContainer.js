@@ -80,12 +80,18 @@ export const FluidSimulationContainer = {
         velocityUniforms['u_time'] = { value: 0.0 };
         velocityUniforms['u_delta'] = { value: 0.0 };
         velocityUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
-        velocityUniforms['u_fluid_gravity'] = { value: this.app.vizSettings.fluid_gravity };
         
-        // ** THE FIX IS HERE: Add new uniforms for state management **
-        velocityUniforms['u_initialPosition'] = { value: null }; // Will be populated later
+        // ** THE FIX IS HERE: Uniforms for state management and director control **
         velocityUniforms['u_physicsState'] = { value: 0 }; // 0:stopped, 1:running, 2:resetting
         velocityUniforms['u_resetProgress'] = { value: 0.0 };
+        velocityUniforms['u_gravity'] = { value: new THREE.Vector3(0, 0, 0) };
+        velocityUniforms['u_pressureStrength'] = { value: 0.0 };
+        velocityUniforms['u_attractionStrength'] = { value: 0.0 };
+        velocityUniforms['u_targetState'] = { value: 0 }; // 0: Canvas, 1: 3D Model
+        
+        // Textures for target positions
+        velocityUniforms['u_initialPosition'] = { value: null }; // Will be populated after init
+        velocityUniforms['u_modelPosition'] = { value: this.app.ComputeManager.particleModelPositionTexture };
 
 
         const positionUniforms = this.positionVariable.material.uniforms;
@@ -168,7 +174,9 @@ export const FluidSimulationContainer = {
         const simTime = this.simulationStartTime > 0 ? this.app.currentTime - this.simulationStartTime : 0;
         const uniforms = this.velocityVariable.material.uniforms;
 
-        uniforms.u_fluid_gravity.value = this.app.vizSettings.fluid_gravity;
+        // Gravity is now controlled by the director, so we remove the direct update from here.
+        // uniforms.u_fluid_gravity.value = this.app.vizSettings.fluid_gravity; 
+        
         uniforms.u_time.value = simTime;
         uniforms.u_delta.value = delta;
         this.positionVariable.material.uniforms['u_delta'].value = delta;

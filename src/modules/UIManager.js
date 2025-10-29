@@ -701,7 +701,6 @@ export const UIManager = {
             });
         });
         
-        // ** THE FIX IS HERE: Connect all fluid sim buttons to the new Director. **
         const startFluidPhysicsButton = document.getElementById('startFluidPhysicsButton');
         if (startFluidPhysicsButton) {
             startFluidPhysicsButton.addEventListener('click', () => {
@@ -719,7 +718,9 @@ export const UIManager = {
         const fluidResetToCanvasButton = document.getElementById('fluidResetToCanvas');
         if(fluidResetToCanvasButton) {
             fluidResetToCanvasButton.addEventListener('click', () => {
-                this.app.FluidDirector.stop();
+                // ** THE FIX IS HERE: Call the correct method to trigger the reset animation **
+                this.app.FluidDirector.stop(); // Stop any active script first
+                this.app.FluidSimulationContainer.resetToCanvas(); // Then start the reset animation
                 this.logSuccess("Resetting fluid to canvas.");
             });
         }

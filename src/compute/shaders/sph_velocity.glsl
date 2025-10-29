@@ -75,7 +75,9 @@ void main() {
                     float r2 = dot(r, r);
                     if (r2 < SMOOTHING_RADIUS * SMOOTHING_RADIUS && r2 > 0.0) {
                         float r_len = sqrt(r2);
-                        pressureForce += PARTICLE_MASS * STIFFNESS * (density - REST_DENSITY) * SPIKY_GRAD * pow(SMOOTHING_RADIUS - r_len, 2.0) / r_len * r;
+                        // Pressure force (pushes particles apart)
+                        pressureForce += -PARTICLE_MASS * STIFFNESS * (density - REST_DENSITY) * SPIKY_GRAD * pow(SMOOTHING_RADIUS - r_len, 2.0) / r_len * r;
+                        // Viscosity force (dampens motion, creates "gooeyness")
                         vec3 neighborVel = texture(textureVelocity, neighborUV).xyz;
                         viscosityForce += VISCOSITY * PARTICLE_MASS * (neighborVel - velocity) * VISC_LAP * (SMOOTHING_RADIUS - r_len);
                     }
@@ -92,8 +94,9 @@ void main() {
 
         // --- 3. Combine All Forces ---
         vec3 totalForce = (pressureForce * u_pressureStrength) + viscosityForce + u_gravity + attractionForce;
-        vec3 acceleration = totalForce; // Assuming mass is 1
+        vec3 acceleration = totalForce / PARTICLE_MASS; // F = ma -> a = F/m
 
+        // Clamp acceleration to prevent explosions
         float maxAccel = 50.0;
         if (length(acceleration) > maxAccel) {
             acceleration = normalize(acceleration) * maxAccel;
@@ -107,8 +110,10 @@ void main() {
 
 
     // --- Shared Logic ---
+    // Apply damping to gradually slow particles down
     velocity *= 0.98;
 
+    // Boundary conditions (simple box collision)
     vec3 halfBounds = vec3(u_planeDimensions.x / 2.0, u_planeDimensions.y / 2.0, u_planeDimensions.x / 2.0);
     if (position.x < -halfBounds.x) { velocity.x *= WALL_DAMPING; }
     if (position.x > halfBounds.x)  { velocity.x *= WALL_DAMPING; }

@@ -17,6 +17,7 @@ import { DirectorManager } from './modules/DirectorManager.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ParticleTransitions } from './modules/ParticleTransitions.js';
 import { FluidSimulationContainer } from './compute/FluidSimulationContainer.js';
+import { FluidDirector } from './compute/FluidDirector.js';
 
 
 const App = {
@@ -77,6 +78,7 @@ const App = {
     DirectorManager: DirectorManager,
     ParticleTransitions: ParticleTransitions,
     FluidSimulationContainer: FluidSimulationContainer,
+    FluidDirector: FluidDirector,
 
     defaultVisualizerSettings: {
         activeControl: 'landscape',
@@ -436,6 +438,7 @@ const App = {
         this.CubeWallManager.init(this);
         this.DirectorManager.init(this);
         this.ParticleTransitions.init(this);
+        this.FluidDirector.init(this);
         
         this.ImagePlaneManager.init(this); 
         this.FluidSimulationContainer.init(this);
@@ -604,6 +607,7 @@ const App = {
         // Physics simulations MUST run before the managers that render their results.
         this.ComputeManager.update(cappedDelta);
         this.FluidSimulationContainer.update(cappedDelta);
+        this.FluidDirector.update();
 
         this.DirectorManager.update(cappedDelta);
         this.ImagePlaneManager.update(cappedDelta);
