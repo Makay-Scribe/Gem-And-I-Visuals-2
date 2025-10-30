@@ -56,6 +56,12 @@ vec2 safeNormalize(vec2 v) {
     return (l > EPSILON_SHADER) ? v / l : vec2(0.0); 
 }
 
+// ** THE FIX IS HERE: Add an overloaded version of safeNormalize for vec3. **
+vec3 safeNormalize(vec3 v) { 
+    float l = length(v); 
+    return (l > EPSILON_SHADER) ? v / l : vec3(0.0); 
+}
+
 mat3 rotationMatrix3(vec3 axis, float angle) {
     axis = normalize(axis);
     float s = sin(angle);

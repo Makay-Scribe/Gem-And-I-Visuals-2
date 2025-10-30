@@ -14,8 +14,6 @@ export const UIManager = {
     particleModelTexture: null,
     gltfLoader: new GLTFLoader(),
     
-    // NOTE: All transition animation logic has been moved to ParticleTransitions.js
-    
     gpgpuExclusiveGroups: [
         ['gpgpu_enableFold', 'gpgpu_enableCylinder'],
         ['gpgpu_enableCloth']
@@ -55,7 +53,6 @@ export const UIManager = {
 
         this.updateMasterControls();
         
-        // Load default preset values into the sliders on startup
         this.app.ParticleTransitions.setActivePreset('default');
     },
 
@@ -387,7 +384,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'fluidAttraction'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity', 'fluid_gravity'].includes(id)) {
                 precision = 2;
@@ -621,6 +618,10 @@ export const UIManager = {
         const newSystemMode = (newUiMode === 'deformation') ? 'faceted' : newUiMode;
 
         if (S.gpgpuGeometryMode === newSystemMode) return;
+        
+        if (S.gpgpuGeometryMode === 'fluidsim') {
+            this.app.FluidSimulationContainer.setActive(false);
+        }
 
         S.gpgpuGeometryMode = newSystemMode;
 
@@ -630,6 +631,21 @@ export const UIManager = {
         this.app.ImagePlaneManager.createDefaultLandscape();
 
         this._updateGpgpuModeVisibility();
+    },
+
+    // ** THE FIX IS HERE: Create a new function to enable/disable fluid controls. **
+    setFluidControlsDisabled(isDisabled) {
+        const container = document.getElementById('fluidSimControlsContainer');
+        if (!container) return;
+        
+        // Disable/enable all buttons and sliders within the container
+        container.querySelectorAll('button, input').forEach(el => {
+            el.disabled = isDisabled;
+        });
+
+        // Add a visual cue
+        container.style.opacity = isDisabled ? 0.5 : 1.0;
+        container.style.pointerEvents = isDisabled ? 'none' : 'auto';
     },
 
     setupEventListeners() {
@@ -701,27 +717,17 @@ export const UIManager = {
             });
         });
         
-        const startFluidPhysicsButton = document.getElementById('startFluidPhysicsButton');
-        if (startFluidPhysicsButton) {
-            startFluidPhysicsButton.addEventListener('click', () => {
-                this.app.FluidSimulationContainer.startPhysics();
-                this.logSuccess("Fluid physics started.");
-            });
-        }
         const fluidMeltAndReformButton = document.getElementById('fluidMeltAndReform');
         if(fluidMeltAndReformButton) {
             fluidMeltAndReformButton.addEventListener('click', () => {
                 this.app.FluidDirector.run('meltAndReform');
-                this.logSuccess("Running 'Melt & Reform' script...");
             });
         }
+        
         const fluidResetToCanvasButton = document.getElementById('fluidResetToCanvas');
         if(fluidResetToCanvasButton) {
             fluidResetToCanvasButton.addEventListener('click', () => {
-                // ** THE FIX IS HERE: Call the correct method to trigger the reset animation **
-                this.app.FluidDirector.stop(); // Stop any active script first
-                this.app.FluidSimulationContainer.resetToCanvas(); // Then start the reset animation
-                this.logSuccess("Resetting fluid to canvas.");
+                this.app.FluidDirector.run('meltAndReform');
             });
         }
         
@@ -771,14 +777,64 @@ export const UIManager = {
         const fluidSimContainer = document.getElementById('fluidSimControlsContainer');
         if (fluidSimContainer) {
             fluidSimContainer.querySelectorAll('input[type="range"]').forEach(slider => {
-                slider.addEventListener('input', (e) => {
-                    const S = this.app.vizSettings;
-                    const id = e.target.id;
-                    S[id] = parseFloat(e.target.value);
-                    this.updateRangeDisplay(id, S[id]);
+                // ** THE FIX IS HERE: The generic listener is removed to avoid conflicts. **
+                // We will add specific listeners for the manual controls.
+            });
+        }
+
+        const fluidAttractionSlider = document.getElementById('fluidAttraction');
+        if (fluidAttractionSlider) {
+            fluidAttractionSlider.addEventListener('input', (e) => {
+                const FSIM = this.app.FluidSimulationContainer;
+                if (!FSIM.gpuCompute) return;
+                
+                // When user touches the slider, interrupt any running animation.
+                this.app.FluidDirector.interruptAndStop();
+                
+                // Ensure physics is running.
+                FSIM.startPhysics();
+
+                const uniforms = FSIM.velocityVariable.material.uniforms;
+                uniforms.u_attractionStrength.value = parseFloat(e.target.value);
+                this.updateRangeDisplay('fluidAttraction', e.target.value);
+            });
+        }
+
+        const fluidTargetToggle = document.getElementById('fluidTargetToggle');
+        if (fluidTargetToggle) {
+            fluidTargetToggle.querySelectorAll('button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const FSIM = this.app.FluidSimulationContainer;
+                    if (!FSIM.gpuCompute) return;
+
+                    this.app.FluidDirector.interruptAndStop();
+                    FSIM.startPhysics();
+
+                    fluidTargetToggle.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+
+                    const uniforms = FSIM.velocityVariable.material.uniforms;
+                    uniforms.u_targetState.value = parseInt(e.target.dataset.target);
                 });
             });
         }
+        
+        // ** THE FIX IS HERE: Add a specific listener for the manual Gravity slider. **
+        const fluidGravitySlider = document.getElementById('fluid_gravity');
+        if (fluidGravitySlider) {
+            fluidGravitySlider.addEventListener('input', (e) => {
+                const FSIM = this.app.FluidSimulationContainer;
+                if (!FSIM.gpuCompute) return;
+                
+                this.app.FluidDirector.interruptAndStop();
+                FSIM.startPhysics();
+
+                const uniforms = FSIM.velocityVariable.material.uniforms;
+                uniforms.u_gravity.value.y = parseFloat(e.target.value);
+                this.updateRangeDisplay('fluid_gravity', e.target.value);
+            });
+        }
+
 
         document.querySelectorAll('input[type="range"], select').forEach(control => {
             if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleControlsContainer') || control.closest('#geocubeControlsContainer') || control.closest('#fluidSimControlsContainer')) return;

@@ -604,10 +604,11 @@ const App = {
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
         // ** THE FIX IS HERE: The update order has been corrected. **
-        // Physics simulations MUST run before the managers that render their results.
-        this.ComputeManager.update(cappedDelta);
-        this.FluidSimulationContainer.update(cappedDelta);
+        // The Director must run FIRST to set the rules for the frame.
+        // The Simulation Containers then run SECOND to execute those rules.
         this.FluidDirector.update();
+        this.FluidSimulationContainer.update(cappedDelta);
+        this.ComputeManager.update(cappedDelta);
 
         this.DirectorManager.update(cappedDelta);
         this.ImagePlaneManager.update(cappedDelta);

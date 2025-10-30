@@ -468,13 +468,23 @@
                 </div>
 
                 <div id="fluidSimControlsContainer" style="display: none;">
-                    <!-- ** THE FIX IS HERE: Add a container for preset buttons and rename the toggle. ** -->
+                    <p class="sub-group-title">MANUAL CONTROL</p>
+                    <div class="segmented-control" id="fluidTargetToggle">
+                        <button class="segmented-control-button active" data-target="0">Canvas</button>
+                        <button class="segmented-control-button" data-target="1">3D Model</button>
+                    </div>
+                    <label>Attraction (Morph): <span id="fluidAttractionValue" class="range-value-display"></span></label>
+                    <input type="range" id="fluidAttraction" min="0.0" max="3.0" step="0.05" value="0.0">
+                    
                     <p class="sub-group-title">FLUID TRANSITIONS</p>
-                    <div class="button-row" id="fluid-preset-buttons">
-                        <button id="fluidMeltAndReform">Melt & Reform</button>
+                    <div class="button-row" id="fluid-preset-buttons-row1" style="margin-bottom: 3px;">
+                        <button id="fluidMeltAndReform">Melt</button>
+                        <button id="fluidExplosion">Explosion</button>
+                        <button id="fluidVortex">Vortex</button>
+                    </div>
+                    <div class="button-row" id="fluid-preset-buttons-row2">
                         <button id="fluidResetToCanvas">Reset to Canvas</button>
                     </div>
-                    <button id="startFluidPhysicsButton">Start Physics</button>
                     <label>Gravity: <span id="fluid_gravityValue" class="range-value-display"></span></label>
                     <input type="range" id="fluid_gravity" min="-2.0" max="2.0" step="0.05" value="0.0">
                 </div>

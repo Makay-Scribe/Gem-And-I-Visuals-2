@@ -1,19 +1,26 @@
-// Smoothed Particle Hydrodynamics (SPH) Velocity Shader - V3 (Director-driven)
-
-const float PI = 3.14159265359;
+// Smoothed Particle Hydrodynamics (SPH) Velocity Shader - V5.1 (Corrected Boundaries)
+#include <gpgpu_common>
 
 uniform float u_time;
 uniform float u_delta;
 
 // --- Director Uniforms ---
-uniform int u_physicsState;         // 0:stopped, 1:running, 2:resetting
-uniform float u_resetProgress;      // 0.0 to 1.0 for the reset animation.
+uniform int u_physicsState;         // 0:stopped, 1:running
 uniform vec3 u_gravity;
 uniform float u_pressureStrength;
 uniform float u_attractionStrength;
 uniform int u_targetState;          // 0: Canvas, 1: 3D Model
 uniform sampler2D u_initialPosition; 
 uniform sampler2D u_modelPosition;
+
+// --- Artistic Uniforms ---
+uniform float u_flowStrength;
+uniform float u_flowScale;
+uniform float u_flowSpeed;
+uniform vec3 u_explosionCenter;
+uniform float u_explosionStrength;
+uniform vec2 u_vortexCenter;
+uniform float u_vortexStrength;
 
 
 // --- SPH Constants ---
@@ -24,7 +31,8 @@ const float REST_DENSITY = 1.0;     // rho_0
 const float VISCOSITY = 0.2;       // mu
 const float WALL_DAMPING = -0.5;
 
-uniform vec2 u_planeDimensions;
+// ** THE FIX IS HERE: Use the new world size uniform for boundaries. **
+uniform float u_worldSize;
 
 const float POLY6 = 315.0 / (64.0 * PI * pow(SMOOTHING_RADIUS, 9.0));
 const float SPIKY_GRAD = -45.0 / (PI * pow(SMOOTHING_RADIUS, 6.0));
@@ -51,9 +59,9 @@ void main() {
         
         if (u_pressureStrength > 0.0) {
             float density = 0.0;
-            // Density calculation (only run if needed)
-            for (int y = -4; y <= 4; y++) {
-                for (int x = -4; x <= 4; x++) {
+            const int neighborhood = 20;
+            for (int y = -neighborhood; y <= neighborhood; y++) {
+                for (int x = -neighborhood; x <= neighborhood; x++) {
                     vec2 neighborUV = uv + vec2(float(x), float(y)) / resolution.xy;
                     if (neighborUV.x < 0.0 || neighborUV.x > 1.0 || neighborUV.y < 0.0 || neighborUV.y > 1.0) continue;
                     vec3 neighborPos = texture(texturePosition, neighborUV).xyz;
@@ -65,9 +73,8 @@ void main() {
                 }
             }
 
-            // Force calculation
-            for (int y = -4; y <= 4; y++) {
-                for (int x = -4; x <= 4; x++) {
+            for (int y = -neighborhood; y <= neighborhood; y++) {
+                for (int x = -neighborhood; x <= neighborhood; x++) {
                     vec2 neighborUV = uv + vec2(float(x), float(y)) / resolution.xy;
                     if (neighborUV.x < 0.0 || neighborUV.x > 1.0 || neighborUV.y < 0.0 || neighborUV.y > 1.0) continue;
                     vec3 neighborPos = texture(texturePosition, neighborUV).xyz;
@@ -75,9 +82,7 @@ void main() {
                     float r2 = dot(r, r);
                     if (r2 < SMOOTHING_RADIUS * SMOOTHING_RADIUS && r2 > 0.0) {
                         float r_len = sqrt(r2);
-                        // Pressure force (pushes particles apart)
                         pressureForce += -PARTICLE_MASS * STIFFNESS * (density - REST_DENSITY) * SPIKY_GRAD * pow(SMOOTHING_RADIUS - r_len, 2.0) / r_len * r;
-                        // Viscosity force (dampens motion, creates "gooeyness")
                         vec3 neighborVel = texture(textureVelocity, neighborUV).xyz;
                         viscosityForce += VISCOSITY * PARTICLE_MASS * (neighborVel - velocity) * VISC_LAP * (SMOOTHING_RADIUS - r_len);
                     }
@@ -92,35 +97,60 @@ void main() {
             attractionForce = (targetPos - position) * u_attractionStrength;
         }
 
-        // --- 3. Combine All Forces ---
-        vec3 totalForce = (pressureForce * u_pressureStrength) + viscosityForce + u_gravity + attractionForce;
-        vec3 acceleration = totalForce / PARTICLE_MASS; // F = ma -> a = F/m
+        // --- 3. Calculate Artistic Forces ---
+        vec3 flowForce = vec3(0.0);
+        if (u_flowStrength > 0.0) {
+            vec3 noise_coord = position * u_flowScale;
+            noise_coord.z += u_time * u_flowSpeed;
+            flowForce = vec3( snoise(noise_coord), snoise(noise_coord + 10.0), snoise(noise_coord + 20.0)) * u_flowStrength;
+        }
 
-        // Clamp acceleration to prevent explosions
+        vec3 explosionForce = vec3(0.0);
+        if (u_explosionStrength != 0.0) {
+            vec3 fromCenter = position - u_explosionCenter;
+            float dist = length(fromCenter);
+            explosionForce = safeNormalize(fromCenter) * u_explosionStrength / (1.0 + dist * dist);
+        }
+
+        vec3 vortexForce = vec3(0.0);
+        if (u_vortexStrength > 0.0) {
+            vec2 toCenter = u_vortexCenter - position.xy;
+            float dist = length(toCenter);
+            vec2 swirlDir = safeNormalize(vec2(-toCenter.y, toCenter.x));
+            vortexForce = vec3(swirlDir, 0.0) * u_vortexStrength / (1.0 + dist * 0.1);
+        }
+
+        // --- 4. Combine All Forces ---
+        vec3 totalForce = (pressureForce * u_pressureStrength) 
+                        + viscosityForce 
+                        + u_gravity 
+                        + attractionForce 
+                        + flowForce
+                        + explosionForce
+                        + vortexForce;
+
+        vec3 acceleration = totalForce / PARTICLE_MASS;
+
         float maxAccel = 50.0;
         if (length(acceleration) > maxAccel) {
             acceleration = normalize(acceleration) * maxAccel;
         }
         velocity += acceleration * u_delta;
-
-    } else if (u_physicsState == 2) { // RESETTING
-        vec3 attractionForce = (initialPos - position) * 2.0; 
-        velocity = mix(velocity, attractionForce, u_resetProgress);
     }
 
-
     // --- Shared Logic ---
-    // Apply damping to gradually slow particles down
     velocity *= 0.98;
 
-    // Boundary conditions (simple box collision)
-    vec3 halfBounds = vec3(u_planeDimensions.x / 2.0, u_planeDimensions.y / 2.0, u_planeDimensions.x / 2.0);
-    if (position.x < -halfBounds.x) { velocity.x *= WALL_DAMPING; }
-    if (position.x > halfBounds.x)  { velocity.x *= WALL_DAMPING; }
-    if (position.y < -halfBounds.y) { velocity.y *= WALL_DAMPING; }
-    if (position.y > halfBounds.y)  { velocity.y *= WALL_DAMPING; }
-    if (position.z < -halfBounds.z) { velocity.z *= WALL_DAMPING; }
-    if (position.z > halfBounds.z)  { velocity.z *= WALL_DAMPING; }
+    // ** THE FIX IS HERE: Use the new world size to define a perfect cube for collision. **
+    float halfWorld = u_worldSize / 2.0;
+    vec3 halfBounds = vec3(halfWorld);
+
+    if (position.x < -halfBounds.x) { velocity.x *= WALL_DAMPING; position.x = -halfBounds.x; }
+    if (position.x > halfBounds.x)  { velocity.x *= WALL_DAMPING; position.x = halfBounds.x; }
+    if (position.y < -halfBounds.y) { velocity.y *= WALL_DAMPING; position.y = -halfBounds.y; }
+    if (position.y > halfBounds.y)  { velocity.y *= WALL_DAMPING; position.y = halfBounds.y; }
+    if (position.z < -halfBounds.z) { velocity.z *= WALL_DAMPING; position.z = -halfBounds.z; }
+    if (position.z > halfBounds.z)  { velocity.z *= WALL_DAMPING; position.z = halfBounds.z; }
 
     gl_FragColor = vec4(velocity, 1.0);
 }

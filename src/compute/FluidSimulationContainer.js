@@ -12,14 +12,13 @@ export const FluidSimulationContainer = {
     positionVariable: null,
     velocityVariable: null,
     PARTICLE_RESOLUTION: 0,
-    WORLD_SIZE: 40, 
+    WORLD_SIZE: 60, 
     PARTICLE_COUNT: 0,
     simulationStartTime: -1,
 
-    // ** THE FIX IS HERE: State is now a string for more descriptive control **
-    physicsState: 'stopped', // 'stopped', 'running', 'resetting'
-    resetStartTime: -1,
-    RESET_DURATION: 6.0, // 6 seconds for a smooth reset animation
+    physicsState: 'stopped', // 'stopped', 'running'
+    // ** THE FIX IS HERE: This flag is no longer needed to control the simulation loop. **
+    // isUnderManualControl: false, 
 
     isInitialized: false,
 
@@ -36,22 +35,20 @@ export const FluidSimulationContainer = {
     startPhysics() {
         if (this.physicsState === 'running') return;
         this.physicsState = 'running';
-        // Reset the simulation clock every time we start from a full stop
         if (this.simulationStartTime < 0) {
             this.simulationStartTime = this.app.currentTime;
         }
     },
 
     stopPhysics() {
+        // ** THE FIX IS HERE: Add a check to see if the user has touched the attraction slider. **
+        // If the attraction is non-zero, we keep the physics running so the particles can hold their shape.
+        if (this.gpuCompute && this.velocityVariable.material.uniforms.u_attractionStrength.value > 0) {
+            console.log("FluidDirector requested stop, but manual attraction is active. Keeping physics alive.");
+            return;
+        }
         this.physicsState = 'stopped';
     },
-
-    resetToCanvas() {
-        if (this.physicsState === 'resetting') return;
-        this.physicsState = 'resetting';
-        this.resetStartTime = this.app.currentTime;
-    },
-
 
     _setupSimulation() {
         if (this.gpuCompute) return;
@@ -79,20 +76,25 @@ export const FluidSimulationContainer = {
         const velocityUniforms = this.velocityVariable.material.uniforms;
         velocityUniforms['u_time'] = { value: 0.0 };
         velocityUniforms['u_delta'] = { value: 0.0 };
-        velocityUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
+        velocityUniforms['u_worldSize'] = { value: this.WORLD_SIZE };
         
-        // ** THE FIX IS HERE: Uniforms for state management and director control **
-        velocityUniforms['u_physicsState'] = { value: 0 }; // 0:stopped, 1:running, 2:resetting
-        velocityUniforms['u_resetProgress'] = { value: 0.0 };
+        velocityUniforms['u_physicsState'] = { value: 0 }; // 0:stopped, 1:running
         velocityUniforms['u_gravity'] = { value: new THREE.Vector3(0, 0, 0) };
         velocityUniforms['u_pressureStrength'] = { value: 0.0 };
         velocityUniforms['u_attractionStrength'] = { value: 0.0 };
         velocityUniforms['u_targetState'] = { value: 0 }; // 0: Canvas, 1: 3D Model
         
-        // Textures for target positions
-        velocityUniforms['u_initialPosition'] = { value: null }; // Will be populated after init
+        velocityUniforms['u_flowStrength'] = { value: 0.0 };
+        velocityUniforms['u_flowScale'] = { value: 0.1 };
+        velocityUniforms['u_flowSpeed'] = { value: 0.2 };
+        
+        velocityUniforms['u_explosionCenter'] = { value: new THREE.Vector3(0, 0, 0) };
+        velocityUniforms['u_explosionStrength'] = { value: 0.0 };
+        velocityUniforms['u_vortexCenter'] = { value: new THREE.Vector2(0, 0) };
+        velocityUniforms['u_vortexStrength'] = { value: 0.0 };
+        
+        velocityUniforms['u_initialPosition'] = { value: null };
         velocityUniforms['u_modelPosition'] = { value: this.app.ComputeManager.particleModelPositionTexture };
-
 
         const positionUniforms = this.positionVariable.material.uniforms;
         positionUniforms['u_delta'] = { value: 0.0 };
@@ -102,7 +104,6 @@ export const FluidSimulationContainer = {
             console.error("FluidSimulation GPGPU Init Error:", error);
             this.app.UIManager.logError("Fluid GPGPU failed to init.");
         } else {
-            // Populate the initial position texture uniform *after* init
             this.velocityVariable.material.uniforms.u_initialPosition.value = this.gpuCompute.createTexture();
             this.fillInitialParticleData(this.velocityVariable.material.uniforms.u_initialPosition.value.image.data, []);
             console.log("Fluid GPGPU simulation created successfully.");
@@ -169,38 +170,20 @@ export const FluidSimulationContainer = {
     },
 
     update(delta) {
-        if (!this.gpuCompute) return;
+        // ** THE FIX IS HERE: The simulation now only stops if the Director explicitly stops it. **
+        if (!this.gpuCompute || this.physicsState === 'stopped') {
+            return;
+        }
         
         const simTime = this.simulationStartTime > 0 ? this.app.currentTime - this.simulationStartTime : 0;
         const uniforms = this.velocityVariable.material.uniforms;
-
-        // Gravity is now controlled by the director, so we remove the direct update from here.
-        // uniforms.u_fluid_gravity.value = this.app.vizSettings.fluid_gravity; 
         
         uniforms.u_time.value = simTime;
         uniforms.u_delta.value = delta;
         this.positionVariable.material.uniforms['u_delta'].value = delta;
 
-        // ** THE FIX IS HERE: Handle the new state logic **
-        switch(this.physicsState) {
-            case 'stopped':
-                uniforms.u_physicsState.value = 0;
-                break;
-            case 'running':
-                uniforms.u_physicsState.value = 1;
-                break;
-            case 'resetting':
-                uniforms.u_physicsState.value = 2;
-                let progress = (this.app.currentTime - this.resetStartTime) / this.RESET_DURATION;
-                progress = Math.min(progress, 1.0);
-                uniforms.u_resetProgress.value = 1.0 - Math.pow(1.0 - progress, 4.0); // Ease out
-                
-                if (progress >= 1.0) {
-                    this.physicsState = 'stopped';
-                }
-                break;
-        }
-
+        uniforms.u_physicsState.value = 1;
+        
         this.gpuCompute.compute();
     }
 };
