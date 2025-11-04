@@ -17,8 +17,6 @@ export const FluidSimulationContainer = {
     simulationStartTime: -1,
 
     physicsState: 'stopped', // 'stopped', 'running'
-    // ** THE FIX IS HERE: This flag is no longer needed to control the simulation loop. **
-    // isUnderManualControl: false, 
 
     isInitialized: false,
 
@@ -41,12 +39,8 @@ export const FluidSimulationContainer = {
     },
 
     stopPhysics() {
-        // ** THE FIX IS HERE: Add a check to see if the user has touched the attraction slider. **
-        // If the attraction is non-zero, we keep the physics running so the particles can hold their shape.
-        if (this.gpuCompute && this.velocityVariable.material.uniforms.u_attractionStrength.value > 0) {
-            console.log("FluidDirector requested stop, but manual attraction is active. Keeping physics alive.");
-            return;
-        }
+        // We no longer check for attraction strength here, as the new morph slider handles it.
+        // A stop command from the director should always be obeyed.
         this.physicsState = 'stopped';
     },
 
@@ -78,11 +72,11 @@ export const FluidSimulationContainer = {
         velocityUniforms['u_delta'] = { value: 0.0 };
         velocityUniforms['u_worldSize'] = { value: this.WORLD_SIZE };
         
-        velocityUniforms['u_physicsState'] = { value: 0 }; // 0:stopped, 1:running
+        velocityUniforms['u_physicsState'] = { value: 0 };
         velocityUniforms['u_gravity'] = { value: new THREE.Vector3(0, 0, 0) };
         velocityUniforms['u_pressureStrength'] = { value: 0.0 };
         velocityUniforms['u_attractionStrength'] = { value: 0.0 };
-        velocityUniforms['u_targetState'] = { value: 0 }; // 0: Canvas, 1: 3D Model
+        velocityUniforms['u_targetState'] = { value: 0 };
         
         velocityUniforms['u_flowStrength'] = { value: 0.0 };
         velocityUniforms['u_flowScale'] = { value: 0.1 };
@@ -98,14 +92,26 @@ export const FluidSimulationContainer = {
 
         const positionUniforms = this.positionVariable.material.uniforms;
         positionUniforms['u_delta'] = { value: 0.0 };
+        positionUniforms['u_worldSize'] = { value: this.WORLD_SIZE };
+        
+        // ** THE FIX IS HERE: Add all the new uniforms to the POSITION shader. **
+        positionUniforms['u_manualMorph'] = { value: 0.0 };
+        // We pass targetState and the position textures to the position shader as well,
+        // so it knows which target to blend towards.
+        positionUniforms['u_targetState'] = velocityUniforms.u_targetState; // Share the same uniform object
+        positionUniforms['u_initialPosition'] = { value: null }; // Will be populated after init
+        positionUniforms['u_modelPosition'] = velocityUniforms.u_modelPosition; // Share the same uniform object
+
 
         const error = this.gpuCompute.init();
         if (error !== null) {
             console.error("FluidSimulation GPGPU Init Error:", error);
             this.app.UIManager.logError("Fluid GPGPU failed to init.");
         } else {
-            this.velocityVariable.material.uniforms.u_initialPosition.value = this.gpuCompute.createTexture();
-            this.fillInitialParticleData(this.velocityVariable.material.uniforms.u_initialPosition.value.image.data, []);
+            const initialPosTexture = this.gpuCompute.createTexture();
+            this.fillInitialParticleData(initialPosTexture.image.data, []);
+            this.velocityVariable.material.uniforms.u_initialPosition.value = initialPosTexture;
+            this.positionVariable.material.uniforms.u_initialPosition.value = initialPosTexture;
             console.log("Fluid GPGPU simulation created successfully.");
         }
     },
@@ -113,8 +119,9 @@ export const FluidSimulationContainer = {
     _disposeSimulation() {
         if (!this.gpuCompute) return;
 
-        if (this.velocityVariable.material.uniforms.u_initialPosition.value) {
-            this.velocityVariable.material.uniforms.u_initialPosition.value.dispose();
+        const initialPosTexture = this.velocityVariable.material.uniforms.u_initialPosition.value;
+        if (initialPosTexture) {
+            initialPosTexture.dispose();
         }
 
         const variables = [this.positionVariable, this.velocityVariable];
@@ -170,8 +177,9 @@ export const FluidSimulationContainer = {
     },
 
     update(delta) {
-        // ** THE FIX IS HERE: The simulation now only stops if the Director explicitly stops it. **
-        if (!this.gpuCompute || this.physicsState === 'stopped') {
+        // ** THE FIX IS HERE: The simulation now also runs if the manual morph slider is active. **
+        const isMorphingManually = this.gpuCompute && this.positionVariable.material.uniforms.u_manualMorph.value > 0;
+        if (!this.gpuCompute || (this.physicsState === 'stopped' && !isMorphingManually)) {
             return;
         }
         
@@ -180,7 +188,7 @@ export const FluidSimulationContainer = {
         
         uniforms.u_time.value = simTime;
         uniforms.u_delta.value = delta;
-        this.positionVariable.material.uniforms['u_delta'].value = delta;
+        this.positionVariable.material.uniforms.u_delta.value = delta;
 
         uniforms.u_physicsState.value = 1;
         

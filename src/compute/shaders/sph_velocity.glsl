@@ -1,4 +1,4 @@
-// Smoothed Particle Hydrodynamics (SPH) Velocity Shader - V5.1 (Corrected Boundaries)
+// Smoothed Particle Hydrodynamics (SPH) Velocity Shader - V6 (Stable & Correct)
 #include <gpgpu_common>
 
 uniform float u_time;
@@ -31,7 +31,6 @@ const float REST_DENSITY = 1.0;     // rho_0
 const float VISCOSITY = 0.2;       // mu
 const float WALL_DAMPING = -0.5;
 
-// ** THE FIX IS HERE: Use the new world size uniform for boundaries. **
 uniform float u_worldSize;
 
 const float POLY6 = 315.0 / (64.0 * PI * pow(SMOOTHING_RADIUS, 9.0));
@@ -62,6 +61,8 @@ void main() {
             const int neighborhood = 20;
             for (int y = -neighborhood; y <= neighborhood; y++) {
                 for (int x = -neighborhood; x <= neighborhood; x++) {
+                    if (x == 0 && y == 0) continue;
+
                     vec2 neighborUV = uv + vec2(float(x), float(y)) / resolution.xy;
                     if (neighborUV.x < 0.0 || neighborUV.x > 1.0 || neighborUV.y < 0.0 || neighborUV.y > 1.0) continue;
                     vec3 neighborPos = texture(texturePosition, neighborUV).xyz;
@@ -75,6 +76,8 @@ void main() {
 
             for (int y = -neighborhood; y <= neighborhood; y++) {
                 for (int x = -neighborhood; x <= neighborhood; x++) {
+                    if (x == 0 && y == 0) continue;
+                    
                     vec2 neighborUV = uv + vec2(float(x), float(y)) / resolution.xy;
                     if (neighborUV.x < 0.0 || neighborUV.x > 1.0 || neighborUV.y < 0.0 || neighborUV.y > 1.0) continue;
                     vec3 neighborPos = texture(texturePosition, neighborUV).xyz;
@@ -141,16 +144,17 @@ void main() {
     // --- Shared Logic ---
     velocity *= 0.98;
 
-    // ** THE FIX IS HERE: Use the new world size to define a perfect cube for collision. **
+    // ** THE FIX IS HERE: This shader now ONLY modifies velocity. Position is NOT touched. **
     float halfWorld = u_worldSize / 2.0;
-    vec3 halfBounds = vec3(halfWorld);
-
-    if (position.x < -halfBounds.x) { velocity.x *= WALL_DAMPING; position.x = -halfBounds.x; }
-    if (position.x > halfBounds.x)  { velocity.x *= WALL_DAMPING; position.x = halfBounds.x; }
-    if (position.y < -halfBounds.y) { velocity.y *= WALL_DAMPING; position.y = -halfBounds.y; }
-    if (position.y > halfBounds.y)  { velocity.y *= WALL_DAMPING; position.y = halfBounds.y; }
-    if (position.z < -halfBounds.z) { velocity.z *= WALL_DAMPING; position.z = -halfBounds.z; }
-    if (position.z > halfBounds.z)  { velocity.z *= WALL_DAMPING; position.z = halfBounds.z; }
+    if ((position.x < -halfWorld && velocity.x < 0.0) || (position.x > halfWorld && velocity.x > 0.0)) {
+        velocity.x *= WALL_DAMPING;
+    }
+    if ((position.y < -halfWorld && velocity.y < 0.0) || (position.y > halfWorld && velocity.y > 0.0)) {
+        velocity.y *= WALL_DAMPING;
+    }
+    if ((position.z < -halfWorld && velocity.z < 0.0) || (position.z > halfWorld && velocity.z > 0.0)) {
+        velocity.z *= WALL_DAMPING;
+    }
 
     gl_FragColor = vec4(velocity, 1.0);
 }

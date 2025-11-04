@@ -14,6 +14,9 @@ export const UIManager = {
     particleModelTexture: null,
     gltfLoader: new GLTFLoader(),
     
+    // ** THE FIX IS HERE: A new property to track manual control state. **
+    isFluidManualActive: false,
+    
     gpgpuExclusiveGroups: [
         ['gpgpu_enableFold', 'gpgpu_enableCylinder'],
         ['gpgpu_enableCloth']
@@ -633,17 +636,14 @@ export const UIManager = {
         this._updateGpgpuModeVisibility();
     },
 
-    // ** THE FIX IS HERE: Create a new function to enable/disable fluid controls. **
     setFluidControlsDisabled(isDisabled) {
         const container = document.getElementById('fluidSimControlsContainer');
         if (!container) return;
         
-        // Disable/enable all buttons and sliders within the container
         container.querySelectorAll('button, input').forEach(el => {
             el.disabled = isDisabled;
         });
 
-        // Add a visual cue
         container.style.opacity = isDisabled ? 0.5 : 1.0;
         container.style.pointerEvents = isDisabled ? 'none' : 'auto';
     },
@@ -723,11 +723,26 @@ export const UIManager = {
                 this.app.FluidDirector.run('meltAndReform');
             });
         }
+
+        const fluidExplosionButton = document.getElementById('fluidExplosion');
+        if(fluidExplosionButton) {
+            fluidExplosionButton.addEventListener('click', () => {
+                this.app.FluidDirector.run('explosion');
+            });
+        }
+
+        const fluidVortexButton = document.getElementById('fluidVortex');
+        if(fluidVortexButton) {
+            fluidVortexButton.addEventListener('click', () => {
+                this.app.FluidDirector.run('vortex');
+            });
+        }
         
-        const fluidResetToCanvasButton = document.getElementById('fluidResetToCanvas');
-        if(fluidResetToCanvasButton) {
-            fluidResetToCanvasButton.addEventListener('click', () => {
-                this.app.FluidDirector.run('meltAndReform');
+        // ** THE FIX IS HERE: Update the ID and the script it calls. **
+        const fluidStopAndResetButton = document.getElementById('fluidStopAndReset');
+        if(fluidStopAndResetButton) {
+            fluidStopAndResetButton.addEventListener('click', () => {
+                this.app.FluidDirector.run('reset');
             });
         }
         
@@ -774,28 +789,18 @@ export const UIManager = {
             });
         });
         
-        const fluidSimContainer = document.getElementById('fluidSimControlsContainer');
-        if (fluidSimContainer) {
-            fluidSimContainer.querySelectorAll('input[type="range"]').forEach(slider => {
-                // ** THE FIX IS HERE: The generic listener is removed to avoid conflicts. **
-                // We will add specific listeners for the manual controls.
-            });
-        }
-
         const fluidAttractionSlider = document.getElementById('fluidAttraction');
         if (fluidAttractionSlider) {
             fluidAttractionSlider.addEventListener('input', (e) => {
                 const FSIM = this.app.FluidSimulationContainer;
                 if (!FSIM.gpuCompute) return;
                 
-                // When user touches the slider, interrupt any running animation.
                 this.app.FluidDirector.interruptAndStop();
-                
-                // Ensure physics is running.
                 FSIM.startPhysics();
 
-                const uniforms = FSIM.velocityVariable.material.uniforms;
-                uniforms.u_attractionStrength.value = parseFloat(e.target.value);
+                // ** THE FIX IS HERE: Connect the slider to the new u_manualMorph uniform. **
+                const uniforms = FSIM.positionVariable.material.uniforms;
+                uniforms.u_manualMorph.value = parseFloat(e.target.value);
                 this.updateRangeDisplay('fluidAttraction', e.target.value);
             });
         }
@@ -813,13 +818,14 @@ export const UIManager = {
                     fluidTargetToggle.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
                     e.target.classList.add('active');
 
-                    const uniforms = FSIM.velocityVariable.material.uniforms;
-                    uniforms.u_targetState.value = parseInt(e.target.dataset.target);
+                    // ** THE FIX IS HERE: Update the targetState on BOTH shaders. **
+                    const target = parseInt(e.target.dataset.target);
+                    FSIM.velocityVariable.material.uniforms.u_targetState.value = target;
+                    FSIM.positionVariable.material.uniforms.u_targetState.value = target;
                 });
             });
         }
         
-        // ** THE FIX IS HERE: Add a specific listener for the manual Gravity slider. **
         const fluidGravitySlider = document.getElementById('fluid_gravity');
         if (fluidGravitySlider) {
             fluidGravitySlider.addEventListener('input', (e) => {

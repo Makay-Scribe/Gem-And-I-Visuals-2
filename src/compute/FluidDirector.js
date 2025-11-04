@@ -152,12 +152,29 @@ export const FluidDirector = {
                 }
             }
         },
+        'reset': {
+            duration: 4000,
+            update(FSIM, progress, easedProgress) {
+                if (!FSIM.velocityVariable) return;
+                const uniforms = FSIM.velocityVariable.material.uniforms;
+
+                uniforms.u_attractionStrength.value = 2.5 * easedProgress;
+                uniforms.u_pressureStrength.value = 0.0;
+                uniforms.u_targetState.value = 0;
+                
+                if (this.app.ImagePlaneManager.fluidMaterial) {
+                    const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
+                    renderUniforms.u_particleColorMix.value = THREE.MathUtils.lerp(renderUniforms.u_particleColorMix.value, 0.0, 0.1);
+                }
+            }
+        }
     },
 
     init(appInstance) {
         this.app = appInstance;
     },
     
+    // ** THE FIX IS HERE: The run() logic has been completely rewritten for clarity and correctness. **
     run(scriptId = 'meltAndReform') {
         if (this.currentState.startsWith('ANIMATING')) {
             console.warn("FluidDirector: Animation already in progress.");
@@ -177,20 +194,33 @@ export const FluidDirector = {
         }
 
         let animationFunction;
-        
-        if (this.currentState === 'IDLE_ON_CANVAS') {
-            console.log(`FluidDirector: Running FORWARD animation for '${scriptId}'`);
-            animationFunction = script.forward;
-            this.currentState = 'ANIMATING_TO_MODEL';
-            this.nextState = 'IDLE_ON_MODEL';
-        } else if (this.currentState === 'IDLE_ON_MODEL') {
-            console.log(`FluidDirector: Running REVERSE animation for '${scriptId}'`);
-            animationFunction = script.reverse;
-            this.currentState = 'ANIMATING_TO_CANVAS';
-            this.nextState = 'IDLE_ON_CANVAS';
+        let nextIdleState;
+        let newAnimatingState;
+
+        if (scriptId === 'reset') {
+            if (this.currentState === 'IDLE_ON_CANVAS') return; // Already home
+            animationFunction = script.update;
+            newAnimatingState = 'ANIMATING_TO_CANVAS';
+            nextIdleState = 'IDLE_ON_CANVAS';
+            console.log(`FluidDirector: Running RESET animation.`);
+        } else {
+            if (this.currentState === 'IDLE_ON_CANVAS') {
+                animationFunction = script.forward;
+                newAnimatingState = 'ANIMATING_TO_MODEL';
+                nextIdleState = 'IDLE_ON_MODEL';
+                console.log(`FluidDirector: Running FORWARD animation for '${scriptId}'`);
+            } else { // Assumes 'IDLE_ON_MODEL'
+                animationFunction = script.reverse;
+                newAnimatingState = 'ANIMATING_TO_CANVAS';
+                nextIdleState = 'IDLE_ON_CANVAS';
+                console.log(`FluidDirector: Running REVERSE animation for '${scriptId}'`);
+            }
         }
 
         if (animationFunction) {
+            this.currentState = newAnimatingState;
+            this.nextState = nextIdleState;
+            
             FSIM.startPhysics();
             this.activeScript = {
                 id: scriptId,
@@ -199,10 +229,11 @@ export const FluidDirector = {
                 update: animationFunction.bind(this)
             };
             if(this.app.UIManager) this.app.UIManager.setFluidControlsDisabled(true);
+        } else {
+             console.error(`FluidDirector: Could not determine an animation function to run for script '${scriptId}' from state '${this.currentState}'.`);
         }
     },
-
-    // ** THE FIX IS HERE: A new function to forcefully stop and clean up any active animation. **
+    
     interruptAndStop() {
         if (!this.activeScript) return;
 
@@ -211,7 +242,6 @@ export const FluidDirector = {
         
         const FSIM = this.app.FluidSimulationContainer;
         if (FSIM && FSIM.gpuCompute) {
-            // Reset all artistic forces immediately
             if (FSIM.velocityVariable) {
                 const uniforms = FSIM.velocityVariable.material.uniforms;
                 uniforms.u_explosionStrength.value = 0.0;
@@ -220,14 +250,10 @@ export const FluidDirector = {
                 uniforms.u_pressureStrength.value = 0.0;
             }
             
-            // Re-enable UI controls
             if(this.app.UIManager) this.app.UIManager.setFluidControlsDisabled(false);
             
-            // Determine the most logical idle state to return to.
             this.currentState = this.nextState || 'IDLE_ON_CANVAS';
             this.nextState = null;
-            
-            // We leave the physics running for the manual controls to take over.
         }
     },
 
