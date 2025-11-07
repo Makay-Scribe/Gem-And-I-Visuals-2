@@ -29,6 +29,11 @@ void main() {
         // If the slider is at 0, just use the pure physics result.
         final_pos = physics_pos;
     }
+    
+    // *******************************************************************
+    // ** TEMPORARY DEBUG LINE: Force Z-offset to confirm GPU is reading **
+    // *******************************************************************
+    final_pos.z += 5.0; 
 
     // Add boundary clamping logic.
     float halfWorld = u_worldSize / 2.0;

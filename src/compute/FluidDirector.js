@@ -20,152 +20,177 @@ export const FluidDirector = {
             duration: 12000,
             forward(FSIM, progress, easedProgress) {
                 if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                
                 const uniforms = FSIM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
+
+                // ACT I: Breakup (0.0 -> 0.4) - Particles start melting downwards
+                const meltProgress = Math.min(1.0, progress / 0.4);
+                uniforms.u_gravity.value.y = -9.8 * meltProgress;
+                uniforms.u_attractionStrength.value = 0.0;
+                uniforms.u_targetState.value = 0; // Still targeting the canvas
                 
-                const meltPhaseEnd = 0.4;
-                if (progress < meltPhaseEnd) {
-                    const meltProgress = progress / meltPhaseEnd;
-                    uniforms.u_gravity.value.y = -9.8 * meltProgress; 
-                    uniforms.u_pressureStrength.value = 1.0;          
-                    uniforms.u_attractionStrength.value = 0.0;        
-                    uniforms.u_targetState.value = 0;
-                    renderUniforms.u_particleColorMix.value = 0.0;
-                }
-                
-                const gatherPhaseEnd = 0.7;
-                if (progress >= meltPhaseEnd && progress < gatherPhaseEnd) {
-                    const gatherProgress = (progress - meltPhaseEnd) / (gatherPhaseEnd - meltPhaseEnd);
-                    uniforms.u_gravity.value.y = THREE.MathUtils.lerp(-9.8, 0.0, gatherProgress); 
-                    uniforms.u_pressureStrength.value = 1.0;                                     
-                    uniforms.u_attractionStrength.value = THREE.MathUtils.lerp(0.0, 0.5, gatherProgress); 
-                    uniforms.u_targetState.value = 1;
-                    renderUniforms.u_particleColorMix.value = THREE.MathUtils.lerp(0.0, 1.0, gatherProgress);
+                // ACT II: Chaos (0.4 -> 0.7) - Gravity fades, attraction to model begins
+                if (progress > 0.4) {
+                    const gatherProgress = Math.min(1.0, (progress - 0.4) / 0.3);
+                    uniforms.u_gravity.value.y = THREE.MathUtils.lerp(-9.8, 0.0, gatherProgress);
+                    uniforms.u_targetState.value = 1; // Switch target to the 3D model
+                    uniforms.u_attractionStrength.value = THREE.MathUtils.lerp(0.0, 0.5, gatherProgress);
+                    renderUniforms.u_particleColorMix.value = gatherProgress;
                 }
 
-                if (progress >= gatherPhaseEnd) {
-                    const reformProgress = (progress - gatherPhaseEnd) / (1.0 - gatherPhaseEnd);
-                    uniforms.u_gravity.value.y = 0.0;                                                
-                    uniforms.u_pressureStrength.value = THREE.MathUtils.lerp(1.0, 0.0, reformProgress); 
-                    uniforms.u_attractionStrength.value = THREE.MathUtils.lerp(0.5, 2.0, reformProgress); 
-                    uniforms.u_targetState.value = 1;
-                    renderUniforms.u_particleColorMix.value = 1.0;
+                // ACT III: Reform (0.7 -> 1.0) - Strong attraction to finalize on model
+                if (progress > 0.7) {
+                    const reformProgress = (progress - 0.7) / 0.3;
+                    uniforms.u_attractionStrength.value = THREE.MathUtils.lerp(0.5, 3.0, reformProgress);
                 }
             },
             reverse(FSIM, progress, easedProgress) {
                 if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-
                 const uniforms = FSIM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
-                
-                const dissolveEnd = 0.3;
-                if (progress < dissolveEnd) {
-                    const dissolveProgress = progress / dissolveEnd;
-                    uniforms.u_gravity.value.y = 2.0 * dissolveProgress;
-                    uniforms.u_pressureStrength.value = 1.5 * dissolveProgress;
-                    uniforms.u_attractionStrength.value = 0.0;
-                    uniforms.u_targetState.value = 1;
-                    renderUniforms.u_particleColorMix.value = 1.0 - dissolveProgress;
-                }
 
-                const fallEnd = 0.7;
-                if (progress >= dissolveEnd && progress < fallEnd) {
-                    const fallProgress = (progress - dissolveEnd) / (fallEnd - dissolveEnd);
+                // ACT I: Breakup (0.0 -> 0.3) - Particles dissolve and float up slightly
+                const dissolveProgress = Math.min(1.0, progress / 0.3);
+                uniforms.u_gravity.value.y = 2.0 * dissolveProgress;
+                uniforms.u_attractionStrength.value = 0.0;
+                uniforms.u_targetState.value = 1; // Still targeting the model
+                renderUniforms.u_particleColorMix.value = 1.0 - dissolveProgress;
+
+                // ACT II: Chaos (0.3 -> 0.7) - Gravity reverses to pull particles down
+                if (progress > 0.3) {
+                    const fallProgress = Math.min(1.0, (progress - 0.3) / 0.4);
                     uniforms.u_gravity.value.y = THREE.MathUtils.lerp(2.0, -9.8, fallProgress);
-                    uniforms.u_pressureStrength.value = 1.5;
-                    uniforms.u_attractionStrength.value = 0.0;
-                    uniforms.u_targetState.value = 0;
+                    uniforms.u_targetState.value = 0; // Switch target back to canvas
                 }
 
-                if (progress >= fallEnd) {
-                    const settleProgress = (progress - fallEnd) / (1.0 - fallEnd);
+                // ACT III: Reform (0.7 -> 1.0) - Gravity fades, strong attraction to canvas
+                if (progress > 0.7) {
+                    const settleProgress = (progress - 0.7) / 0.3;
                     uniforms.u_gravity.value.y = THREE.MathUtils.lerp(-9.8, 0.0, settleProgress);
-                    uniforms.u_pressureStrength.value = THREE.MathUtils.lerp(1.5, 0.0, settleProgress);
-                    uniforms.u_attractionStrength.value = THREE.MathUtils.lerp(0.0, 2.0, settleProgress);
-                    uniforms.u_targetState.value = 0;
+                    uniforms.u_attractionStrength.value = THREE.MathUtils.lerp(0.0, 3.0, settleProgress);
                 }
             }
         },
         'explosion': {
             duration: 8000,
             forward(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable) return;
+                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
                 const uniforms = FSIM.velocityVariable.material.uniforms;
+                const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
                 
-                const explosionEnd = 0.4;
-                if (progress < explosionEnd) {
-                    const explosionProgress = progress / explosionEnd;
-                    const shockwave = Math.sin(explosionProgress * Math.PI);
-                    uniforms.u_explosionStrength.value = 20.0 * shockwave;
-                    uniforms.u_pressureStrength.value = 2.0 * shockwave;
-                    uniforms.u_attractionStrength.value = 0.0;
-                }
+                // ACT I & II: Breakup & Chaos (0.0 -> 0.7) - A single shockwave pulse
+                const shockwaveProgress = Math.min(1.0, progress / 0.7);
+                const shockwave = Math.sin(shockwaveProgress * Math.PI); // A single curve up and down
+                uniforms.u_explosionStrength.value = 50.0 * shockwave;
+                uniforms.u_attractionStrength.value = 0.0;
 
-                if (progress >= explosionEnd) {
-                    const reassembleProgress = (progress - explosionEnd) / (1.0 - explosionEnd);
-                    uniforms.u_explosionStrength.value = 0.0;
-                    uniforms.u_pressureStrength.value = 0.0;
-                    uniforms.u_attractionStrength.value = 2.5 * reassembleProgress;
+                // ACT III: Reform (0.5 -> 1.0) - Strong attraction to model
+                if (progress > 0.5) {
+                    const reassembleProgress = (progress - 0.5) / 0.5;
                     uniforms.u_targetState.value = 1;
-                    if (this.app.ImagePlaneManager.fluidMaterial) {
-                        this.app.ImagePlaneManager.fluidMaterial.uniforms.u_particleColorMix.value = reassembleProgress;
-                    }
+                    uniforms.u_attractionStrength.value = 3.0 * reassembleProgress;
+                    renderUniforms.u_particleColorMix.value = reassembleProgress;
                 }
             },
             reverse(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable) return;
+                // Reverse is just a simple, strong attraction back to the canvas
+                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
                 const uniforms = FSIM.velocityVariable.material.uniforms;
-                uniforms.u_attractionStrength.value = 2.0 * easedProgress;
-                uniforms.u_pressureStrength.value = 0.0;
+                const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
+
                 uniforms.u_targetState.value = 0;
-                if (this.app.ImagePlaneManager.fluidMaterial) {
-                    this.app.ImagePlaneManager.fluidMaterial.uniforms.u_particleColorMix.value = 1.0 - easedProgress;
-                }
+                uniforms.u_attractionStrength.value = 3.0 * easedProgress;
+                renderUniforms.u_particleColorMix.value = 1.0 - easedProgress;
             }
         },
         'vortex': {
             duration: 10000,
             forward(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable) return;
+                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
                 const uniforms = FSIM.velocityVariable.material.uniforms;
+                const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
-                const vortexCurve = Math.sin(progress * Math.PI);
+                // ACT I & II: Breakup & Chaos (0.0 -> 0.8) - Vortex ramps up and then down
+                const vortexProgress = Math.min(1.0, progress / 0.8);
+                const vortexCurve = Math.sin(vortexProgress * Math.PI);
                 uniforms.u_vortexStrength.value = 15.0 * vortexCurve;
                 uniforms.u_gravity.value.y = 5.0 * vortexCurve;
-                
-                uniforms.u_attractionStrength.value = 2.0 * easedProgress;
-                uniforms.u_targetState.value = 1;
+                uniforms.u_attractionStrength.value = 0.0;
 
-                if (this.app.ImagePlaneManager.fluidMaterial) {
-                    this.app.ImagePlaneManager.fluidMaterial.uniforms.u_particleColorMix.value = easedProgress;
+                // ACT III: Reform (0.6 -> 1.0) - Strong attraction to model
+                if (progress > 0.6) {
+                    const reformProgress = (progress - 0.6) / 0.4;
+                    uniforms.u_targetState.value = 1;
+                    uniforms.u_attractionStrength.value = 3.0 * reformProgress;
+                    renderUniforms.u_particleColorMix.value = reformProgress;
                 }
             },
             reverse(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable) return;
+                // Reverse is a simple attraction back to the canvas
+                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
                 const uniforms = FSIM.velocityVariable.material.uniforms;
-                uniforms.u_attractionStrength.value = 2.0 * easedProgress;
-                uniforms.u_pressureStrength.value = 0.0;
+                const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
+
                 uniforms.u_targetState.value = 0;
-                if (this.app.ImagePlaneManager.fluidMaterial) {
-                    this.app.ImagePlaneManager.fluidMaterial.uniforms.u_particleColorMix.value = 1.0 - easedProgress;
+                uniforms.u_attractionStrength.value = 3.0 * easedProgress;
+                renderUniforms.u_particleColorMix.value = 1.0 - easedProgress;
+            }
+        },
+        'swirl_reform': {
+            duration: 9000,
+            forward(FSIM, progress, easedProgress) {
+                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = FSIM.velocityVariable.material.uniforms;
+                const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
+
+                // ACT I & II: Breakup & Chaos (0.0 -> 0.8) - Curl noise ramps up and then down
+                const swirlProgress = Math.min(1.0, progress / 0.8);
+                const swirlCurve = Math.sin(swirlProgress * Math.PI);
+                uniforms.u_curlStrength.value = 5.0 * swirlCurve;
+                uniforms.u_curlScale.value = 0.05;
+                uniforms.u_curlSpeed.value = 0.5;
+                uniforms.u_attractionStrength.value = 0.0;
+
+                // ACT III: Reform (0.6 -> 1.0) - Strong attraction to model
+                if (progress > 0.6) {
+                    const reformProgress = (progress - 0.6) / 0.4;
+                    uniforms.u_targetState.value = 1;
+                    uniforms.u_attractionStrength.value = 3.0 * reformProgress;
+                    renderUniforms.u_particleColorMix.value = reformProgress;
+                }
+            },
+            reverse(FSIM, progress, easedProgress) {
+                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = FSIM.velocityVariable.material.uniforms;
+                const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
+
+                // ACT I & II: Breakup & Chaos (0.0 -> 0.8) - Swirl away from the model
+                const chaosProgress = Math.min(1.0, progress / 0.8);
+                const chaosCurve = Math.sin(chaosProgress * Math.PI);
+                uniforms.u_curlStrength.value = 5.0 * chaosCurve;
+                uniforms.u_curlScale.value = 0.05;
+                uniforms.u_curlSpeed.value = 0.5;
+                uniforms.u_attractionStrength.value = 0.0;
+
+                // ACT III: Reform (0.6 -> 1.0) - Strong attraction back to canvas
+                if (progress > 0.6) {
+                    const reformProgress = (progress - 0.6) / 0.4;
+                    uniforms.u_targetState.value = 0;
+                    uniforms.u_attractionStrength.value = 3.0 * reformProgress;
+                    renderUniforms.u_particleColorMix.value = 1.0 - reformProgress;
                 }
             }
         },
         'reset': {
             duration: 4000,
             update(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable) return;
+                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
                 const uniforms = FSIM.velocityVariable.material.uniforms;
+                const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
-                uniforms.u_attractionStrength.value = 2.5 * easedProgress;
-                uniforms.u_pressureStrength.value = 0.0;
+                uniforms.u_attractionStrength.value = 3.0 * easedProgress;
                 uniforms.u_targetState.value = 0;
-                
-                if (this.app.ImagePlaneManager.fluidMaterial) {
-                    const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
-                    renderUniforms.u_particleColorMix.value = THREE.MathUtils.lerp(renderUniforms.u_particleColorMix.value, 0.0, 0.1);
-                }
+                renderUniforms.u_particleColorMix.value = THREE.MathUtils.lerp(renderUniforms.u_particleColorMix.value, 0.0, 0.1);
             }
         }
     },
@@ -174,22 +199,35 @@ export const FluidDirector = {
         this.app = appInstance;
     },
     
-    // ** THE FIX IS HERE: The run() logic has been completely rewritten for clarity and correctness. **
+    _resetUniforms() {
+        const FSIM = this.app.FluidSimulationContainer;
+        if (!FSIM || !FSIM.gpuCompute || !FSIM.velocityVariable) return;
+        const uniforms = FSIM.velocityVariable.material.uniforms;
+        
+        if (uniforms.u_explosionStrength) uniforms.u_explosionStrength.value = 0.0;
+        if (uniforms.u_vortexStrength) uniforms.u_vortexStrength.value = 0.0;
+        if (uniforms.u_gravity) uniforms.u_gravity.value.y = 0.0;
+        if (uniforms.u_flowStrength) uniforms.u_flowStrength.value = 0.0;
+        if (uniforms.u_attractionStrength) uniforms.u_attractionStrength.value = 0.0;
+        if (uniforms.u_curlStrength) uniforms.u_curlStrength.value = 0.0;
+    },
+
     run(scriptId = 'meltAndReform') {
+        console.log(`FluidDirector: Attempting to run '${scriptId}'. Current state: ${this.currentState}.`);
+        
         if (this.currentState.startsWith('ANIMATING')) {
-            console.warn("FluidDirector: Animation already in progress.");
+            console.warn("FluidDirector: Animation already in progress. Vetoing run command.");
             return;
         }
+        
+        const modelReady = this.app.isDefaultSculptureBaked;
+        console.log(`FluidDirector: Model Texture Ready: ${modelReady}.`);
 
         const FSIM = this.app.FluidSimulationContainer;
         const script = this.scripts[scriptId];
 
-        if (!script) {
-            console.warn(`FluidDirector: Script "${scriptId}" not found.`);
-            return;
-        }
-        if (!FSIM || !FSIM.gpuCompute || !FSIM.velocityVariable) {
-            console.error("FluidDirector cannot run: FluidSimulationContainer is not ready.");
+        if (!script || !FSIM || !FSIM.gpuCompute || !FSIM.velocityVariable) {
+            console.error("FluidDirector cannot run: Fluid Simulation Container or script is not ready.");
             return;
         }
 
@@ -197,23 +235,36 @@ export const FluidDirector = {
         let nextIdleState;
         let newAnimatingState;
 
+        const isCurrentlyOnCanvas = this.currentState === 'IDLE_ON_CANVAS';
+        const isCurrentlyOnModel = this.currentState === 'IDLE_ON_MODEL';
+        
         if (scriptId === 'reset') {
-            if (this.currentState === 'IDLE_ON_CANVAS') return; // Already home
+            if (isCurrentlyOnCanvas) {
+                console.log("FluidDirector: Already on canvas, RESET unnecessary.");
+                return;
+            }
             animationFunction = script.update;
             newAnimatingState = 'ANIMATING_TO_CANVAS';
             nextIdleState = 'IDLE_ON_CANVAS';
-            console.log(`FluidDirector: Running RESET animation.`);
         } else {
-            if (this.currentState === 'IDLE_ON_CANVAS') {
+            if (isCurrentlyOnCanvas) {
+                if (!modelReady) {
+                     this.app.UIManager.logError("Cannot transition to 3D Model. Please load and 'Bake' a GLB model first.");
+                     console.error("FluidDirector: Vetoed forward transition, 3D Model has not been baked.");
+                     return;
+                }
                 animationFunction = script.forward;
                 newAnimatingState = 'ANIMATING_TO_MODEL';
                 nextIdleState = 'IDLE_ON_MODEL';
-                console.log(`FluidDirector: Running FORWARD animation for '${scriptId}'`);
-            } else { // Assumes 'IDLE_ON_MODEL'
+            } 
+            else if (isCurrentlyOnModel) { 
                 animationFunction = script.reverse;
                 newAnimatingState = 'ANIMATING_TO_CANVAS';
                 nextIdleState = 'IDLE_ON_CANVAS';
-                console.log(`FluidDirector: Running REVERSE animation for '${scriptId}'`);
+            }
+            else {
+                console.error(`FluidDirector: Cannot start transition. Invalid current state: ${this.currentState}`);
+                return;
             }
         }
 
@@ -221,6 +272,7 @@ export const FluidDirector = {
             this.currentState = newAnimatingState;
             this.nextState = nextIdleState;
             
+            this._resetUniforms();
             FSIM.startPhysics();
             this.activeScript = {
                 id: scriptId,
@@ -236,56 +288,46 @@ export const FluidDirector = {
     
     interruptAndStop() {
         if (!this.activeScript) return;
-
         console.log("FluidDirector: Animation interrupted by user.");
         this.activeScript = null;
+        this._resetUniforms();
         
         const FSIM = this.app.FluidSimulationContainer;
-        if (FSIM && FSIM.gpuCompute) {
-            if (FSIM.velocityVariable) {
-                const uniforms = FSIM.velocityVariable.material.uniforms;
-                uniforms.u_explosionStrength.value = 0.0;
-                uniforms.u_vortexStrength.value = 0.0;
-                uniforms.u_gravity.value.y = 0.0;
-                uniforms.u_pressureStrength.value = 0.0;
-            }
-            
+        if (FSIM) {
             if(this.app.UIManager) this.app.UIManager.setFluidControlsDisabled(false);
-            
             this.currentState = this.nextState || 'IDLE_ON_CANVAS';
             this.nextState = null;
+            if (this.currentState.startsWith('IDLE')) {
+                FSIM.stopPhysics();
+            }
         }
     },
 
     stop() {
         this.activeScript = null;
-        
+        this._resetUniforms();
+
         const FSIM = this.app.FluidSimulationContainer;
-        if (FSIM && FSIM.gpuCompute) {
-            if (FSIM.velocityVariable) {
-                const uniforms = FSIM.velocityVariable.material.uniforms;
-                uniforms.u_explosionStrength.value = 0.0;
-                uniforms.u_vortexStrength.value = 0.0;
-                uniforms.u_gravity.value.y = 0.0;
-            }
-            
+        if (FSIM) {
             if (this.nextState) {
                 this.currentState = this.nextState;
                 this.nextState = null;
             } else {
                 this.currentState = 'IDLE_ON_CANVAS';
             }
+            
             console.log(`FluidDirector: Transition complete. New state: ${this.currentState}`);
 
-            FSIM.stopPhysics();
+            if (this.currentState.startsWith('IDLE')) {
+                FSIM.stopPhysics();
+            }
+            
             if(this.app.UIManager) this.app.UIManager.setFluidControlsDisabled(false);
         }
     },
 
     update() {
-        if (!this.activeScript) {
-            return;
-        }
+        if (!this.activeScript) return;
 
         const FSIM = this.app.FluidSimulationContainer;
         if (!FSIM || !FSIM.gpuCompute) {
@@ -296,9 +338,7 @@ export const FluidDirector = {
         const elapsedTime = this.app.currentTime - this.activeScript.startTime;
         let progress = Math.min(1.0, elapsedTime / this.activeScript.duration);
         
-        const easedProgress = progress < 0.5 
-            ? 4 * progress * progress * progress 
-            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        const easedProgress = 0.5 - 0.5 * Math.cos(progress * Math.PI);
         
         this.activeScript.update(FSIM, progress, easedProgress);
 

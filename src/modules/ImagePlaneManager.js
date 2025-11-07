@@ -307,17 +307,21 @@ export const ImagePlaneManager = {
         const resolution = FSIM.PARTICLE_RESOLUTION;
 
         const geometry = new this.app.THREE.BufferGeometry();
+        // ** FIX 1: The position attribute is still needed, but it will be overwritten in the shader. **
+        // We initialize it as a dummy attribute.
         geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
 
-        const uvs = new Float32Array(count * 2);
+        const gpgpuUvs = new Float32Array(count * 2);
         for (let y = 0; y < resolution; y++) {
             for (let x = 0; x < resolution; x++) {
                 const i = (y * resolution + x);
-                uvs[i * 2 + 0] = x / (resolution - 1);
-                uvs[i * 2 + 1] = y / (resolution - 1);
+                // The UV is the coordinate used to sample the GPGPU texture
+                gpgpuUvs[i * 2 + 0] = x / (resolution - 1);
+                gpgpuUvs[i * 2 + 1] = y / (resolution - 1);
             }
         }
-        geometry.setAttribute('uv', new this.app.THREE.BufferAttribute(uvs, 2));
+        // ** FIX 2: We must use a custom attribute name for the GPGPU sampling UV **
+        geometry.setAttribute('gpgpu_uv', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
 
         this._createFluidPBRMaterial();
 
@@ -346,7 +350,8 @@ export const ImagePlaneManager = {
                 uvs[i + 1] = y / (resolution - 1);
             }
         }
-        geometry.setAttribute('uv', new this.app.THREE.BufferAttribute(uvs, 2));
+        // ** CRITICAL FIX: The standard particle system must use the GPGPU UV for its position fetch as well **
+        geometry.setAttribute('gpgpu_uv', new this.app.THREE.BufferAttribute(uvs, 2));
 
         this._createParticlePBRMaterial();
 
@@ -400,6 +405,7 @@ export const ImagePlaneManager = {
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
         
+        // ** FIX 3: Base particle size calculation is shared **
         this.calculatedParticleBaseSize = this.planeDimensions.x / (this.app.FluidSimulationContainer.PARTICLE_RESOLUTION - 1) * Math.sqrt(2);
 
         this.fluidMaterial = new this.app.THREE.ShaderMaterial({
@@ -425,6 +431,7 @@ export const ImagePlaneManager = {
                 u_pixelRatio: { value: window.devicePixelRatio },
                 u_particle_twinkleIntensity: { value: 0.0 },
             },
+            // ** FIX 4: The rendering shader is the Particle one, but its Vertex Shader needs an update **
             vertexShader: particleRenderVertexShader,
             fragmentShader: particleRenderFragmentShader,
             transparent: true,
@@ -548,9 +555,11 @@ export const ImagePlaneManager = {
             if (!CM || !CM.particleGpuCompute) return;
             const posTarget = CM.particleGpuCompute.getCurrentRenderTarget(CM.particlePositionVar);
             
-            if(this.particlePBRMaterial) {
-                const U = this.particlePBRMaterial.uniforms;
+            if(this.particleSystem && this.particleSystem.material) { // Check if material exists
+                const U = this.particleSystem.material.uniforms;
+                // ** CRITICAL FIX: Ensure the position texture is passed to the rendering shader **
                 U.u_positionTexture.value = posTarget.texture;
+                
                 const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
                 const fineSize = S.particle_min_size;
                 U.particle_base_size.value = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
@@ -580,6 +589,7 @@ export const ImagePlaneManager = {
 
             if (this.fluidMaterial) {
                 const U = this.fluidMaterial.uniforms;
+                // ** CRITICAL FIX: Pass the GPGPU position texture to the rendering material **
                 U.u_positionTexture.value = posTarget.texture;
                 
                 // ** THE FIX IS HERE: The fluid particle size now uses the same logic as the main particle engine. **

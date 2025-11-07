@@ -14,7 +14,8 @@ export const UIManager = {
     particleModelTexture: null,
     gltfLoader: new GLTFLoader(),
     
-    // ** THE FIX IS HERE: A new property to track manual control state. **
+    _isProgrammaticUpdate: false, // ** THE FIX: Flag to prevent UI feedback loops **
+    
     isFluidManualActive: false,
     
     gpgpuExclusiveGroups: [
@@ -60,6 +61,9 @@ export const UIManager = {
     },
 
     syncAllControlsToSettings() {
+        // ** THE FIX: Wrap the entire sync operation with the flag **
+        this._isProgrammaticUpdate = true;
+        
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
             if (el) { 
@@ -79,6 +83,8 @@ export const UIManager = {
                 checkbox.checked = this.app.vizSettings[checkbox.id];
             }
         });
+        
+        this._isProgrammaticUpdate = false;
     },
     
     initImageEffectsControls() {
@@ -104,6 +110,8 @@ export const UIManager = {
     },
 
     syncManualSlidersFromState() {
+        this._isProgrammaticUpdate = true;
+
         const S = this.app.vizSettings;
         const UIElements = this.controlDOMElements;
         
@@ -121,6 +129,8 @@ export const UIManager = {
             this.updateRangeDisplay('actorY', targetPosition.y);
             this.updateRangeDisplay('actorDepth', targetPosition.z);
         }
+        
+        this._isProgrammaticUpdate = false;
     },
 
     setupMasterControls() {
@@ -244,6 +254,8 @@ export const UIManager = {
     },
 
     updateMasterControls() {
+        this._isProgrammaticUpdate = true;
+
         const S = this.app.vizSettings;
         const activeControl = S.activeControl;
         const UIElements = this.controlDOMElements;
@@ -301,6 +313,8 @@ export const UIManager = {
         this.syncManualSlidersFromState();
         this.updatePresetGlow();
         this.refreshAccordion(UIElements.masterControlContainer);
+        
+        this._isProgrammaticUpdate = false;
     },
     
     updatePresetGlow() {
@@ -387,7 +401,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'fluidAttraction'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowScale', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'fluidAttraction', 'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity', 'fluid_gravity'].includes(id)) {
                 precision = 2;
@@ -493,8 +507,8 @@ export const UIManager = {
             }
             URL.revokeObjectURL(objectURL);
         }, undefined, (error) => {
-            this.logError(`Error loading texture for ${uniformName}: ${error}`);
-            URL.revokeObjectURL(objectURL);
+                this.logError(`Error loading texture for ${uniformName}: ${error}`);
+                URL.revokeObjectURL(objectURL);
         });
     },
 
@@ -579,6 +593,8 @@ export const UIManager = {
     },
 
     resetGpgpuSettings() {
+        this._isProgrammaticUpdate = true;
+
         const S = this.app.vizSettings;
         const D = this.app.defaultVisualizerSettings;
 
@@ -594,7 +610,8 @@ export const UIManager = {
             'gpgpu_enableDroop', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor',
             'gpgpu_enablePeel', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelEnableAudio', 'gpgpu_peelTextureAmount', 'gpgpu_peelDrift',
             'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress',
-            'playerCube_enabled', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity'
+            'playerCube_enabled', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity',
+            'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed'
         ];
 
         gpgpuKeys.forEach(key => {
@@ -614,6 +631,8 @@ export const UIManager = {
         this._updateDeformationPanelStates();
 
         this.logSuccess("All GPGPU settings have been reset to default.");
+        
+        this._isProgrammaticUpdate = false;
     },
     
     _switchGpgpuMode(newUiMode) {
@@ -636,16 +655,64 @@ export const UIManager = {
         this._updateGpgpuModeVisibility();
     },
 
-    setFluidControlsDisabled(isDisabled) {
+    setFluidControlsDisabled(isDisabled, preserveManualMorph = true) {
         const container = document.getElementById('fluidSimControlsContainer');
         if (!container) return;
         
-        container.querySelectorAll('button, input').forEach(el => {
-            el.disabled = isDisabled;
-        });
+        const manualMorphSlider = document.getElementById('fluidAttraction');
+        const buttons = document.querySelectorAll('#fluidTargetToggle button');
 
-        container.style.opacity = isDisabled ? 0.5 : 1.0;
-        container.style.pointerEvents = isDisabled ? 'none' : 'auto';
+        // Disable/Enable all controls except the manual morph slider during a directed transition
+        container.querySelectorAll('button, input').forEach(el => {
+            // Only disable the director's buttons when the director is running
+            if (el.id === 'fluidMeltAndReform' || el.id === 'fluidExplosion' || el.id === 'fluidVortex' || el.id === 'fluidSwirlReform' || el.id === 'fluidStopAndReset') {
+                el.disabled = isDisabled;
+            }
+            
+            // Disable the manual sliders if the director is running AND the slider is NOT the special one we want to preserve
+            if (el.closest('.accordion-content') && el !== manualMorphSlider && el.id !== 'fluid_gravity' && isDisabled) {
+                el.disabled = isDisabled;
+            }
+        });
+        
+        // Final state: If not disabled, ensure everything is enabled.
+        if (!isDisabled) {
+             container.querySelectorAll('button, input').forEach(el => {
+                el.disabled = false;
+            });
+        }
+        
+        // Target buttons disabled state:
+        buttons.forEach(btn => btn.disabled = isDisabled);
+
+
+        // Only set opacity for the director buttons, not the manual control section.
+        const buttonRow1 = document.getElementById('fluid-preset-buttons-row1');
+        const buttonRow2 = document.getElementById('fluid-preset-buttons-row2');
+        
+        if (buttonRow1 && buttonRow2) {
+            buttonRow1.style.opacity = isDisabled ? 0.5 : 1.0;
+            buttonRow2.style.opacity = isDisabled ? 0.5 : 1.0;
+            buttonRow1.style.pointerEvents = isDisabled ? 'none' : 'auto';
+            buttonRow2.style.pointerEvents = isDisabled ? 'none' : 'auto';
+        }
+
+        // The whole UI is unlocked on stop, or locked on run.
+        if (!isDisabled) {
+            if (this.app.FluidSimulationContainer.velocityVariable) {
+                const targetUniform = this.app.FluidSimulationContainer.velocityVariable.material.uniforms.u_targetState.value;
+                this.app.FluidDirector.currentState = (targetUniform == 1) 
+                    ? 'IDLE_ON_MODEL' 
+                    : 'IDLE_ON_CANVAS';
+                
+                // Set the toggle button's active state
+                buttons.forEach(btn => btn.classList.remove('active'));
+                const targetButton = document.querySelector(`#fluidTargetToggle button[data-target="${targetUniform}"]`);
+                if (targetButton) targetButton.classList.add('active');
+            } else {
+                 this.app.FluidDirector.currentState = 'IDLE_ON_CANVAS';
+            }
+        }
     },
 
     setupEventListeners() {
@@ -738,7 +805,13 @@ export const UIManager = {
             });
         }
         
-        // ** THE FIX IS HERE: Update the ID and the script it calls. **
+        const fluidSwirlReformButton = document.getElementById('fluidSwirlReform');
+        if (fluidSwirlReformButton) {
+            fluidSwirlReformButton.addEventListener('click', () => {
+                this.app.FluidDirector.run('swirl_reform');
+            });
+        }
+        
         const fluidStopAndResetButton = document.getElementById('fluidStopAndReset');
         if(fluidStopAndResetButton) {
             fluidStopAndResetButton.addEventListener('click', () => {
@@ -751,6 +824,7 @@ export const UIManager = {
         if (geocubeContainer) {
             geocubeContainer.querySelectorAll('input, select').forEach(control => {
                 control.addEventListener('input', (e) => {
+                    if (this._isProgrammaticUpdate) return;
                     const id = e.target.id;
                     if (!id || this.app.vizSettings[id] === undefined) return;
                     
@@ -782,6 +856,7 @@ export const UIManager = {
         
         document.querySelectorAll('#particleControlsContainer input[type="range"]').forEach(slider => {
             slider.addEventListener('input', (e) => {
+                if (this._isProgrammaticUpdate) return;
                 const S = this.app.vizSettings;
                 const id = e.target.id;
                 S[id] = parseFloat(e.target.value);
@@ -789,21 +864,42 @@ export const UIManager = {
             });
         });
         
-        const fluidAttractionSlider = document.getElementById('fluidAttraction');
-        if (fluidAttractionSlider) {
-            fluidAttractionSlider.addEventListener('input', (e) => {
-                const FSIM = this.app.FluidSimulationContainer;
-                if (!FSIM.gpuCompute) return;
-                
-                this.app.FluidDirector.interruptAndStop();
-                FSIM.startPhysics();
+        const fluidSliders = ['fluidAttraction', 'fluid_gravity', 'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed'];
 
-                // ** THE FIX IS HERE: Connect the slider to the new u_manualMorph uniform. **
-                const uniforms = FSIM.positionVariable.material.uniforms;
-                uniforms.u_manualMorph.value = parseFloat(e.target.value);
-                this.updateRangeDisplay('fluidAttraction', e.target.value);
-            });
-        }
+        fluidSliders.forEach(id => {
+            const slider = document.getElementById(id);
+            if (slider) {
+                slider.addEventListener('input', (e) => {
+                    // ** THE FIX: Check the flag before interrupting **
+                    if (this._isProgrammaticUpdate) return;
+
+                    const FSIM = this.app.FluidSimulationContainer;
+                    if (!FSIM.gpuCompute) return;
+                    
+                    this.app.FluidDirector.interruptAndStop();
+                    FSIM.startPhysics();
+
+                    const value = parseFloat(e.target.value);
+                    const uniformsV = FSIM.velocityVariable.material.uniforms;
+                    const uniformsP = FSIM.positionVariable.material.uniforms;
+                    
+                    if (id === 'fluidAttraction') {
+                        uniformsP.u_manualMorph.value = value;
+                        uniformsV.u_attractionStrength.value = value * 2.5; 
+                    } else if (id === 'fluid_gravity') {
+                        uniformsV.u_gravity.value.y = value;
+                    } else if (id === 'fluid_curlStrength') {
+                        uniformsV.u_curlStrength.value = value;
+                    } else if (id === 'fluid_curlScale') {
+                        uniformsV.u_curlScale.value = value;
+                    } else if (id === 'fluid_curlSpeed') {
+                        uniformsV.u_curlSpeed.value = value;
+                    }
+
+                    this.updateRangeDisplay(id, value);
+                });
+            }
+        });
 
         const fluidTargetToggle = document.getElementById('fluidTargetToggle');
         if (fluidTargetToggle) {
@@ -818,7 +914,6 @@ export const UIManager = {
                     fluidTargetToggle.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
                     e.target.classList.add('active');
 
-                    // ** THE FIX IS HERE: Update the targetState on BOTH shaders. **
                     const target = parseInt(e.target.dataset.target);
                     FSIM.velocityVariable.material.uniforms.u_targetState.value = target;
                     FSIM.positionVariable.material.uniforms.u_targetState.value = target;
@@ -826,26 +921,11 @@ export const UIManager = {
             });
         }
         
-        const fluidGravitySlider = document.getElementById('fluid_gravity');
-        if (fluidGravitySlider) {
-            fluidGravitySlider.addEventListener('input', (e) => {
-                const FSIM = this.app.FluidSimulationContainer;
-                if (!FSIM.gpuCompute) return;
-                
-                this.app.FluidDirector.interruptAndStop();
-                FSIM.startPhysics();
-
-                const uniforms = FSIM.velocityVariable.material.uniforms;
-                uniforms.u_gravity.value.y = parseFloat(e.target.value);
-                this.updateRangeDisplay('fluid_gravity', e.target.value);
-            });
-        }
-
-
         document.querySelectorAll('input[type="range"], select').forEach(control => {
             if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleControlsContainer') || control.closest('#geocubeControlsContainer') || control.closest('#fluidSimControlsContainer')) return;
 
             control.addEventListener('input', (e) => {
+                if (this._isProgrammaticUpdate) return;
                 const id = e.target.id;
                 if (!id || this.app.vizSettings[id] === undefined) return;
                 
@@ -887,6 +967,7 @@ export const UIManager = {
         const morphSlider = document.getElementById('particle_morphProgress');
         if (morphSlider) {
             morphSlider.addEventListener('input', (e) => {
+                if (this._isProgrammaticUpdate) return;
                 const S = this.app.vizSettings;
                 const value = parseFloat(e.target.value);
                 S.particle_morphProgress = value;
@@ -927,6 +1008,7 @@ export const UIManager = {
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.closest('#gpgpuEffectsAccordion') || checkbox.closest('#butterchurnControls')) return;
              
              checkbox.addEventListener('input', (e) => {
+                 if (this._isProgrammaticUpdate) return;
                  if (this.app.vizSettings[e.target.id] !== undefined) {
                      this.app.vizSettings[e.target.id] = e.target.checked;
                  }
@@ -944,6 +1026,7 @@ export const UIManager = {
         
         document.querySelectorAll('#deformationControlsContainer .header-toggle-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', (e) => {
+                if (this._isProgrammaticUpdate) return;
                 if (this.app.vizSettings[e.target.id] !== undefined) {
                     this.app.vizSettings[e.target.id] = e.target.checked;
                 }
@@ -1034,41 +1117,32 @@ export const UIManager = {
                 }
                 
                 this.logSuccess(`Baking ${preset.name}...`);
-                this.gltfLoader.load(preset.path, 
-                    (gltf) => {
-                        let bestMesh = null;
-                        gltf.scene.traverse(child => { if (child.isMesh) bestMesh = child; });
+                this.gltfLoader.load(preset.path, (gltf) => {
+                    let bestMesh = null;
+                    gltf.scene.traverse(child => { if (child.isMesh) { bestMesh = child; } });
+                    
+                    if (bestMesh) {
+                        this.particleModelMesh = bestMesh;
 
-                        if (bestMesh) {
-                            this.particleModelMesh = bestMesh;
-                            
-                            if (bestMesh.material && bestMesh.material.map) {
-                                this.particleModelTexture = bestMesh.material.map;
-                                if (this.app.ImagePlaneManager.particlePBRMaterial) {
-                                    this.app.ImagePlaneManager.particlePBRMaterial.uniforms.u_particleModelTexture.value = this.particleModelTexture;
-                                }
-                            } else {
-                                this.logError(`Model "${preset.name}" has no texture map. Cannot use Model Color mode.`);
-                                this.particleModelTexture = null; 
-                            }
-                            
-                            const CM = this.app.ComputeManager;
-                            if (CM && CM.particleModelPositionTexture) {
-                                CM.bakeToTexture(this.particleModelMesh, CM.particleModelPositionTexture);
-                                this.logSuccess(`Baked ${preset.name}. Ready to transition.`);
-                                this.updateFileNameDisplay('particleModel', preset.name);
-
+                        if (bestMesh.material && bestMesh.material.map) {
+                            this.particleModelTexture = bestMesh.material.map;
+                            if (this.app.ImagePlaneManager.particlePBRMaterial) {
+                                this.app.ImagePlaneManager.particlePBRMaterial.uniforms.u_particleModelTexture.value = this.particleModelTexture;
                             }
                         } else {
-                            this.logError(`No mesh found in ${preset.name}.`);
+                            this.logError(`Model "${preset.name}" has no texture map.`);
+                            this.particleModelTexture = null; 
                         }
-                    }, 
-                    undefined, 
-                    (error) => {
-                        this.logError(`Failed to load ${preset.name} for baking.`);
-                        console.error(error);
+
+                        const CM = this.app.ComputeManager;
+                        if (CM && CM.particleModelPositionTexture) {
+                            CM.bakeToTexture(this.particleModelMesh, CM.particleModelPositionTexture);
+                            this.logSuccess(`Baked ${preset.name}. Ready to transition.`);
+                        }
+                    } else {
+                        this.logError('No mesh found in the loaded model.');
                     }
-                );
+                });
             });
         });
 
@@ -1106,12 +1180,14 @@ export const UIManager = {
     },
     
     setMorphState(targetProgress) {
-        this.app.vizSettings.particle_morphProgress = targetProgress;
         const slider = document.getElementById('particle_morphProgress');
         if (slider) {
+            this._isProgrammaticUpdate = true;
             slider.value = targetProgress;
+            this.app.vizSettings.particle_morphProgress = targetProgress;
+            this.updateRangeDisplay('particle_morphProgress', targetProgress);
+            this._isProgrammaticUpdate = false;
         }
-        this.updateRangeDisplay('particle_morphProgress', targetProgress);
         this.handleMorphSlider(targetProgress);
     },
 
@@ -1134,6 +1210,8 @@ export const UIManager = {
     loadPresetValues(presetId) {},
 
     syncSlidersToSettings() {
+        this._isProgrammaticUpdate = true;
+
         const S = this.app.vizSettings;
         const editorSliderIds = [
             'particle_flowStrength', 'particle_flowSpeed', 'particle_flowScale', 
@@ -1148,6 +1226,8 @@ export const UIManager = {
                 this.updateRangeDisplay(key, S[key]);
             }
         });
+        
+        this._isProgrammaticUpdate = false;
     },
 
     toggleDemoMode() {
@@ -1241,6 +1321,7 @@ export const UIManager = {
         const engineSelect = document.getElementById('butterchurnEngineSelect');
         if (engineSelect) {
             engineSelect.addEventListener('change', (e) => {
+                if (this._isProgrammaticUpdate) return;
                 this.app.ButterchurnManager.switchEngine(e.target.value);
             });
         }
@@ -1264,7 +1345,7 @@ export const UIManager = {
         if (tintColor) tintColor.addEventListener('input', (e) => { this.app.vizSettings.butterchurnTintColor = e.target.value; if(this.app.butterchurnMaterial) this.app.butterchurnMaterial.color.set(e.target.value); });
         
         const enableCycle = document.getElementById('butterchurnEnableCycle');
-        if (enableCycle) enableCycle.addEventListener('change', (e) => { this.app.vizSettings.butterchurnEnableCycle = e.target.checked; this.app.ButterchurnManager.updateCycleInterval(); });
+        if (enableCycle) enableCycle.addEventListener('change', (e) => { if (this._isProgrammaticUpdate) return; this.app.vizSettings.butterchurnEnableCycle = e.target.checked; this.app.ButterchurnManager.updateCycleInterval(); });
         
         document.getElementById('butterchurnPrevPreset').addEventListener('click', () => this.app.ButterchurnManager.prevPreset());
         document.getElementById('butterchurnRandomPreset').addEventListener('click', () => this.app.ButterchurnManager.randomPreset());
@@ -1464,6 +1545,8 @@ export const UIManager = {
         }
     },
     resetLandscapeSettings() {
+        this._isProgrammaticUpdate = true;
+
         const S = this.app.vizSettings;
         const D = this.app.defaultVisualizerSettings;
     
@@ -1489,7 +1572,7 @@ export const UIManager = {
         });
     
         this.app.ImagePlaneManager.createDefaultLandscape();
-    
+        this._isProgrammaticUpdate = false;
         this.logSuccess("Landscape settings reset.");
     }
 };

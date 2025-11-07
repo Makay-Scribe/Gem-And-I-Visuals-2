@@ -27,6 +27,33 @@ export const FluidSimulationContainer = {
         
         this.isInitialized = true;
         console.log("FluidSimulationContainer initialized (Physics only).");
+        
+        // ** FIX 1: Set an initial fallback texture to prevent crash **
+        // This is necessary because some code paths may try to create the FluidSim
+        // before ComputeManager has had a chance to set up.
+        this._modelPositionTexture = this._createFallbackTexture();
+    },
+
+    // Helper to create a fallback 1x1 black/empty data texture
+    _createFallbackTexture() {
+        const emptyData = new Float32Array([0, 0, 0, 0]);
+        const texture = new THREE.DataTexture(emptyData, 1, 1, THREE.RGBAFormat, THREE.FloatType);
+        texture.needsUpdate = true;
+        return texture;
+    },
+
+    // --- NEW METHOD: Allows external modules (main.js) to set the baked model data LATER ---
+    setBakedModelTexture(modelPositionTexture) {
+        if (!modelPositionTexture) return;
+
+        // ** Fix 2: If we have an active simulation, update the uniforms now **
+        if (this.velocityVariable) {
+            this.velocityVariable.material.uniforms.u_modelPosition.value = modelPositionTexture;
+            this.positionVariable.material.uniforms.u_modelPosition.value = modelPositionTexture;
+        }
+
+        // Store the texture so _setupSimulation can use it if called later
+        this._modelPositionTexture = modelPositionTexture;
     },
 
     // --- Public Control Methods ---
@@ -36,12 +63,17 @@ export const FluidSimulationContainer = {
         if (this.simulationStartTime < 0) {
             this.simulationStartTime = this.app.currentTime;
         }
+
+        if (this.velocityVariable) {
+            this.velocityVariable.material.uniforms.u_attractionStrength.value = 0.5;
+        }
     },
 
     stopPhysics() {
-        // We no longer check for attraction strength here, as the new morph slider handles it.
-        // A stop command from the director should always be obeyed.
         this.physicsState = 'stopped';
+        if (this.velocityVariable && this.positionVariable && this.positionVariable.material.uniforms.u_manualMorph.value === 0.0) {
+            this.velocityVariable.material.uniforms.u_attractionStrength.value = 0.0;
+        }
     },
 
     _setupSimulation() {
@@ -52,6 +84,15 @@ export const FluidSimulationContainer = {
             this.app.UIManager.logError("Fluid Simulation requires WebGL2.");
             return;
         }
+        
+        // ** FIX 3: If no valid texture has been supplied yet, wait for the one from ComputeManager **
+        // At this point, ComputeManager should have already created a texture, even if it's empty.
+        let targetModelTexture = this._modelPositionTexture || this.app.ComputeManager.particleModelPositionTexture;
+        if (!targetModelTexture) {
+            targetModelTexture = this._createFallbackTexture();
+            console.warn("FluidSim: No model texture found, using fallback for initial setup.");
+        }
+
 
         this.gpuCompute = new GPUComputationRenderer(this.PARTICLE_RESOLUTION, this.PARTICLE_RESOLUTION, renderer);
 
@@ -87,20 +128,23 @@ export const FluidSimulationContainer = {
         velocityUniforms['u_vortexCenter'] = { value: new THREE.Vector2(0, 0) };
         velocityUniforms['u_vortexStrength'] = { value: 0.0 };
         
+        velocityUniforms['u_curlStrength'] = { value: 0.0 };
+        velocityUniforms['u_curlScale'] = { value: 0.0 };
+        velocityUniforms['u_curlSpeed'] = { value: 0.0 };
+        
         velocityUniforms['u_initialPosition'] = { value: null };
-        velocityUniforms['u_modelPosition'] = { value: this.app.ComputeManager.particleModelPositionTexture };
+        // ** ASSIGNING THE SAFE/UPDATED TARGET TEXTURE **
+        velocityUniforms['u_modelPosition'] = { value: targetModelTexture }; 
 
         const positionUniforms = this.positionVariable.material.uniforms;
         positionUniforms['u_delta'] = { value: 0.0 };
         positionUniforms['u_worldSize'] = { value: this.WORLD_SIZE };
         
-        // ** THE FIX IS HERE: Add all the new uniforms to the POSITION shader. **
         positionUniforms['u_manualMorph'] = { value: 0.0 };
-        // We pass targetState and the position textures to the position shader as well,
-        // so it knows which target to blend towards.
-        positionUniforms['u_targetState'] = velocityUniforms.u_targetState; // Share the same uniform object
-        positionUniforms['u_initialPosition'] = { value: null }; // Will be populated after init
-        positionUniforms['u_modelPosition'] = velocityUniforms.u_modelPosition; // Share the same uniform object
+        positionUniforms['u_targetState'] = velocityUniforms.u_targetState; 
+        positionUniforms['u_initialPosition'] = { value: null }; 
+        // ** ASSIGNING THE SAFE/UPDATED TARGET TEXTURE **
+        positionUniforms['u_modelPosition'] = velocityUniforms.u_modelPosition; 
 
 
         const error = this.gpuCompute.init();
@@ -177,9 +221,16 @@ export const FluidSimulationContainer = {
     },
 
     update(delta) {
-        // ** THE FIX IS HERE: The simulation now also runs if the manual morph slider is active. **
-        const isMorphingManually = this.gpuCompute && this.positionVariable.material.uniforms.u_manualMorph.value > 0;
-        if (!this.gpuCompute || (this.physicsState === 'stopped' && !isMorphingManually)) {
+        if (!this.gpuCompute) {
+            return;
+        }
+        
+        const isMorphingManually = this.positionVariable.material.uniforms.u_manualMorph.value > 0.0;
+        
+        if (this.physicsState === 'stopped' && !isMorphingManually) {
+            if (this.velocityVariable) {
+                 this.velocityVariable.material.uniforms.u_attractionStrength.value = 0.0;
+            }
             return;
         }
         
@@ -191,7 +242,11 @@ export const FluidSimulationContainer = {
         this.positionVariable.material.uniforms.u_delta.value = delta;
 
         uniforms.u_physicsState.value = 1;
-        
+
+        if (!this.app.FluidDirector.activeScript && isMorphingManually) {
+            uniforms.u_attractionStrength.value = this.positionVariable.material.uniforms.u_manualMorph.value * 2.5; 
+        }
+
         this.gpuCompute.compute();
     }
 };

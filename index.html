@@ -372,8 +372,8 @@
                         <div class="accordion-header-with-toggle">
                             <button class="accordion-header">
                                 <span class="header-title">Player Cube</span>
-                                <span class="header-engine-tag geometry-tag">Geometry</span>
-                            </button>
+                                <span class="header-engine-tag geometry-tag">Geometry</span
+                            ></button>
                             <input type="checkbox" id="playerCube_enabled" class="header-toggle-checkbox">
                         </div>
                         <div class="accordion-content">
@@ -443,6 +443,7 @@
                             <input type="range" id="particle_flowSpeed" min="0.0" max="2.0" step="0.01" value="0.2">
                             <label>Flow Scale: <span id="particle_flowScaleValue" class="range-value-display"></span></label>
                             <input type="range" id="particle_flowScale" min="0.0" max="1.0" step="0.01" value="0.1">
+                            <hr style="border-color: #333; margin: 4px 0;">
                             <label>Attraction: <span id="particle_attractionStrengthValue" class="range-value-display"></span></label>
                             <input type="range" id="particle_attractionStrength" min="0.0" max="1.0" step="0.01" value="0.1">
                             <hr style="border-color: #333; margin: 4px 0;">
@@ -483,11 +484,26 @@
                         <button id="fluidVortex">Vortex</button>
                     </div>
                     <div class="button-row" id="fluid-preset-buttons-row2">
-                        <!-- ** THE FIX IS HERE: Rename the button and its ID. ** -->
+                        <!-- ** NEW SWIRL BUTTON ** -->
+                        <button id="fluidSwirlReform">Swirl & Reform</button> 
                         <button id="fluidStopAndReset">Stop & Reset</button>
                     </div>
-                    <label>Gravity: <span id="fluid_gravityValue" class="range-value-display"></span></label>
-                    <input type="range" id="fluid_gravity" min="-2.0" max="2.0" step="0.05" value="0.0">
+
+                    <div class="accordion-item">
+                        <button class="accordion-header">Force & Effect Sliders</button>
+                        <div class="accordion-content">
+                            <label>Gravity: <span id="fluid_gravityValue" class="range-value-display"></span></label>
+                            <input type="range" id="fluid_gravity" min="-2.0" max="2.0" step="0.05" value="0.0">
+                            <p class="sub-group-title">CURL NOISE</p>
+                            <!-- ** NEW CURL NOISE SLIDERS ** -->
+                            <label>Curl Strength: <span id="fluid_curlStrengthValue" class="range-value-display"></span></label>
+                            <input type="range" id="fluid_curlStrength" min="0.0" max="5.0" step="0.1" value="0.0">
+                            <label>Curl Scale: <span id="fluid_curlScaleValue" class="range-value-display"></span></label>
+                            <input type="range" id="fluid_curlScale" min="0.01" max="0.5" step="0.01" value="0.05">
+                            <label>Curl Speed: <span id="fluid_curlSpeedValue" class="range-value-display"></span></label>
+                            <input type="range" id="fluid_curlSpeed" min="0.0" max="2.0" step="0.1" value="0.3">
+                        </div>
+                    </div>
                 </div>
                 
                 <button id="gpgpuResetButton">Reset GPGPU Sliders</button>

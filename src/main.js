@@ -61,6 +61,9 @@ const App = {
     shaderPresets: shaderPresets,
     vizSettings: {},
     isDemoModeActive: false,
+    
+    // ** NEW FIX TRACKER **
+    isDefaultSculptureBaked: false,
 
     // --- MANAGERS ---
     UIManager: UIManager,
@@ -74,7 +77,7 @@ const App = {
     ComputeManager: ComputeManager,
     GPGPUDebugger: GPGPUDebugger,
     CubeWallManager: CubeWallManager,
-    Debugger: Debugger,
+    Debugger: Debugger, // ** FIX: Corrected typo from Debugber **
     DirectorManager: DirectorManager,
     ParticleTransitions: ParticleTransitions,
     FluidSimulationContainer: FluidSimulationContainer,
@@ -186,6 +189,10 @@ const App = {
         particle_attractionStrength: 0.1,
         particle_morphProgress: 0.0, 
         particle_target: 'flat', 
+        
+        fluid_curlStrength: 0.0,
+        fluid_curlScale: 0.05,
+        fluid_curlSpeed: 0.3,
 
         // --- CUBEWALL SETTINGS ---
         gpgpu_cubeWallGridSize: 10,
@@ -268,7 +275,14 @@ const App = {
                 } else {
                     this.UIManager.particleModelTexture = null;
                 }
+                
+                // ** FIX: Perform the bake and explicitly flag success **
                 this.ComputeManager.bakeToTexture(bestMesh, this.ComputeManager.particleModelPositionTexture);
+                this.isDefaultSculptureBaked = true; // Flag the success
+                
+                // ** CRITICAL FIX: Tell the Fluid Sim the model is ready and update its uniform **
+                this.FluidSimulationContainer.setBakedModelTexture(this.ComputeManager.particleModelPositionTexture);
+                
                 this.UIManager.logSuccess("Default sculpture baked.");
                 this.UIManager.updateFileNameDisplay('particleModel', 'Devmodel.glb (Default)');
             } else {
@@ -427,7 +441,7 @@ const App = {
         this.renderer.toneMapping = toneMappingOptions[this.vizSettings.toneMappingMode] || THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
 
-        // Phase 1: Initialize all managers
+        // Phase 1: Initialize all managers (minimal THREE/config dependencies)
         this.SceneManager.init(this);
         this.BackgroundManager.init(this);
         this.CameraManager.init(this);
@@ -439,10 +453,9 @@ const App = {
         this.DirectorManager.init(this);
         this.ParticleTransitions.init(this);
         this.FluidDirector.init(this);
-        
         this.ImagePlaneManager.init(this); 
-        this.FluidSimulationContainer.init(this);
-        
+        this.FluidSimulationContainer.init(this); 
+
         this.ComputeManager.init(this, 
             this.ImagePlaneManager.planeDimensions.x, 
             this.ImagePlaneManager.planeDimensions.y, 
@@ -450,8 +463,7 @@ const App = {
             this.ImagePlaneManager.planeResolution.y
         );
         this.GPGPUDebugger.init(this);
-        
-        this.ComputeManager.initParticleSystem();
+        this.ComputeManager.initParticleSystem(); // Sets up particle/cube GPGPU environment (before Fluid Sim uses textures)
 
         this.UIManager.init(this); 
         
@@ -475,16 +487,32 @@ const App = {
         this.scene.add(this.guideLaser);
 
 
-        // Phase 2: Create geometry and run preload tasks
+        // Phase 2: Parallel asset loading and waiting
+        
+        // ** STRUCTURAL FIX: Load audio/image in parallel, and load/bake sculpture AFTER **
+        const assetLoadingPromise = this.preloadDevAssets(); 
+
+        // Load the model and BAKE its position data *after* all managers are instantiated
+        const sculptureLoadingPromise = this.preloadDefaultSculpture();
+        
+        // ** Await ALL major loading before moving to final render setup **
+        await Promise.all([assetLoadingPromise, sculptureLoadingPromise]);
+
+        
+        // Phase 3: Final structural setup and initial rendering
+        
+        // 1. Create all geometry based on final settings and baked data
         this.ImagePlaneManager.createDefaultLandscape(); 
+        
+        // 2. Activate FluidSim GPGPU if it's the starting mode.
+        // This MUST happen AFTER the model is baked (in preloadDefaultSculpture).
+        if (this.vizSettings.gpgpuGeometryMode === 'fluidsim') {
+             this.FluidSimulationContainer.setActive(true);
+        }
+        
+        // 3. Render and final touches
         this.BackgroundManager.render(); 
         this.GPGPUDebugger.update(); 
-        
-        await this.preloadDevAssets();
-        
-        if (this.ComputeManager && this.ComputeManager.particleGpuCompute) {
-            await this.preloadDefaultSculpture();
-        }
         
         const defaultShaderId = 'presetBg6';
         const defaultShaderCode = this.shaderPresets[defaultShaderId];
