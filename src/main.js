@@ -62,7 +62,6 @@ const App = {
     vizSettings: {},
     isDemoModeActive: false,
     
-    // ** NEW FIX TRACKER **
     isDefaultSculptureBaked: false,
 
     // --- MANAGERS ---
@@ -77,7 +76,7 @@ const App = {
     ComputeManager: ComputeManager,
     GPGPUDebugger: GPGPUDebugger,
     CubeWallManager: CubeWallManager,
-    Debugger: Debugger, // ** FIX: Corrected typo from Debugber **
+    Debugger: Debugger,
     DirectorManager: DirectorManager,
     ParticleTransitions: ParticleTransitions,
     FluidSimulationContainer: FluidSimulationContainer,
@@ -231,6 +230,25 @@ const App = {
         enableOnScreenDebugger: true,
     },
 
+    setFluidMorphState(target, sliderValue) {
+        const FSIM = this.FluidSimulationContainer;
+        if (!FSIM.gpuCompute) return;
+
+        this.FluidDirector.interruptAndStop();
+        FSIM.startPhysics();
+
+        FSIM.velocityVariable.material.uniforms.u_targetState.value = target;
+        FSIM.positionVariable.material.uniforms.u_targetState.value = target;
+
+        this.UIManager.setSliderValue('fluidAttraction', sliderValue);
+        
+        const uniformsP = FSIM.positionVariable.material.uniforms;
+        uniformsP.u_manualMorph.value = sliderValue;
+
+        const uniformsV = FSIM.velocityVariable.material.uniforms;
+        uniformsV.u_attractionStrength.value = sliderValue * 2.5;
+    },
+
     async preloadDevAssets() {
         console.log("Attempting to preload developer assets...");
         try {
@@ -276,11 +294,9 @@ const App = {
                     this.UIManager.particleModelTexture = null;
                 }
                 
-                // ** FIX: Perform the bake and explicitly flag success **
                 this.ComputeManager.bakeToTexture(bestMesh, this.ComputeManager.particleModelPositionTexture);
-                this.isDefaultSculptureBaked = true; // Flag the success
+                this.isDefaultSculptureBaked = true;
                 
-                // ** CRITICAL FIX: Tell the Fluid Sim the model is ready and update its uniform **
                 this.FluidSimulationContainer.setBakedModelTexture(this.ComputeManager.particleModelPositionTexture);
                 
                 this.UIManager.logSuccess("Default sculpture baked.");
@@ -441,7 +457,6 @@ const App = {
         this.renderer.toneMapping = toneMappingOptions[this.vizSettings.toneMappingMode] || THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
 
-        // Phase 1: Initialize all managers (minimal THREE/config dependencies)
         this.SceneManager.init(this);
         this.BackgroundManager.init(this);
         this.CameraManager.init(this);
@@ -463,7 +478,7 @@ const App = {
             this.ImagePlaneManager.planeResolution.y
         );
         this.GPGPUDebugger.init(this);
-        this.ComputeManager.initParticleSystem(); // Sets up particle/cube GPGPU environment (before Fluid Sim uses textures)
+        this.ComputeManager.initParticleSystem();
 
         this.UIManager.init(this); 
         
@@ -485,32 +500,17 @@ const App = {
         this.guideLaser.frustumCulled = false;
         this.guideLaser.visible = this.vizSettings.enableGuideLaser;
         this.scene.add(this.guideLaser);
-
-
-        // Phase 2: Parallel asset loading and waiting
         
-        // ** STRUCTURAL FIX: Load audio/image in parallel, and load/bake sculpture AFTER **
         const assetLoadingPromise = this.preloadDevAssets(); 
-
-        // Load the model and BAKE its position data *after* all managers are instantiated
         const sculptureLoadingPromise = this.preloadDefaultSculpture();
-        
-        // ** Await ALL major loading before moving to final render setup **
         await Promise.all([assetLoadingPromise, sculptureLoadingPromise]);
 
-        
-        // Phase 3: Final structural setup and initial rendering
-        
-        // 1. Create all geometry based on final settings and baked data
         this.ImagePlaneManager.createDefaultLandscape(); 
         
-        // 2. Activate FluidSim GPGPU if it's the starting mode.
-        // This MUST happen AFTER the model is baked (in preloadDefaultSculpture).
         if (this.vizSettings.gpgpuGeometryMode === 'fluidsim') {
              this.FluidSimulationContainer.setActive(true);
         }
         
-        // 3. Render and final touches
         this.BackgroundManager.render(); 
         this.GPGPUDebugger.update(); 
         
@@ -607,10 +607,8 @@ const App = {
             const sliderX = document.getElementById('lightDirectionX');
             const sliderZ = document.getElementById('lightDirectionZ');
             if (sliderX && sliderZ) {
-                sliderX.value = newX;
-                sliderZ.value = newZ;
-                this.UIManager.updateRangeDisplay('lightDirectionX', newX);
-                this.UIManager.updateRangeDisplay('lightDirectionZ', newZ);
+                this.UIManager.setSliderValue('lightDirectionX', newX);
+                this.UIManager.setSliderValue('lightDirectionZ', newZ);
             }
         }
         
@@ -631,9 +629,6 @@ const App = {
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
-        // ** THE FIX IS HERE: The update order has been corrected. **
-        // The Director must run FIRST to set the rules for the frame.
-        // The Simulation Containers then run SECOND to execute those rules.
         this.FluidDirector.update();
         this.FluidSimulationContainer.update(cappedDelta);
         this.ComputeManager.update(cappedDelta);
@@ -651,7 +646,7 @@ const App = {
         this.GPGPUDebugger.update();
         this.Debugger.update();
 
-        this.UIManager.syncManualSlidersFromState();
+        this.UIManager.syncSlidersFromState();
 
         this.renderer.clear();
         this.BackgroundManager.render();
