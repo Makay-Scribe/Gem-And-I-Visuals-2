@@ -1,7 +1,6 @@
 import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
-// --- Import all our GLSL files as raw text strings ---
 import commonShader from './shaders/common.glsl?raw';
 import waterRippleShader from './shaders/effects/waterRipple.glsl?raw';
 import eqRippleShader from './shaders/effects/eqRipple.glsl?raw';
@@ -15,50 +14,38 @@ import gpgpuPositionShader from './shaders/gpgpu_position.glsl?raw';
 
 import particlePositionShader from './shaders/effects/particle_position.glsl?raw';
 import particleVelocityShader from './shaders/effects/particle_velocity.glsl?raw';
-
+import fluidVelocityShader from './shaders/sph_velocity.glsl?raw';
 
 export const ComputeManager = {
-    app: null, // Main app instance
-    
-    // --- Original GPGPU System (for planes and cubewall) ---
+    app: null,
+    _currentMode: null,
+
     gpuCompute: null,
     positionVariable: null,
-    previousPositionVariable: null, 
-    initialPositionTexture: null,
-    clothEnableTime: -1, 
-
-    // --- Isolated GPGPU System for Particles ---
-    particleGpuCompute: null,
-    particlePositionVar: null,
-    particleVelocityVar: null,
+    velocityVariable: null,
+    _particleVelocityShader: particleVelocityShader,
+    _fluidVelocityShader: fluidVelocityShader,
     particleFlatPositionTexture: null,
-    particleModelPositionTexture: null, 
+    particleModelPositionTexture: null,
     particleModelUVTexture: null,
-
     WIDTH: 0,
     HEIGHT: 0,
     AREA: 0,
 
-    init(appInstance, planeWidth, planeHeight, planeResX, planeResY) {
-        if (this.gpuCompute && this.WIDTH === planeResX && this.HEIGHT === planeResY) {
-            console.log("ComputeManager: GPGPU system already initialized with correct dimensions. Skipping re-init.");
-            return;
-        }
+    landscapeGpuCompute: null,
+    landscapePositionVariable: null,
+    landscapePreviousPositionVariable: null,
+    landscapeInitialPositionTexture: null,
+    clothEnableTime: -1,
 
+    init(appInstance) {
         this.app = appInstance;
         const renderer = this.app.renderer;
-
-        this.disposeLandscapeSystem();
-
-        this.WIDTH = planeResX;
-        this.HEIGHT = planeResY;
-        this.AREA = this.WIDTH * this.HEIGHT;
 
         if (!renderer.capabilities.isWebGL2) {
             this.app.UIManager.logError("GPGPU Compute requires WebGL2.");
             return;
         }
-
         if (renderer.capabilities.floatFragmentTextures === false) {
             this.app.UIManager.logError("No float textures support on this GPU.");
             return;
@@ -74,62 +61,96 @@ export const ComputeManager = {
         this.app.THREE.ShaderChunk['gpgpu_droop'] = droopShader;
         this.app.THREE.ShaderChunk['gpgpu_peel'] = peelShader;
 
-        this.gpuCompute = new GPUComputationRenderer(this.WIDTH, this.HEIGHT, renderer);
+        this._setupUnifiedParticleSimulation();
+    },
 
-        const initialPositionData = new Float32Array(this.AREA * 4);
+    switchMode(newMode, isInitial = false) {
+        if (this._currentMode === newMode) return;
         
-        const halfWidth = planeWidth / 2;
-        const halfHeight = planeHeight / 2;
+        console.log(`ComputeManager: Switching mode from '${this._currentMode}' to -> '${newMode}'`);
+        const oldMode = this._currentMode;
+        this._currentMode = newMode;
 
-        for (let i = 0; i < this.HEIGHT; i++) {
-            for (let j = 0; j < this.WIDTH; j++) {
-                const index = (i * this.WIDTH + j);
-                const x = (j / (this.WIDTH - 1)) * planeWidth - halfWidth;
-                const y = (i / (this.HEIGHT - 1)) * planeHeight - halfHeight;
-                const z = 0.0; 
+        if (oldMode === 'particles') this._resetParticleUniforms();
+        if (oldMode === 'fluidsim') this._resetFluidUniforms();
 
+        const isParticleOrFluid = (newMode === 'particles' || newMode === 'fluidsim');
+        const isLandscape = (newMode === 'faceted' || newMode === 'geocube');
+
+        if (isParticleOrFluid) {
+            const shader = (newMode === 'fluidsim') ? this._fluidVelocityShader : this._particleVelocityShader;
+            if (this.velocityVariable.material.fragmentShader !== shader) {
+                this.velocityVariable.material.fragmentShader = shader;
+                this.velocityVariable.material.needsUpdate = true;
+            }
+        }
+        
+        if (isLandscape) {
+            this.initLandscapeSystem();
+        }
+
+        if (!isInitial) {
+            this.app.ImagePlaneManager.createDefaultLandscape();
+        }
+    },
+
+    initLandscapeSystem() {
+        const planeRes = this.app.ImagePlaneManager.planeResolution;
+        if (this.landscapeGpuCompute && this.landscapeGpuCompute.width === planeRes.x && this.landscapeGpuCompute.height === planeRes.y) {
+            return;
+        }
+
+        this.disposeLandscapeSystem();
+
+        const renderer = this.app.renderer;
+        this.landscapeGpuCompute = new GPUComputationRenderer(planeRes.x, planeRes.y, renderer);
+        
+        const planeDims = this.app.ImagePlaneManager.planeDimensions;
+        const initialPositionData = new Float32Array(planeRes.x * planeRes.y * 4);
+        const halfWidth = planeDims.x / 2;
+        const halfHeight = planeDims.y / 2;
+
+        for (let i = 0; i < planeRes.y; i++) {
+            for (let j = 0; j < planeRes.x; j++) {
+                const index = (i * planeRes.x + j);
+                const x = (j / (planeRes.x - 1)) * planeDims.x - halfWidth;
+                const y = (i / (planeRes.y - 1)) * planeDims.y - halfHeight;
                 initialPositionData[index * 4 + 0] = x;
                 initialPositionData[index * 4 + 1] = y;
-                initialPositionData[index * 4 + 2] = z;
+                initialPositionData[index * 4 + 2] = 0.0;
                 initialPositionData[index * 4 + 3] = 1.0;
             }
         }
 
-        this.initialPositionTexture = new this.app.THREE.DataTexture(initialPositionData, this.WIDTH, this.HEIGHT, this.app.THREE.RGBAFormat, this.app.THREE.FloatType);
-        this.initialPositionTexture.needsUpdate = true;
-        
-        const copyShader = `
-            void main() {
-                vec2 uv = gl_FragCoord.xy / resolution.xy;
-                gl_FragColor = texture2D(texturePosition, uv);
-            }
-        `;
+        this.landscapeInitialPositionTexture = new this.app.THREE.DataTexture(initialPositionData, planeRes.x, planeRes.y, this.app.THREE.RGBAFormat, this.app.THREE.FloatType);
+        this.landscapeInitialPositionTexture.needsUpdate = true;
 
-        this.positionVariable = this.gpuCompute.addVariable('texturePosition', gpgpuPositionShader, this.initialPositionTexture);
-        this.previousPositionVariable = this.gpuCompute.addVariable('texturePreviousPosition', copyShader, this.initialPositionTexture);
+        const copyShader = `void main() { gl_FragColor = texture2D(texturePosition, gl_FragCoord.xy / resolution.xy); }`;
 
-        this.gpuCompute.setVariableDependencies(this.positionVariable, [this.positionVariable, this.previousPositionVariable]);
-        this.gpuCompute.setVariableDependencies(this.previousPositionVariable, [this.positionVariable]);
-        
+        this.landscapePositionVariable = this.landscapeGpuCompute.addVariable('texturePosition', gpgpuPositionShader, this.landscapeInitialPositionTexture);
+        this.landscapePreviousPositionVariable = this.landscapeGpuCompute.addVariable('texturePreviousPosition', copyShader, this.landscapeInitialPositionTexture);
+
+        this.landscapeGpuCompute.setVariableDependencies(this.landscapePositionVariable, [this.landscapePositionVariable, this.landscapePreviousPositionVariable]);
+        this.landscapeGpuCompute.setVariableDependencies(this.landscapePreviousPositionVariable, [this.landscapePositionVariable]);
+
         const uniforms = {
-            u_initialPosition: { value: this.initialPositionTexture },
+            u_initialPosition: { value: this.landscapeInitialPositionTexture },
             u_time: { value: 0 },
             u_delta: { value: 0 },
             u_audioLow: { value: 0 },
-            u_audioTexture: { value: this.app.AudioProcessor.audioTexture }, 
-            u_planeDimensions: { value: new this.app.THREE.Vector2(planeWidth, planeHeight) },
+            u_audioTexture: { value: this.app.AudioProcessor.audioTexture },
+            u_planeDimensions: { value: new this.app.THREE.Vector2(planeDims.x, planeDims.y) },
             u_gpgpu_enableWaterRipple: { value: false },
             u_gpgpu_rippleSpeed: { value: 0.5 },
             u_gpgpu_rippleStrength: { value: 1.0 },
             u_gpgpu_rippleFrequency: { value: 15.0 },
             u_gpgpu_enableEqRipple: { value: false },
             u_gpgpu_eqRippleStrength: { value: 2.0 },
-            u_gpgpu_eqRippleSmoothing: { value: 0.5 },
+            u_gpgpu_eqRippleStyle: { value: 0 },
             u_gpgpu_eqRippleBarCount: { value: 64.0 },
             u_gpgpu_eqRippleBarWidth: { value: 0.8 },
             u_gpgpu_eqRippleRangeStart: { value: 0.0 },
             u_gpgpu_eqRippleRangeEnd: { value: 1.0 },
-            u_gpgpu_eqRippleStyle: { value: 0 },
             u_gpgpu_enableCloth: { value: false },
             u_gpgpu_clothDamping: { value: 1.0 },
             u_gpgpu_clothStiffness: { value: 0.8 },
@@ -180,121 +201,146 @@ export const ComputeManager = {
             u_gpgpu_peelDrift: { value: 0.0 },
         };
 
-        this.positionVariable.material.uniforms = uniforms;
-        this.previousPositionVariable.material.uniforms = uniforms;
+        this.landscapePositionVariable.material.uniforms = uniforms;
+        this.landscapePreviousPositionVariable.material.uniforms = this.landscapePositionVariable.material.uniforms;
 
+        const error = this.landscapeGpuCompute.init();
+        if (error !== null) {
+            this.app.UIManager.logError("Landscape GPGPU Init Error: " + error);
+        } else {
+            this.app.UIManager.logSuccess("Landscape GPGPU Compute Initialized.");
+        }
+    },
+    
+    _setupUnifiedParticleSimulation() {
+        if (this.gpuCompute) return;
+
+        this.WIDTH = this.app.vizSettings.particle_resolution;
+        this.HEIGHT = this.app.vizSettings.particle_resolution;
+        this.AREA = this.WIDTH * this.HEIGHT;
+        
+        const renderer = this.app.renderer;
+        this.gpuCompute = new GPUComputationRenderer(this.WIDTH, this.HEIGHT, renderer);
+
+        this.particleFlatPositionTexture = this.gpuCompute.createTexture();
+        this.particleModelPositionTexture = this.gpuCompute.createTexture();
+        this.particleModelUVTexture = this.gpuCompute.createTexture();
+
+        const dtPosition = this.gpuCompute.createTexture();
+        const dtVelocity = this.gpuCompute.createTexture();
+        
+        this._fillInitialParticleData(dtPosition.image.data, dtVelocity.image.data);
+        this._fillInitialParticleData(this.particleFlatPositionTexture.image.data, []);
+
+        this.velocityVariable = this.gpuCompute.addVariable("textureVelocity", this._particleVelocityShader, dtVelocity);
+        this.positionVariable = this.gpuCompute.addVariable("texturePosition", particlePositionShader, dtPosition);
+
+        this.gpuCompute.setVariableDependencies(this.velocityVariable, [this.positionVariable, this.velocityVariable]);
+        this.gpuCompute.setVariableDependencies(this.positionVariable, [this.positionVariable, this.velocityVariable]);
+        
+        const D = this.app.defaultVisualizerSettings;
+        const vUniforms = this.velocityVariable.material.uniforms;
+        vUniforms['u_time'] = { value: 0.0 };
+        vUniforms['u_delta'] = { value: 0.0 };
+        vUniforms['u_targetPositionMap'] = { value: this.particleFlatPositionTexture };
+        vUniforms['u_initialPosition'] = { value: this.particleFlatPositionTexture };
+        vUniforms['u_modelPosition'] = { value: this.particleModelPositionTexture };
+        vUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
+        vUniforms['particle_flowScale'] = { value: D.particle_flowScale };
+        vUniforms['particle_flowSpeed'] = { value: D.particle_flowSpeed };
+        vUniforms['particle_flowStrength'] = { value: D.particle_flowStrength };
+        vUniforms['particle_attractionStrength'] = { value: D.particle_attractionStrength };
+        vUniforms['particle_morphProgress'] = { value: D.particle_morphProgress };
+        vUniforms['u_gravityWellPosition'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
+        vUniforms['u_gravityWellStrength'] = { value: 0.0 };
+        vUniforms['u_orbitalStrength'] = { value: 0.0 };
+        vUniforms['u_physicsState'] = { value: 0 };
+        vUniforms['u_gravity'] = { value: new this.app.THREE.Vector3(0, D.fluid_gravity, 0) };
+        vUniforms['u_targetState'] = { value: 0 };
+        vUniforms['u_worldSize'] = { value: 60 };
+        vUniforms['u_explosionCenter'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
+        vUniforms['u_explosionStrength'] = { value: 0.0 };
+        vUniforms['u_vortexCenter'] = { value: new this.app.THREE.Vector2(0, 0) };
+        vUniforms['u_vortexStrength'] = { value: 0.0 };
+        vUniforms['fluid_curlStrength'] = { value: D.fluid_curlStrength };
+        vUniforms['fluid_curlScale'] = { value: D.fluid_curlScale };
+        vUniforms['fluid_curlSpeed'] = { value: D.fluid_curlSpeed };
+        vUniforms['fluid_attractionStrength'] = { value: 0.0 };
+
+        const pUniforms = this.positionVariable.material.uniforms;
+        pUniforms['u_delta'] = { value: 0.0 };
+        pUniforms['u_worldSize'] = vUniforms.u_worldSize;
+        pUniforms['u_manualMorph'] = { value: 0.0 };
+        pUniforms['u_targetState'] = vUniforms.u_targetState;
+        pUniforms['u_initialPosition'] = vUniforms.u_initialPosition;
+        pUniforms['u_modelPosition'] = vUniforms.u_modelPosition;
+        
         const error = this.gpuCompute.init();
         if (error !== null) {
-            this.app.UIManager.logError("GPGPU Init Error: " + error);
-            console.error("GPGPU Init Error:", error);
+            this.app.UIManager.logError("Unified GPGPU failed to init.");
         } else {
-            this.app.UIManager.logSuccess("GPGPU Compute Initialized.");
+            console.log("Unified GPGPU system initialized.");
         }
     },
 
-    initParticleSystem() {
-        this.disposeParticleSimulation();
+    _resetParticleUniforms() {
+        if (!this.velocityVariable) return;
+        const D = this.app.defaultVisualizerSettings;
+        const u = this.velocityVariable.material.uniforms;
+        u.particle_flowStrength.value = D.particle_flowStrength;
+        u.particle_flowSpeed.value = D.particle_flowSpeed;
+        u.particle_flowScale.value = D.particle_flowScale;
+        u.particle_attractionStrength.value = D.particle_attractionStrength;
+        u.particle_morphProgress.value = D.particle_morphProgress;
+        u.u_gravityWellStrength.value = 0.0;
+        u.u_orbitalStrength.value = 0.0;
+    },
 
-        const S = this.app.vizSettings;
-        const resolution = S.particle_resolution;
-        const count = resolution * resolution;
-        const renderer = this.app.renderer;
+    _resetFluidUniforms() {
+        if (!this.velocityVariable) return;
+        const D = this.app.defaultVisualizerSettings;
+        const u = this.velocityVariable.material.uniforms;
+        u.u_gravity.value.set(0, D.fluid_gravity, 0);
+        u.fluid_attractionStrength.value = 0.0;
+        u.u_explosionStrength.value = 0.0;
+        u.u_vortexStrength.value = 0.0;
+        u.fluid_curlStrength.value = D.fluid_curlStrength;
+        u.fluid_curlScale.value = D.fluid_curlScale;
+        u.fluid_curlSpeed.value = D.fluid_curlSpeed;
+        u.u_physicsState.value = 0;
+    },
 
-        this.particleGpuCompute = new GPUComputationRenderer(resolution, resolution, renderer);
-
-        if (!this.particleFlatPositionTexture) {
-            this.particleFlatPositionTexture = this.particleGpuCompute.createTexture();
-        }
-        if (!this.particleModelPositionTexture) {
-            this.particleModelPositionTexture = this.particleGpuCompute.createTexture(); 
-        }
-        if (!this.particleModelUVTexture) {
-            this.particleModelUVTexture = this.particleGpuCompute.createTexture();
-        }
-
-        const dtPosition = this.particleGpuCompute.createTexture();
-        const dtVelocity = this.particleGpuCompute.createTexture();
-        
-        const posArray = dtPosition.image.data;
-        const velArray = dtVelocity.image.data;
-        const flatArray = this.particleFlatPositionTexture.image.data;
-
+    _fillInitialParticleData(positionData, velocityData) {
         const planeDims = this.app.ImagePlaneManager.planeDimensions;
         const halfWidth = planeDims.x / 2;
         const halfHeight = planeDims.y / 2;
+        const res = this.app.vizSettings.particle_resolution;
 
-        for (let i = 0; i < count; i++) {
+        for (let i = 0; i < res * res; i++) {
             const k = i * 4;
-            const u = (i % resolution) / (resolution - 1);
-            const v = Math.floor(i / resolution) / (resolution - 1);
+            const u = (i % res) / (res - 1);
+            const v = Math.floor(i / res) / (res - 1);
+
+            positionData[k + 0] = u * planeDims.x - halfWidth;
+            positionData[k + 1] = v * planeDims.y - halfHeight;
+            positionData[k + 2] = 0.0;
+            positionData[k + 3] = 1.0;
             
-            const worldX = u * planeDims.x - halfWidth;
-            const worldY = v * planeDims.y - halfHeight;
-
-            posArray[k + 0] = flatArray[k + 0] = worldX;
-            posArray[k + 1] = flatArray[k + 1] = worldY;
-            posArray[k + 2] = flatArray[k + 2] = 0;
-            posArray[k + 3] = flatArray[k + 3] = 1.0;
-
-            velArray[k + 0] = 0;
-            velArray[k + 1] = 0;
-            velArray[k + 2] = 0;
-            velArray[k + 3] = 1.0;
-        }
-
-        this.particleVelocityVar = this.particleGpuCompute.addVariable("textureVelocity", particleVelocityShader, dtVelocity);
-        this.particlePositionVar = this.particleGpuCompute.addVariable("texturePosition", particlePositionShader, dtPosition);
-
-        this.particleGpuCompute.setVariableDependencies(this.particleVelocityVar, [this.particlePositionVar, this.particleVelocityVar]);
-        this.particleGpuCompute.setVariableDependencies(this.particlePositionVar, [this.particlePositionVar, this.particleVelocityVar]);
-        
-        const velocityUniforms = this.particleVelocityVar.material.uniforms;
-        velocityUniforms['u_time'] = { value: 0.0 };
-        velocityUniforms['u_targetPositionMap'] = { value: this.particleFlatPositionTexture };
-        velocityUniforms['u_initialPosition'] = { value: this.particleFlatPositionTexture };
-        velocityUniforms['u_planeDimensions'] = { value: this.app.ImagePlaneManager.planeDimensions };
-
-        velocityUniforms['particle_flowScale'] = { value: S.particle_flowScale };
-        velocityUniforms['particle_flowSpeed'] = { value: S.particle_flowSpeed };
-        velocityUniforms['particle_flowStrength'] = { value: S.particle_flowStrength };
-        velocityUniforms['particle_morphProgress'] = { value: S.particle_morphProgress };
-        velocityUniforms['particle_attractionStrength'] = { value: S.particle_attractionStrength };
-
-        velocityUniforms['u_gravity'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
-        velocityUniforms['u_vortexStrength'] = { value: 0.0 };
-        velocityUniforms['u_vortexPosition'] = { value: new this.app.THREE.Vector2(0, 0) };
-        velocityUniforms['u_meltProgress'] = { value: 0.0 };
-        
-        velocityUniforms['u_gravityWellPosition'] = { value: new this.app.THREE.Vector3(0, 0, 0) };
-        velocityUniforms['u_gravityWellStrength'] = { value: 0.0 };
-        velocityUniforms['u_orbitalStrength'] = { value: 0.0 };
-
-        const positionUniforms = this.particlePositionVar.material.uniforms;
-        positionUniforms['u_delta'] = { value: 0.0 };
-
-        const error = this.particleGpuCompute.init();
-        if (error !== null) {
-            console.error("Particle GPGPU Error:", error);
-            this.app.UIManager.logError("Particle GPGPU failed to init.");
-        } else {
-            console.log("Particle GPGPU system initialized.");
+            if(velocityData && velocityData.length > 0) {
+                velocityData[k + 0] = 0.0;
+                velocityData[k + 1] = 0.0;
+                velocityData[k + 2] = 0.0;
+                velocityData[k + 3] = 0.0;
+            }
         }
     },
-
-    bakeToTexture(mesh, targetPositionTexture) {
-        if (!mesh || !targetPositionTexture) {
-            console.error("Bake failed: mesh or target position texture is missing.");
-            return;
-        }
     
+    bakeToTexture(mesh, targetPositionTexture) {
+        if (!mesh || !targetPositionTexture) return;
         const targetUVTexture = this.particleModelUVTexture;
-        if (!targetUVTexture) {
-            console.error("Bake failed: particleModelUVTexture is missing.");
-            return;
-        }
+        if (!targetUVTexture) return;
     
         const sampler = new MeshSurfaceSampler(mesh).build();
-    
         const posArray = targetPositionTexture.image.data;
         const uvArray = targetUVTexture.image.data;
         const particleCount = posArray.length / 4;
@@ -314,25 +360,16 @@ export const ComputeManager = {
         const _uv = new this.app.THREE.Vector2();
     
         const hasUVs = mesh.geometry.attributes.uv !== undefined;
-        if (!hasUVs) {
-            console.warn(`Baking to texture: Mesh "${mesh.name}" has no UV coordinates. Model color will not work.`);
-        }
     
         for (let i = 0; i < particleCount; i++) {
             sampler.sample(_position, _normal, undefined, _uv);
-    
             _position.sub(center).multiplyScalar(scale);
-    
             const k = i * 4;
             posArray[k + 0] = _position.x;
             posArray[k + 1] = _position.y;
             posArray[k + 2] = _position.z;
-            posArray[k + 3] = 1.0;
-
             uvArray[k + 0] = hasUVs ? _uv.x : 0.0;
             uvArray[k + 1] = hasUVs ? _uv.y : 0.0;
-            uvArray[k + 2] = 0.0; 
-            uvArray[k + 3] = 1.0; 
         }
     
         targetPositionTexture.needsUpdate = true;
@@ -346,43 +383,30 @@ export const ComputeManager = {
     },
 
     disposeLandscapeSystem() {
-        if (this.gpuCompute) {
-            if (this.positionVariable) this.positionVariable.renderTargets.forEach(rt => rt.dispose());
-            if (this.previousPositionVariable) this.previousPositionVariable.renderTargets.forEach(rt => rt.dispose());
-            if (this.initialPositionTexture) this.initialPositionTexture.dispose();
-
-            this.gpuCompute = null;
-            this.positionVariable = null;
-            this.previousPositionVariable = null;
-            this.initialPositionTexture = null;
+        if (this.landscapeGpuCompute) {
+            this.landscapeGpuCompute.dispose();
+            if (this.landscapeInitialPositionTexture) this.landscapeInitialPositionTexture.dispose();
+            this.landscapeGpuCompute = null;
+            this.landscapePositionVariable = null;
+            this.landscapePreviousPositionVariable = null;
+            this.landscapeInitialPositionTexture = null;
             console.log("Landscape GPGPU system disposed.");
         }
     },
 
     disposeParticleSystem() {
-        this.disposeParticleSimulation(); // Dispose the active simulation
-        // Also dispose the baked data textures
-        if (this.particleFlatPositionTexture) this.particleFlatPositionTexture.dispose();
-        if (this.particleModelPositionTexture) this.particleModelPositionTexture.dispose();
-        if (this.particleModelUVTexture) this.particleModelUVTexture.dispose();
-        this.particleFlatPositionTexture = null; 
-        this.particleModelPositionTexture = null;
-        this.particleModelUVTexture = null;
-        console.log("Full Particle GPGPU system (sim + baked data) disposed.");
-    },
-
-    disposeParticleSimulation() {
-        if (this.particleGpuCompute) {
-            const variables = [this.particlePositionVar, this.particleVelocityVar];
-            variables.forEach(variable => {
-                if (variable && variable.renderTargets) {
-                    variable.renderTargets.forEach(rt => rt.dispose());
-                }
-            });
-            this.particleGpuCompute = null;
-            this.particlePositionVar = null;
-            this.particleVelocityVar = null;
-            console.log("Particle GPGPU *simulation* disposed. Baked data preserved.");
+        if (this.gpuCompute) {
+            this.gpuCompute.dispose();
+            if (this.particleFlatPositionTexture) this.particleFlatPositionTexture.dispose();
+            if (this.particleModelPositionTexture) this.particleModelPositionTexture.dispose();
+            if (this.particleModelUVTexture) this.particleModelUVTexture.dispose();
+            this.gpuCompute = null;
+            this.positionVariable = null;
+            this.velocityVariable = null;
+            this.particleFlatPositionTexture = null;
+            this.particleModelPositionTexture = null;
+            this.particleModelUVTexture = null;
+            console.log("Unified Particle GPGPU system disposed.");
         }
     },
 
@@ -390,19 +414,16 @@ export const ComputeManager = {
         const S = this.app.vizSettings;
         const A = this.app.AudioProcessor;
         
-        // ** THE FIX IS HERE: Add explicit checks for the active GPGPU mode **
-        const isDeformationMode = S.gpgpuGeometryMode === 'faceted' || S.gpgpuGeometryMode === 'geocube';
-        
-        // --- UPDATE LANDSCAPE/DEFORMATION GPGPU SYSTEM ---
-        if (this.gpuCompute && isDeformationMode) {
-            const uniforms = this.positionVariable.material.uniforms;
-            
-            if (S.gpgpu_enableCloth && this.clothEnableTime < 0) {
-                this.clothEnableTime = this.app.currentTime;
-            } else if (!S.gpgpu_enableCloth) {
-                this.clothEnableTime = -1;
-            }
+        const isParticleOrFluid = (this._currentMode === 'particles' || this._currentMode === 'fluidsim');
+        const isLandscape = (this._currentMode === 'faceted' || this._currentMode === 'geocube');
 
+        if (isLandscape && this.landscapeGpuCompute) {
+            const uniforms = this.landscapePositionVariable.material.uniforms;
+            
+            // --- BUG FIX: CORRECTLY UPDATE THE .value PROPERTY OF EXISTING UNIFORMS ---
+            if (S.gpgpu_enableCloth && this.clothEnableTime < 0) this.clothEnableTime = this.app.currentTime;
+            else if (!S.gpgpu_enableCloth) this.clothEnableTime = -1;
+    
             let blendFactor = 0.0;
             if (this.clothEnableTime >= 0) {
                 const elapsedTime = this.app.currentTime - this.clothEnableTime;
@@ -410,7 +431,7 @@ export const ComputeManager = {
                 blendFactor = Math.min(elapsedTime / blendDuration, 1.0);
             }
             uniforms.u_gpgpu_clothBlendFactor.value = blendFactor;
-
+    
             uniforms.u_gpgpu_enableWaterRipple.value = S.gpgpu_enableWaterRipple;
             uniforms.u_gpgpu_rippleSpeed.value = S.gpgpu_rippleSpeed;
             uniforms.u_gpgpu_rippleStrength.value = S.gpgpu_rippleStrength;
@@ -436,7 +457,6 @@ export const ComputeManager = {
             uniforms.u_gpgpu_ambientWindSpeed.value = S.gpgpu_ambientWindSpeed;
             uniforms.u_gpgpu_ambientWindScale.value = S.gpgpu_ambientWindScale;
             uniforms.u_gpgpu_directionalWind.value.set(S.gpgpu_directionalWindX, S.gpgpu_directionalWindY, S.gpgpu_directionalWindZ);
-
             uniforms.u_gpgpu_enableFold.value = S.gpgpu_enableFold;
             uniforms.u_gpgpu_foldAngle.value = S.gpgpu_foldAngle * (Math.PI / 180.0);
             uniforms.u_gpgpu_foldDepth.value = S.gpgpu_foldDepth;
@@ -449,7 +469,6 @@ export const ComputeManager = {
             uniforms.u_gpgpu_enableFoldTuck.value = S.gpgpu_enableFoldTuck;
             uniforms.u_gpgpu_foldTuckAmount.value = S.gpgpu_foldTuckAmount;
             uniforms.u_gpgpu_foldTuckReach.value = S.gpgpu_foldTuckReach;
-
             uniforms.u_gpgpu_enableCylinder.value = S.gpgpu_enableCylinder;
             uniforms.u_gpgpu_cylinderRadius.value = S.gpgpu_cylinderRadius;
             uniforms.u_gpgpu_cylinderHeightScale.value = S.gpgpu_cylinderHeightScale;
@@ -457,7 +476,6 @@ export const ComputeManager = {
             uniforms.u_gpgpu_cylinderAxisAlignment.value = cylAxisMapGpgpu[S.gpgpu_cylinderAxisAlignment] || 0;
             uniforms.u_gpgpu_cylinderArcAngle.value = S.gpgpu_cylinderArcAngle * (Math.PI / 180.0);
             uniforms.u_gpgpu_cylinderArcOffset.value = S.gpgpu_cylinderArcOffset * (Math.PI / 180.0);
-
             uniforms.u_gpgpu_enableSag.value = S.gpgpu_enableSag;
             uniforms.u_gpgpu_sagAmount.value = S.gpgpu_sagAmount;
             uniforms.u_gpgpu_sagFalloffSharpness.value = S.gpgpu_sagFalloffSharpness;
@@ -468,39 +486,50 @@ export const ComputeManager = {
             uniforms.u_gpgpu_droopFalloffSharpness.value = S.gpgpu_droopFalloffSharpness;
             uniforms.u_gpgpu_droopSupportedWidthFactor.value = S.gpgpu_droopSupportedWidthFactor;
             uniforms.u_gpgpu_droopSupportedDepthFactor.value = S.gpgpu_droopSupportedDepthFactor;
-            
             uniforms.u_gpgpu_enablePeel.value = S.gpgpu_enablePeel;
             uniforms.u_gpgpu_peelAmount.value = S.gpgpu_peelAmount;
             uniforms.u_gpgpu_peelCurl.value = S.gpgpu_peelCurl;
             uniforms.u_gpgpu_peelEnableAudio.value = S.gpgpu_peelEnableAudio;
             uniforms.u_gpgpu_peelTextureAmount.value = S.gpgpu_peelTextureAmount;
             uniforms.u_gpgpu_peelDrift.value = S.gpgpu_peelDrift;
-            
             uniforms.u_time.value = this.app.currentTime;
             uniforms.u_delta.value = delta;
             uniforms.u_audioLow.value = A.energy.low;
-            if (A.audioTexture) { 
-                uniforms.u_audioTexture.value = A.audioTexture;
-            }
-            
-            this.gpuCompute.compute();
+            if (A.audioTexture) uniforms.u_audioTexture.value = A.audioTexture;
+            // --- END BUG FIX ---
+
+            this.landscapeGpuCompute.compute();
         }
 
-        // --- UPDATE PARTICLE GPGPU SYSTEM ---
-        if (this.particleGpuCompute && S.gpgpuGeometryMode === 'particles') {
-            const pUniformsV = this.particleVelocityVar.material.uniforms;
-            const pUniformsP = this.particlePositionVar.material.uniforms;
+        if (isParticleOrFluid && this.gpuCompute) {
+            const vUniforms = this.velocityVariable.material.uniforms;
+            const pUniforms = this.positionVariable.material.uniforms;
+            
+            vUniforms.u_time.value = this.app.currentTime;
+            vUniforms.u_delta.value = delta;
+            pUniforms.u_delta.value = delta;
+            
+            if (this._currentMode === 'particles') {
+                vUniforms.particle_flowScale.value = S.particle_flowScale;
+                vUniforms.particle_flowSpeed.value = S.particle_flowSpeed;
+                vUniforms.particle_flowStrength.value = S.particle_flowStrength;
+                vUniforms.particle_morphProgress.value = S.particle_morphProgress;
+                vUniforms.particle_attractionStrength.value = S.particle_attractionStrength;
+            } else if (this._currentMode === 'fluidsim') {
+                const isDirectorActive = this.app.FluidDirector.activeScript;
+                const isManualActive = pUniforms.u_manualMorph.value > 0.0;
 
-            pUniformsV.u_time.value = this.app.currentTime;
-            pUniformsP.u_delta.value = delta;
+                if (!isDirectorActive) {
+                    vUniforms.fluid_curlStrength.value = S.fluid_curlStrength;
+                    vUniforms.fluid_curlScale.value = S.fluid_curlScale;
+                    vUniforms.fluid_curlSpeed.value = S.fluid_curlSpeed;
+                }
+                
+                vUniforms.u_physicsState.value = (isDirectorActive || isManualActive) ? 1 : 0;
+                if (vUniforms.u_physicsState.value === 0) return;
+            }
 
-            pUniformsV.particle_flowScale.value = S.particle_flowScale;
-            pUniformsV.particle_flowSpeed.value = S.particle_flowSpeed;
-            pUniformsV.particle_flowStrength.value = S.particle_flowStrength;
-            pUniformsV.particle_morphProgress.value = S.particle_morphProgress;
-            pUniformsV.particle_attractionStrength.value = S.particle_attractionStrength;
-
-            this.particleGpuCompute.compute();
+            this.gpuCompute.compute();
         }
     }
 };

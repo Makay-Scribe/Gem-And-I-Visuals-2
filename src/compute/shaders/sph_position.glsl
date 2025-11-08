@@ -1,9 +1,8 @@
-// src/compute/shaders/sph_position.glsl - V3 (With Manual Morph)
+// src/compute/shaders/sph_position.glsl - V4 (Cleaned for Unified ComputeManager)
 
 uniform float u_delta;
 uniform float u_worldSize;
 
-// ** THE FIX IS HERE: Add uniforms for manual morphing. **
 uniform float u_manualMorph; // The 0-1 value from the slider
 uniform int u_targetState;   // The target (0 for Canvas, 1 for Model)
 uniform sampler2D u_initialPosition;
@@ -18,7 +17,6 @@ void main() {
     // Standard Verlet integration: Update the position based on velocity.
     vec3 physics_pos = position + velocity * u_delta;
 
-    // ** THE FIX IS HERE: Implement the manual morph logic. **
     vec3 final_pos;
     if (u_manualMorph > 0.0) {
         // If the user is using the manual slider, blend between the physics
@@ -30,10 +28,9 @@ void main() {
         final_pos = physics_pos;
     }
     
-    // *******************************************************************
-    // ** TEMPORARY DEBUG LINE: Force Z-offset to confirm GPU is reading **
-    // *******************************************************************
-    final_pos.z += 5.0; 
+    // --- BUG FIX ---
+    // The hardcoded debug line `final_pos.z += 5.0;` has been removed.
+    // --- END BUG FIX ---
 
     // Add boundary clamping logic.
     float halfWorld = u_worldSize / 2.0;

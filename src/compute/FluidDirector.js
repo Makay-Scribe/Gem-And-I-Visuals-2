@@ -2,10 +2,11 @@ import THREE from '../three-singleton.js';
 
 /*
 ================================================================================================
-FLUID SIMULATION DIRECTOR
+FLUID SIMULATION DIRECTOR (REFACTORED)
 ================================================================================================
 This module is the "Conductor" for all fluid-based artistic transitions.
-It manages timelines and tells the FluidSimulationContainer which forces to apply and when.
+It now directs the unified ComputeManager, telling it which forces to apply and when
+by modifying the uniforms on its GPGPU variables.
 */
 
 export const FluidDirector = {
@@ -18,15 +19,15 @@ export const FluidDirector = {
     scripts: {
         'meltAndReform': {
             duration: 12000,
-            forward(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                const uniforms = FSIM.velocityVariable.material.uniforms;
+            forward(CM, progress, easedProgress) {
+                if (!CM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = CM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
                 // ACT I: Breakup (0.0 -> 0.4) - Particles start melting downwards
                 const meltProgress = Math.min(1.0, progress / 0.4);
                 uniforms.u_gravity.value.y = -9.8 * meltProgress;
-                uniforms.u_attractionStrength.value = 0.0;
+                uniforms.fluid_attractionStrength.value = 0.0;
                 uniforms.u_targetState.value = 0; // Still targeting the canvas
                 
                 // ACT II: Chaos (0.4 -> 0.7) - Gravity fades, attraction to model begins
@@ -34,25 +35,25 @@ export const FluidDirector = {
                     const gatherProgress = Math.min(1.0, (progress - 0.4) / 0.3);
                     uniforms.u_gravity.value.y = THREE.MathUtils.lerp(-9.8, 0.0, gatherProgress);
                     uniforms.u_targetState.value = 1; // Switch target to the 3D model
-                    uniforms.u_attractionStrength.value = THREE.MathUtils.lerp(0.0, 0.5, gatherProgress);
+                    uniforms.fluid_attractionStrength.value = THREE.MathUtils.lerp(0.0, 0.5, gatherProgress);
                     renderUniforms.u_particleColorMix.value = gatherProgress;
                 }
 
                 // ACT III: Reform (0.7 -> 1.0) - Strong attraction to finalize on model
                 if (progress > 0.7) {
                     const reformProgress = (progress - 0.7) / 0.3;
-                    uniforms.u_attractionStrength.value = THREE.MathUtils.lerp(0.5, 3.0, reformProgress);
+                    uniforms.fluid_attractionStrength.value = THREE.MathUtils.lerp(0.5, 3.0, reformProgress);
                 }
             },
-            reverse(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                const uniforms = FSIM.velocityVariable.material.uniforms;
+            reverse(CM, progress, easedProgress) {
+                if (!CM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = CM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
                 // ACT I: Breakup (0.0 -> 0.3) - Particles dissolve and float up slightly
                 const dissolveProgress = Math.min(1.0, progress / 0.3);
                 uniforms.u_gravity.value.y = 2.0 * dissolveProgress;
-                uniforms.u_attractionStrength.value = 0.0;
+                uniforms.fluid_attractionStrength.value = 0.0;
                 uniforms.u_targetState.value = 1; // Still targeting the model
                 renderUniforms.u_particleColorMix.value = 1.0 - dissolveProgress;
 
@@ -67,47 +68,46 @@ export const FluidDirector = {
                 if (progress > 0.7) {
                     const settleProgress = (progress - 0.7) / 0.3;
                     uniforms.u_gravity.value.y = THREE.MathUtils.lerp(-9.8, 0.0, settleProgress);
-                    uniforms.u_attractionStrength.value = THREE.MathUtils.lerp(0.0, 3.0, settleProgress);
+                    uniforms.fluid_attractionStrength.value = THREE.MathUtils.lerp(0.0, 3.0, settleProgress);
                 }
             }
         },
         'explosion': {
             duration: 8000,
-            forward(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                const uniforms = FSIM.velocityVariable.material.uniforms;
+            forward(CM, progress, easedProgress) {
+                if (!CM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = CM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
                 
                 // ACT I & II: Breakup & Chaos (0.0 -> 0.7) - A single shockwave pulse
                 const shockwaveProgress = Math.min(1.0, progress / 0.7);
                 const shockwave = Math.sin(shockwaveProgress * Math.PI); // A single curve up and down
                 uniforms.u_explosionStrength.value = 50.0 * shockwave;
-                uniforms.u_attractionStrength.value = 0.0;
+                uniforms.fluid_attractionStrength.value = 0.0;
 
                 // ACT III: Reform (0.5 -> 1.0) - Strong attraction to model
                 if (progress > 0.5) {
                     const reassembleProgress = (progress - 0.5) / 0.5;
                     uniforms.u_targetState.value = 1;
-                    uniforms.u_attractionStrength.value = 3.0 * reassembleProgress;
+                    uniforms.fluid_attractionStrength.value = 3.0 * reassembleProgress;
                     renderUniforms.u_particleColorMix.value = reassembleProgress;
                 }
             },
-            reverse(FSIM, progress, easedProgress) {
-                // Reverse is just a simple, strong attraction back to the canvas
-                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                const uniforms = FSIM.velocityVariable.material.uniforms;
+            reverse(CM, progress, easedProgress) {
+                if (!CM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = CM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
                 uniforms.u_targetState.value = 0;
-                uniforms.u_attractionStrength.value = 3.0 * easedProgress;
+                uniforms.fluid_attractionStrength.value = 3.0 * easedProgress;
                 renderUniforms.u_particleColorMix.value = 1.0 - easedProgress;
             }
         },
         'vortex': {
             duration: 10000,
-            forward(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                const uniforms = FSIM.velocityVariable.material.uniforms;
+            forward(CM, progress, easedProgress) {
+                if (!CM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = CM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
                 // ACT I & II: Breakup & Chaos (0.0 -> 0.8) - Vortex ramps up and then down
@@ -115,80 +115,79 @@ export const FluidDirector = {
                 const vortexCurve = Math.sin(vortexProgress * Math.PI);
                 uniforms.u_vortexStrength.value = 15.0 * vortexCurve;
                 uniforms.u_gravity.value.y = 5.0 * vortexCurve;
-                uniforms.u_attractionStrength.value = 0.0;
+                uniforms.fluid_attractionStrength.value = 0.0;
 
                 // ACT III: Reform (0.6 -> 1.0) - Strong attraction to model
                 if (progress > 0.6) {
                     const reformProgress = (progress - 0.6) / 0.4;
                     uniforms.u_targetState.value = 1;
-                    uniforms.u_attractionStrength.value = 3.0 * reformProgress;
+                    uniforms.fluid_attractionStrength.value = 3.0 * reformProgress;
                     renderUniforms.u_particleColorMix.value = reformProgress;
                 }
             },
-            reverse(FSIM, progress, easedProgress) {
-                // Reverse is a simple attraction back to the canvas
-                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                const uniforms = FSIM.velocityVariable.material.uniforms;
+            reverse(CM, progress, easedProgress) {
+                if (!CM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = CM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
                 uniforms.u_targetState.value = 0;
-                uniforms.u_attractionStrength.value = 3.0 * easedProgress;
+                uniforms.fluid_attractionStrength.value = 3.0 * easedProgress;
                 renderUniforms.u_particleColorMix.value = 1.0 - easedProgress;
             }
         },
         'swirl_reform': {
             duration: 9000,
-            forward(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                const uniforms = FSIM.velocityVariable.material.uniforms;
+            forward(CM, progress, easedProgress) {
+                if (!CM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = CM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
                 // ACT I & II: Breakup & Chaos (0.0 -> 0.8) - Curl noise ramps up and then down
                 const swirlProgress = Math.min(1.0, progress / 0.8);
                 const swirlCurve = Math.sin(swirlProgress * Math.PI);
-                uniforms.u_curlStrength.value = 5.0 * swirlCurve;
-                uniforms.u_curlScale.value = 0.05;
-                uniforms.u_curlSpeed.value = 0.5;
-                uniforms.u_attractionStrength.value = 0.0;
+                uniforms.fluid_curlStrength.value = 5.0 * swirlCurve;
+                uniforms.fluid_curlScale.value = 0.05;
+                uniforms.fluid_curlSpeed.value = 0.5;
+                uniforms.fluid_attractionStrength.value = 0.0;
 
                 // ACT III: Reform (0.6 -> 1.0) - Strong attraction to model
                 if (progress > 0.6) {
                     const reformProgress = (progress - 0.6) / 0.4;
                     uniforms.u_targetState.value = 1;
-                    uniforms.u_attractionStrength.value = 3.0 * reformProgress;
+                    uniforms.fluid_attractionStrength.value = 3.0 * reformProgress;
                     renderUniforms.u_particleColorMix.value = reformProgress;
                 }
             },
-            reverse(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                const uniforms = FSIM.velocityVariable.material.uniforms;
+            reverse(CM, progress, easedProgress) {
+                if (!CM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = CM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
                 // ACT I & II: Breakup & Chaos (0.0 -> 0.8) - Swirl away from the model
                 const chaosProgress = Math.min(1.0, progress / 0.8);
                 const chaosCurve = Math.sin(chaosProgress * Math.PI);
-                uniforms.u_curlStrength.value = 5.0 * chaosCurve;
-                uniforms.u_curlScale.value = 0.05;
-                uniforms.u_curlSpeed.value = 0.5;
-                uniforms.u_attractionStrength.value = 0.0;
+                uniforms.fluid_curlStrength.value = 5.0 * chaosCurve;
+                uniforms.fluid_curlScale.value = 0.05;
+                uniforms.fluid_curlSpeed.value = 0.5;
+                uniforms.fluid_attractionStrength.value = 0.0;
 
                 // ACT III: Reform (0.6 -> 1.0) - Strong attraction back to canvas
                 if (progress > 0.6) {
                     const reformProgress = (progress - 0.6) / 0.4;
                     uniforms.u_targetState.value = 0;
-                    uniforms.u_attractionStrength.value = 3.0 * reformProgress;
+                    uniforms.fluid_attractionStrength.value = 3.0 * reformProgress;
                     renderUniforms.u_particleColorMix.value = 1.0 - reformProgress;
                 }
             }
         },
         'reset': {
             duration: 4000,
-            update(FSIM, progress, easedProgress) {
-                if (!FSIM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
-                const uniforms = FSIM.velocityVariable.material.uniforms;
+            update(CM, progress, easedProgress) {
+                if (!CM.velocityVariable || !this.app.ImagePlaneManager.fluidMaterial) return;
+                const uniforms = CM.velocityVariable.material.uniforms;
                 const renderUniforms = this.app.ImagePlaneManager.fluidMaterial.uniforms;
 
-                uniforms.u_attractionStrength.value = 3.0 * easedProgress;
+                uniforms.fluid_attractionStrength.value = 3.0 * easedProgress;
                 uniforms.u_targetState.value = 0;
                 renderUniforms.u_particleColorMix.value = THREE.MathUtils.lerp(renderUniforms.u_particleColorMix.value, 0.0, 0.1);
             }
@@ -200,16 +199,11 @@ export const FluidDirector = {
     },
     
     _resetUniforms() {
-        const FSIM = this.app.FluidSimulationContainer;
-        if (!FSIM || !FSIM.gpuCompute || !FSIM.velocityVariable) return;
-        const uniforms = FSIM.velocityVariable.material.uniforms;
+        const CM = this.app.ComputeManager;
+        if (!CM || !CM.gpuCompute || !CM.velocityVariable) return;
         
-        if (uniforms.u_explosionStrength) uniforms.u_explosionStrength.value = 0.0;
-        if (uniforms.u_vortexStrength) uniforms.u_vortexStrength.value = 0.0;
-        if (uniforms.u_gravity) uniforms.u_gravity.value.y = 0.0;
-        if (uniforms.u_flowStrength) uniforms.u_flowStrength.value = 0.0;
-        if (uniforms.u_attractionStrength) uniforms.u_attractionStrength.value = 0.0;
-        if (uniforms.u_curlStrength) uniforms.u_curlStrength.value = 0.0;
+        // This now calls the dedicated reset helper in ComputeManager
+        CM._resetFluidUniforms();
     },
 
     run(scriptId = 'meltAndReform') {
@@ -223,11 +217,11 @@ export const FluidDirector = {
         const modelReady = this.app.isDefaultSculptureBaked;
         console.log(`FluidDirector: Model Texture Ready: ${modelReady}.`);
 
-        const FSIM = this.app.FluidSimulationContainer;
+        const CM = this.app.ComputeManager;
         const script = this.scripts[scriptId];
 
-        if (!script || !FSIM || !FSIM.gpuCompute || !FSIM.velocityVariable) {
-            console.error("FluidDirector cannot run: Fluid Simulation Container or script is not ready.");
+        if (!script || !CM || !CM.gpuCompute || !CM.velocityVariable) {
+            console.error("FluidDirector cannot run: Compute Manager or script is not ready.");
             return;
         }
 
@@ -273,7 +267,7 @@ export const FluidDirector = {
             this.nextState = nextIdleState;
             
             this._resetUniforms();
-            FSIM.startPhysics();
+            
             this.activeScript = {
                 id: scriptId,
                 startTime: this.app.currentTime,
@@ -292,14 +286,11 @@ export const FluidDirector = {
         this.activeScript = null;
         this._resetUniforms();
         
-        const FSIM = this.app.FluidSimulationContainer;
-        if (FSIM) {
+        const CM = this.app.ComputeManager;
+        if (CM) {
             if(this.app.UIManager) this.app.UIManager.setFluidControlsDisabled(false);
             this.currentState = this.nextState || 'IDLE_ON_CANVAS';
             this.nextState = null;
-            if (this.currentState.startsWith('IDLE')) {
-                FSIM.stopPhysics();
-            }
         }
     },
 
@@ -307,8 +298,8 @@ export const FluidDirector = {
         this.activeScript = null;
         this._resetUniforms();
 
-        const FSIM = this.app.FluidSimulationContainer;
-        if (FSIM) {
+        const CM = this.app.ComputeManager;
+        if (CM) {
             if (this.nextState) {
                 this.currentState = this.nextState;
                 this.nextState = null;
@@ -317,10 +308,6 @@ export const FluidDirector = {
             }
             
             console.log(`FluidDirector: Transition complete. New state: ${this.currentState}`);
-
-            if (this.currentState.startsWith('IDLE')) {
-                FSIM.stopPhysics();
-            }
             
             if(this.app.UIManager) this.app.UIManager.setFluidControlsDisabled(false);
         }
@@ -329,8 +316,8 @@ export const FluidDirector = {
     update() {
         if (!this.activeScript) return;
 
-        const FSIM = this.app.FluidSimulationContainer;
-        if (!FSIM || !FSIM.gpuCompute) {
+        const CM = this.app.ComputeManager;
+        if (!CM || !CM.gpuCompute) {
             this.stop();
             return;
         }
@@ -340,7 +327,7 @@ export const FluidDirector = {
         
         const easedProgress = 0.5 - 0.5 * Math.cos(progress * Math.PI);
         
-        this.activeScript.update(FSIM, progress, easedProgress);
+        this.activeScript.update(CM, progress, easedProgress);
 
         if (progress >= 1.0) {
             this.stop();

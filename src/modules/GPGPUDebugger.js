@@ -31,14 +31,10 @@ const gpgpuDebugFragmentShader = `
             color.g = remap(data.g, -halfWorld, halfWorld, 0.0, 1.0);
             color.b = remap(data.b, -halfWorld, halfWorld, 0.0, 1.0);
         } else if (u_debugViewMode == 1) { // Velocity (Vector)
-            // Remap velocity vectors from [-1, 1] (approx) to color [0, 1]
-            // X -> Red, Y -> Green, Z -> Blue
             color = data.rgb * 0.5 + 0.5;
         } else if (u_debugViewMode == 2) { // Raw Data
-            // Just display the raw data, useful for single-channel debug
             color = data.rgb;
         } else if (u_debugViewMode == 3) { // Alpha Channel
-            // Display the alpha value as grayscale
             color = vec3(data.a);
         }
 
@@ -52,18 +48,15 @@ export const GPGPUDebugger = {
     camera: null,
     mesh: null,
     
-    // --- UI Elements ---
     systemSelect: null,
     textureSelect: null,
     viewSelect: null,
     pixelValueDisplay: null,
 
-    // --- State ---
-    debugSystem: 'particles', // Default to a system that exists on startup
+    debugSystem: 'particles',
     debugTexture: 'position',
     debugView: 'world',
 
-    // --- PIXEL INSPECTOR PROPERTIES ---
     isMouseOver: false,
     mouse: null, 
     pixelBuffer: new Float32Array(4),
@@ -88,8 +81,8 @@ export const GPGPUDebugger = {
             fragmentShader: gpgpuDebugFragmentShader,
             uniforms: {
                 tDebug: { value: null },
-                u_worldSize: { value: 40.0 }, // Default world size
-                u_debugViewMode: { value: 0 }  // Default to Position (World)
+                u_worldSize: { value: 40.0 },
+                u_debugViewMode: { value: 0 }
             }
         });
 
@@ -97,7 +90,6 @@ export const GPGPUDebugger = {
         this.mesh.position.set(aspect - 0.22, -1.0 + 0.22, 0); 
         this.scene.add(this.mesh);
 
-        // --- Event Listeners (with null checks in case HTML isn't updated yet) ---
         if (this.systemSelect) {
             this.systemSelect.addEventListener('change', (e) => {
                 this.debugSystem = e.target.value;
@@ -118,11 +110,10 @@ export const GPGPUDebugger = {
             });
         }
 
-        this.updateTextureOptions(); // Populate options on init
+        this.updateTextureOptions();
         console.log("Upgraded GPGPU Debugger initialized.");
     },
 
-    // Dynamically populates the "Texture" dropdown based on the selected system
     updateTextureOptions() {
         if (!this.textureSelect) return;
 
@@ -134,20 +125,16 @@ export const GPGPUDebugger = {
             this.textureSelect.appendChild(opt);
         };
 
-        // All systems have a position texture
         addOption('position', 'Position');
 
-        // Only the landscape system has a 'previousPosition' for cloth physics
         if (this.debugSystem === 'landscape') {
             addOption('previousPosition', 'Previous Position');
         }
         
-        // Systems other than landscape have velocity
         if (this.debugSystem === 'particles' || this.debugSystem === 'fluidsim') {
             addOption('velocity', 'Velocity');
         }
         
-        // After changing options, default to the first one available.
         this.debugTexture = this.textureSelect.value;
     },
 
@@ -191,60 +178,49 @@ export const GPGPUDebugger = {
         if (!this.mesh || !this.app.vizSettings.enableGPGPUDebugger) return;
 
         const CM = this.app.ComputeManager;
-        const FSIM = this.app.FluidSimulationContainer;
         let computeInstance = null;
         let variable = null;
         let worldSize = 40.0;
         let resolution = { x: 0, y: 0 };
 
-        // 1. Select the GPGPU System to inspect
+        // --- BUG FIX: POINT TO THE CORRECT GPGPU INSTANCES AND VARIABLES ---
         switch (this.debugSystem) {
             case 'landscape':
-                computeInstance = CM.gpuCompute;
+                computeInstance = CM.landscapeGpuCompute; // Correct instance
                 if (computeInstance) {
-                    variable = this.debugTexture === 'position' ? CM.positionVariable : CM.previousPositionVariable;
+                    variable = this.debugTexture === 'position' ? CM.landscapePositionVariable : CM.landscapePreviousPositionVariable; // Correct variables
                     worldSize = this.app.ImagePlaneManager.planeDimensions.x;
-                    resolution.x = CM.WIDTH;
-                    resolution.y = CM.HEIGHT;
+                    resolution.x = this.app.ImagePlaneManager.planeResolution.x;
+                    resolution.y = this.app.ImagePlaneManager.planeResolution.y;
                 }
                 break;
             case 'particles':
-                computeInstance = CM.particleGpuCompute;
+            case 'fluidsim': // Particles and Fluid sim share the same unified engine
+                computeInstance = CM.gpuCompute; // Correct instance
                 if (computeInstance) {
-                    variable = this.debugTexture === 'position' ? CM.particlePositionVar : CM.particleVelocityVar;
+                    variable = this.debugTexture === 'position' ? CM.positionVariable : CM.velocityVariable; // Correct variables
                     worldSize = this.app.ImagePlaneManager.planeDimensions.x;
                     resolution.x = this.app.vizSettings.particle_resolution;
                     resolution.y = this.app.vizSettings.particle_resolution;
                 }
                 break;
-            case 'fluidsim':
-                computeInstance = FSIM.gpuCompute;
-                if (computeInstance) {
-                    variable = this.debugTexture === 'position' ? FSIM.positionVariable : FSIM.velocityVariable;
-                    worldSize = FSIM.WORLD_SIZE;
-                    resolution.x = FSIM.PARTICLE_RESOLUTION;
-                    resolution.y = FSIM.PARTICLE_RESOLUTION;
-                }
-                break;
         }
+        // --- END BUG FIX ---
 
         if (!computeInstance || !variable) {
-            this.mesh.visible = false; // Hide the debug view if the target system isn't running
+            this.mesh.visible = false;
             return;
         }
         this.mesh.visible = true;
 
-        // 2. Get the target texture
         const targetTexture = computeInstance.getCurrentRenderTarget(variable);
         if (!targetTexture) return;
 
-        // 3. Update shader uniforms
         this.mesh.material.uniforms.tDebug.value = targetTexture.texture;
         this.mesh.material.uniforms.u_worldSize.value = worldSize;
         const viewModeMap = { 'world': 0, 'vector': 1, 'raw': 2, 'alpha': 3 };
         this.mesh.material.uniforms.u_debugViewMode.value = viewModeMap[this.debugView] || 0;
 
-        // 4. Pixel Inspector Logic
         if (this.isMouseOver) {
             const texelX = Math.floor(this.mouse.x * resolution.x);
             const texelY = Math.floor(this.mouse.y * resolution.y);

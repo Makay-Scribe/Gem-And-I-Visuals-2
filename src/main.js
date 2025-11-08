@@ -16,7 +16,7 @@ import { CubeWallManager } from './modules/CubeWallManager.js';
 import { DirectorManager } from './modules/DirectorManager.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ParticleTransitions } from './modules/ParticleTransitions.js';
-import { FluidSimulationContainer } from './compute/FluidSimulationContainer.js';
+// REFACTOR: The FluidSimulationContainer import is now removed.
 import { FluidDirector } from './compute/FluidDirector.js';
 
 
@@ -79,7 +79,7 @@ const App = {
     Debugger: Debugger,
     DirectorManager: DirectorManager,
     ParticleTransitions: ParticleTransitions,
-    FluidSimulationContainer: FluidSimulationContainer,
+    // REFACTOR: FluidSimulationContainer is removed. FluidDirector remains.
     FluidDirector: FluidDirector,
 
     defaultVisualizerSettings: {
@@ -230,23 +230,23 @@ const App = {
         enableOnScreenDebugger: true,
     },
 
+    // REFACTOR: This helper function now correctly targets the unified ComputeManager
     setFluidMorphState(target, sliderValue) {
-        const FSIM = this.FluidSimulationContainer;
-        if (!FSIM.gpuCompute) return;
+        const CM = this.ComputeManager;
+        if (!CM.gpuCompute) return;
 
         this.FluidDirector.interruptAndStop();
-        FSIM.startPhysics();
+        
+        const vUniforms = CM.velocityVariable.material.uniforms;
+        vUniforms.u_physicsState.value = 1; // Ensure physics is running for manual control
+        vUniforms.u_targetState.value = target;
+        vUniforms.fluid_attractionStrength.value = sliderValue * 2.5;
 
-        FSIM.velocityVariable.material.uniforms.u_targetState.value = target;
-        FSIM.positionVariable.material.uniforms.u_targetState.value = target;
+        const pUniforms = CM.positionVariable.material.uniforms;
+        pUniforms.u_targetState.value = target;
+        pUniforms.u_manualMorph.value = sliderValue;
 
         this.UIManager.setSliderValue('fluidAttraction', sliderValue);
-        
-        const uniformsP = FSIM.positionVariable.material.uniforms;
-        uniformsP.u_manualMorph.value = sliderValue;
-
-        const uniformsV = FSIM.velocityVariable.material.uniforms;
-        uniformsV.u_attractionStrength.value = sliderValue * 2.5;
     },
 
     async preloadDevAssets() {
@@ -294,10 +294,9 @@ const App = {
                     this.UIManager.particleModelTexture = null;
                 }
                 
+                // REFACTOR: Now bakes to the unified ComputeManager's texture
                 this.ComputeManager.bakeToTexture(bestMesh, this.ComputeManager.particleModelPositionTexture);
                 this.isDefaultSculptureBaked = true;
-                
-                this.FluidSimulationContainer.setBakedModelTexture(this.ComputeManager.particleModelPositionTexture);
                 
                 this.UIManager.logSuccess("Default sculpture baked.");
                 this.UIManager.updateFileNameDisplay('particleModel', 'Devmodel.glb (Default)');
@@ -457,6 +456,7 @@ const App = {
         this.renderer.toneMapping = toneMappingOptions[this.vizSettings.toneMappingMode] || THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
 
+        // --- Manager Initialization Order ---
         this.SceneManager.init(this);
         this.BackgroundManager.init(this);
         this.CameraManager.init(this);
@@ -469,19 +469,14 @@ const App = {
         this.ParticleTransitions.init(this);
         this.FluidDirector.init(this);
         this.ImagePlaneManager.init(this); 
-        this.FluidSimulationContainer.init(this); 
-
-        this.ComputeManager.init(this, 
-            this.ImagePlaneManager.planeDimensions.x, 
-            this.ImagePlaneManager.planeDimensions.y, 
-            this.ImagePlaneManager.planeResolution.x, 
-            this.ImagePlaneManager.planeResolution.y
-        );
+        
+        // REFACTOR: ComputeManager is now the single source of truth and is initialized here.
+        this.ComputeManager.init(this);
+        
         this.GPGPUDebugger.init(this);
-        this.ComputeManager.initParticleSystem();
-
         this.UIManager.init(this); 
         
+        // --- Scene Setup ---
         this.ambientLight = new THREE.AmbientLight(this.vizSettings.ambientLightColor, 1.0);
         this.scene.add(this.ambientLight);
 
@@ -501,15 +496,13 @@ const App = {
         this.guideLaser.visible = this.vizSettings.enableGuideLaser;
         this.scene.add(this.guideLaser);
         
+        // --- Asset Preloading ---
         const assetLoadingPromise = this.preloadDevAssets(); 
         const sculptureLoadingPromise = this.preloadDefaultSculpture();
         await Promise.all([assetLoadingPromise, sculptureLoadingPromise]);
 
+        // REFACTOR: This call creates the initial visible geometry (particles)
         this.ImagePlaneManager.createDefaultLandscape(); 
-        
-        if (this.vizSettings.gpgpuGeometryMode === 'fluidsim') {
-             this.FluidSimulationContainer.setActive(true);
-        }
         
         this.BackgroundManager.render(); 
         this.GPGPUDebugger.update(); 
@@ -564,7 +557,6 @@ const App = {
         canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
         
         canvas.addEventListener('wheel', this.onMouseWheel.bind(this), { passive: false });
-
         canvas.addEventListener('contextmenu', e => e.preventDefault());
 
         const directorButton = document.getElementById('directorModeButton');
@@ -626,13 +618,14 @@ const App = {
             this.guideLaser.geometry.attributes.position.needsUpdate = true;
         }
         
+        // --- Manager Update Calls ---
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
-        this.FluidDirector.update();
-        this.FluidSimulationContainer.update(cappedDelta);
-        this.ComputeManager.update(cappedDelta);
-
+        // REFACTOR: The single ComputeManager.update() call handles all GPGPU work.
+        this.ComputeManager.update(cappedDelta); 
+        
+        this.FluidDirector.update(); // FluidDirector now modifies ComputeManager's state
         this.DirectorManager.update(cappedDelta);
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
@@ -640,14 +633,13 @@ const App = {
         this.ParticleTransitions.update();
         
         this.CameraManager.update(cappedDelta); 
-        
         this.SceneManager.update(cappedDelta);
         this.BackgroundManager.update();
         this.GPGPUDebugger.update();
         this.Debugger.update();
-
         this.UIManager.syncSlidersFromState();
 
+        // --- Rendering ---
         this.renderer.clear();
         this.BackgroundManager.render();
         this.renderer.clearDepth();

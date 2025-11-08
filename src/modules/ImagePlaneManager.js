@@ -7,18 +7,13 @@ import particleRenderFragmentShader from '../shaders/particle_render.frag?raw';
 
 export const ImagePlaneManager = {
     app: null,
-    // --- Geometry ---
     landscape: null, 
     instancedMesh: null,
     particleSystem: null,
     fluidSystem: null, 
-    
-    // --- Materials ---
     landscapeMaterial: null,
     particlePBRMaterial: null,
     fluidMaterial: null,
-
-    // --- State & Containers ---
     landscapeContainer: null, 
     boundingBox: null, 
     planeDimensions: null, 
@@ -79,7 +74,6 @@ export const ImagePlaneManager = {
         this.autopilot.startQuat = new this.app.THREE.Quaternion();
         this.autopilot.endQuat = new this.app.THREE.Quaternion();
 
-
         this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionLandscape);
         this.state.targetPosition.copy(this.state.homePosition);
         this.landscapeContainer = new this.app.THREE.Group();
@@ -137,7 +131,7 @@ export const ImagePlaneManager = {
         this.landscapeContainer.visible = S.enableLandscape;
         
         if (!S.enableLandscape) return;
-
+        
         const isFluidMode = S.gpgpuGeometryMode === 'fluidsim';
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
         const isParticleMode = S.gpgpuGeometryMode === 'particles';
@@ -210,8 +204,6 @@ export const ImagePlaneManager = {
         this.updatePlaneDimensions();
         
         const S = this.app.vizSettings;
-        const CM = this.app.ComputeManager;
-
         this._cleanupMeshes(); 
 
         if (S.gpgpuGeometryMode === 'particles') {
@@ -222,16 +214,6 @@ export const ImagePlaneManager = {
             this._createPlaneMesh('faceted');
         } else if (S.gpgpuGeometryMode === 'fluidsim') {
             this._createFluidSystem();
-        }
-
-        if (S.gpgpuGeometryMode === 'particles' && CM && CM.initParticleSystem) {
-            CM.initParticleSystem();
-        }
-        
-        if (S.gpgpuGeometryMode !== 'particles' && S.gpgpuGeometryMode !== 'fluidsim') {
-            if (CM && CM.init) {
-                CM.init(this.app, this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
-            }
         }
 
         this.applyAndStoreHomeOrientation();
@@ -302,25 +284,21 @@ export const ImagePlaneManager = {
     },
 
     _createFluidSystem() {
-        const FSIM = this.app.FluidSimulationContainer;
-        const count = FSIM.PARTICLE_COUNT;
-        const resolution = FSIM.PARTICLE_RESOLUTION;
+        const CM = this.app.ComputeManager;
+        const count = CM.AREA;
+        const resolution = CM.WIDTH;
 
         const geometry = new this.app.THREE.BufferGeometry();
-        // ** FIX 1: The position attribute is still needed, but it will be overwritten in the shader. **
-        // We initialize it as a dummy attribute.
         geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
 
         const gpgpuUvs = new Float32Array(count * 2);
         for (let y = 0; y < resolution; y++) {
             for (let x = 0; x < resolution; x++) {
                 const i = (y * resolution + x);
-                // The UV is the coordinate used to sample the GPGPU texture
                 gpgpuUvs[i * 2 + 0] = x / (resolution - 1);
                 gpgpuUvs[i * 2 + 1] = y / (resolution - 1);
             }
         }
-        // ** FIX 2: We must use a custom attribute name for the GPGPU sampling UV **
         geometry.setAttribute('gpgpu_uv', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
 
         this._createFluidPBRMaterial();
@@ -339,7 +317,6 @@ export const ImagePlaneManager = {
         this.calculatedParticleBaseSize = cellSize * Math.sqrt(2);
         
         const geometry = new this.app.THREE.BufferGeometry();
-        
         geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
 
         const uvs = new Float32Array(count * 2);
@@ -350,7 +327,6 @@ export const ImagePlaneManager = {
                 uvs[i + 1] = y / (resolution - 1);
             }
         }
-        // ** CRITICAL FIX: The standard particle system must use the GPGPU UV for its position fetch as well **
         geometry.setAttribute('gpgpu_uv', new this.app.THREE.BufferAttribute(uvs, 2));
 
         this._createParticlePBRMaterial();
@@ -391,7 +367,6 @@ export const ImagePlaneManager = {
         
         this.state.homeQuaternion.identity(); 
         if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
-            // These modes are always flat XY planes, so they use the default identity quaternion.
         } else {
             const tempObject = new this.app.THREE.Object3D();
             if (S.planeOrientation === 'xz') { tempObject.rotateX(-Math.PI / 2); } 
@@ -402,19 +377,19 @@ export const ImagePlaneManager = {
     
     _createFluidPBRMaterial() {
         const S = this.app.vizSettings;
+        const CM = this.app.ComputeManager;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
         
-        // ** FIX 3: Base particle size calculation is shared **
-        this.calculatedParticleBaseSize = this.planeDimensions.x / (this.app.FluidSimulationContainer.PARTICLE_RESOLUTION - 1) * Math.sqrt(2);
+        this.calculatedParticleBaseSize = this.planeDimensions.x / (CM.WIDTH - 1) * Math.sqrt(2);
 
         this.fluidMaterial = new this.app.THREE.ShaderMaterial({
             defines: { 'USE_ENVMAP': '' },
             uniforms: {
                 u_map: { value: textureToUse },
-                u_positionTexture: { value: null }, 
-                u_particleModelUVTexture: { value: null }, 
-                u_particleModelTexture: { value: null }, 
+                u_positionTexture: { value: null },
+                u_particleModelUVTexture: { value: CM.particleModelUVTexture }, 
+                u_particleModelTexture: { value: this.app.UIManager?.particleModelTexture || null }, 
                 u_particleColorMix: { value: 0.0 }, 
                 particle_base_size: { value: 1.0 }, 
                 particle_min_size: { value: 0.0 }, 
@@ -431,7 +406,6 @@ export const ImagePlaneManager = {
                 u_pixelRatio: { value: window.devicePixelRatio },
                 u_particle_twinkleIntensity: { value: 0.0 },
             },
-            // ** FIX 4: The rendering shader is the Particle one, but its Vertex Shader needs an update **
             vertexShader: particleRenderVertexShader,
             fragmentShader: particleRenderFragmentShader,
             transparent: true,
@@ -477,15 +451,16 @@ export const ImagePlaneManager = {
 
     createGPGPUMaterial() {
         const S = this.app.vizSettings;
+        const CM = this.app.ComputeManager;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
         
         const vertexShader = S.gpgpuGeometryMode === 'geocube' ? cubewallRenderVertexShader : landscapeRenderVertexShader;
-        const positionRenderTarget = this.app.ComputeManager.gpuCompute.getCurrentRenderTarget(this.app.ComputeManager.positionVariable);
+
         const uniforms = {
             u_map: { value: textureToUse },
-            u_positionTexture: { value: positionRenderTarget.texture },
-            u_initialPosition: { value: this.app.ComputeManager.initialPositionTexture },
+            u_positionTexture: { value: null }, 
+            u_initialPosition: { value: CM.landscapeInitialPositionTexture },
             u_metalness: { value: S.metalness },
             u_roughness: { value: S.roughness },
             u_envMapIntensity: { value: S.reflectionStrength },
@@ -551,71 +526,47 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
         
-        if (S.gpgpuGeometryMode === 'particles') {
-            if (!CM || !CM.particleGpuCompute) return;
-            const posTarget = CM.particleGpuCompute.getCurrentRenderTarget(CM.particlePositionVar);
+        if (S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
+            if (!CM || !CM.gpuCompute) return;
             
-            if(this.particleSystem && this.particleSystem.material) { // Check if material exists
-                const U = this.particleSystem.material.uniforms;
-                // ** CRITICAL FIX: Ensure the position texture is passed to the rendering shader **
-                U.u_positionTexture.value = posTarget.texture;
-                
-                const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
-                const fineSize = S.particle_min_size;
-                U.particle_base_size.value = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
-                U.particle_min_size.value = U.particle_base_size.value;
-                U.u_particle_size_mix.value = 0.0;
-                U.u_pixelRatio.value = window.devicePixelRatio;
-                U.u_particleColorMix.value = S.particle_morphProgress;
-                if (this.app.UIManager.particleModelTexture) {
-                    U.u_particleModelTexture.value = this.app.UIManager.particleModelTexture;
-                }
-                U.u_metalness.value = S.metalness;
-                U.u_roughness.value = S.roughness;
-                U.u_envMapIntensity.value = S.reflectionStrength;
-                U.t_envMap.value = this.app.hdrTexture; 
-                U.u_cameraPosition.value = this.app.camera.position;
-                U.u_lightColor.value.set(S.lightColor);
-                U.u_ambientLightColor.value.set(S.ambientLightColor);
-                U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-                U.u_time.value = this.app.currentTime;
-                U.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
+            const material = S.gpgpuGeometryMode === 'particles' ? this.particlePBRMaterial : this.fluidMaterial;
+            if (!material) return;
+
+            const U = material.uniforms;
+
+            const posTarget = CM.gpuCompute.getCurrentRenderTarget(CM.positionVariable);
+            U.u_positionTexture.value = posTarget.texture;
+            
+            const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
+            const fineSize = S.particle_min_size;
+            U.particle_base_size.value = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
+            U.particle_min_size.value = U.particle_base_size.value;
+            U.u_particle_size_mix.value = 0.0;
+            
+            U.u_pixelRatio.value = window.devicePixelRatio;
+            U.u_particleColorMix.value = S.particle_morphProgress;
+            if (this.app.UIManager.particleModelTexture) {
+                U.u_particleModelTexture.value = this.app.UIManager.particleModelTexture;
             }
-        } else if (S.gpgpuGeometryMode === 'fluidsim') {
-            const FSIM = this.app.FluidSimulationContainer;
-            if (!FSIM || !FSIM.gpuCompute) return;
+            U.u_metalness.value = S.metalness;
+            U.u_roughness.value = S.roughness;
+            U.u_envMapIntensity.value = S.reflectionStrength;
+            U.t_envMap.value = this.app.hdrTexture; 
+            U.u_cameraPosition.value = this.app.camera.position;
+            U.u_lightColor.value.set(S.lightColor);
+            U.u_ambientLightColor.value.set(S.ambientLightColor);
+            U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+            U.u_time.value = this.app.currentTime;
+            U.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
 
-            const posTarget = FSIM.gpuCompute.getCurrentRenderTarget(FSIM.positionVariable);
-
-            if (this.fluidMaterial) {
-                const U = this.fluidMaterial.uniforms;
-                // ** CRITICAL FIX: Pass the GPGPU position texture to the rendering material **
-                U.u_positionTexture.value = posTarget.texture;
-                
-                // ** THE FIX IS HERE: The fluid particle size now uses the same logic as the main particle engine. **
-                const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
-                const fineSize = S.particle_min_size; // Use the shared min_size for consistency
-                U.particle_base_size.value = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
-                U.particle_min_size.value = U.particle_base_size.value;
-                U.u_particle_size_mix.value = 0.0;
-
-
-                U.u_pixelRatio.value = window.devicePixelRatio;
-                U.u_metalness.value = S.metalness;
-                U.u_roughness.value = S.roughness;
-                U.u_envMapIntensity.value = S.reflectionStrength;
-                U.t_envMap.value = this.app.hdrTexture; 
-                U.u_cameraPosition.value = this.app.camera.position;
-                U.u_lightColor.value.set(S.lightColor);
-                U.u_ambientLightColor.value.set(S.ambientLightColor);
-                U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-            }
         } else { 
-            if (!this.landscapeMaterial || !CM.gpuCompute) return;
+            if (!this.landscapeMaterial || !CM.landscapeGpuCompute) return;
             const U = this.landscapeMaterial.uniforms;
-            const positionTarget = CM.gpuCompute.getCurrentRenderTarget(CM.positionVariable);
+            
+            const positionTarget = CM.landscapeGpuCompute.getCurrentRenderTarget(CM.landscapePositionVariable);
             U.u_positionTexture.value = positionTarget.texture;
             
+            U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph; 
             U.u_time.value = this.app.currentTime;
             U.u_metalness.value = S.metalness;
             U.u_roughness.value = S.roughness;
@@ -625,9 +576,7 @@ export const ImagePlaneManager = {
             U.u_lightColor.value.set(S.lightColor);
             U.u_ambientLightColor.value.set(S.ambientLightColor);
             U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-            
             U.u_gpgpu_enableCubeWall.value = S.gpgpuGeometryMode === 'geocube';
-            U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;
             U.u_gpgpu_cubeWallSideColor.value.set(S.gpgpu_cubeWallSideColor);
             U.gpgpu_cubeWallUseImageTexture.value = S.gpgpu_cubeWallUseImageTexture;
             U.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;

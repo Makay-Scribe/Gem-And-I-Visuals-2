@@ -4,11 +4,9 @@ export const CubeWallManager = {
     app: null,
     playerCube: null,
 
-    // --- CONFIG ---
-    PLAYER_MOVE_DURATION: 350, // ms
+    PLAYER_MOVE_DURATION: 350,
     PLAYER_ROLL_LIFT_AMOUNT: 0.25,
     
-    // --- STATE ---
     gridSize: 10,
     animationState: {
         isMoving: false,
@@ -40,10 +38,6 @@ export const CubeWallManager = {
     },
 
     _calculateGpgpuOffsetCPU() {
-        // ** THE FIX IS HERE: This function is being disabled. **
-        // This logic was causing effects from Faceted mode (like Water Ripple) to
-        // incorrectly influence the player cube's position in GeoCube mode.
-        // Returning 0 ensures the engines are properly decoupled.
         return 0;
     },
 
@@ -82,8 +76,6 @@ export const CubeWallManager = {
             });
 
             material.onBeforeCompile = (shader) => {
-                // This uniform is used to enable beveling in the shader. It is now correctly
-                // tied to the player cube's own enabled flag.
                 shader.uniforms.u_gpgpu_enableCubeWall = { value: this.app.vizSettings.playerCube_enabled };
                 shader.uniforms.u_gpgpu_cubeWallBevelWidth = { value: this.app.vizSettings.gpgpu_cubeWallBevelWidth };
                 shader.uniforms.u_gpgpu_cubeWallBevelIntensity = { value: this.app.vizSettings.gpgpu_cubeWallBevelIntensity };
@@ -203,7 +195,7 @@ export const CubeWallManager = {
             if (validMoves.length > 0) {
                 nextMove = validMoves[Math.floor(Math.random() * validMoves.length)];
             } else {
-                this.resetPlayerState(); // Stuck, so reset
+                this.resetPlayerState();
                 this.moveTimeoutId = setTimeout(() => this.startNextMove(), 1000);
                 return;
             }
@@ -242,8 +234,6 @@ export const CubeWallManager = {
         const S = this.app.vizSettings;
         const isGeoCubeMode = S.gpgpuGeometryMode === 'geocube';
 
-        // ** THE FIX IS HERE: This check is now robust. **
-        // The manager will only run if the player has enabled it AND the app is in the correct mode.
         if (!this.playerCube || !S.playerCube_enabled || !isGeoCubeMode) {
             if (this.playerCube) this.playerCube.visible = false;
             if (this.moveTimeoutId) {
@@ -254,13 +244,14 @@ export const CubeWallManager = {
         }
         this.playerCube.visible = true;
 
+        // --- BUG FIX: UPDATE PLAYER CUBE MATERIAL UNIFORMS ---
         if (Array.isArray(this.playerCube.material)) {
             this.playerCube.material.forEach(material => {
                 material.roughness = S.roughness;
                 material.metalness = S.metalness;
                 material.envMapIntensity = S.reflectionStrength;
 
-                if (material.userData.shader) {
+                if (material.userData.shader && material.userData.shader.uniforms) {
                     const shaderUniforms = material.userData.shader.uniforms;
                     shaderUniforms.u_gpgpu_enableCubeWall.value = S.playerCube_enabled;
                     shaderUniforms.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
@@ -268,14 +259,13 @@ export const CubeWallManager = {
                 }
             });
         }
+        // --- END BUG FIX ---
 
         const state = this.animationState;
-
         const landscapeBasePos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
         const gpgpuOffset = this._calculateGpgpuOffsetCPU();
         const playerHeightOffset = (this._getCubeSize() / 2) + ((this._getCubeSize() * 0.9) / 2);
         const finalTargetZ = landscapeBasePos.z + gpgpuOffset + playerHeightOffset;
-
 
         if (state.isMoving) {
             const progress = Math.min(1, (performance.now() - state.startTime) / this.PLAYER_MOVE_DURATION);

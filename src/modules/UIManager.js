@@ -60,24 +60,18 @@ export const UIManager = {
         this.app.ParticleTransitions.setActivePreset('default');
     },
     
-    // ** THE FIX IS HERE: The function is now correctly part of the exported object **
     syncSlidersFromState() {
-        if (!this.app) return; // Add a guard clause
+        if (!this.app) return;
         this._isProgrammaticUpdate = true;
         const S = this.app.vizSettings;
         
-        // This is a subset of syncAllControlsToSettings, focusing only on sliders
-        // that are driven by the application state (like Director or manual control).
-        
-        // Fluid Sim Sliders
         const fluidAttractionSlider = document.getElementById('fluidAttraction');
-        if (fluidAttractionSlider && this.app.FluidSimulationContainer?.positionVariable) {
-            const morphValue = this.app.FluidSimulationContainer.positionVariable.material.uniforms.u_manualMorph.value;
+        if (fluidAttractionSlider && this.app.ComputeManager?.positionVariable) {
+            const morphValue = this.app.ComputeManager.positionVariable.material.uniforms.u_manualMorph.value;
             fluidAttractionSlider.value = morphValue;
             this.updateRangeDisplay('fluidAttraction', morphValue);
         }
 
-        // Particle System Sliders
         const particleMorphSlider = document.getElementById('particle_morphProgress');
         if (particleMorphSlider) {
             particleMorphSlider.value = S.particle_morphProgress;
@@ -668,21 +662,21 @@ export const UIManager = {
     
     _switchGpgpuMode(newUiMode) {
         const S = this.app.vizSettings;
+        const oldSystemMode = S.gpgpuGeometryMode;
         const newSystemMode = (newUiMode === 'deformation') ? 'faceted' : newUiMode;
 
-        if (S.gpgpuGeometryMode === newSystemMode) return;
+        if (oldSystemMode === newSystemMode) return;
         
-        if (S.gpgpuGeometryMode === 'fluidsim') {
-            this.app.FluidSimulationContainer.setActive(false);
+        if (oldSystemMode === 'geocube') {
+            this.app.CubeWallManager.setActive(false);
+        }
+        if (newSystemMode === 'geocube') {
+            this.app.CubeWallManager.setActive(true);
         }
 
         S.gpgpuGeometryMode = newSystemMode;
-
-        const isFluid = newSystemMode === 'fluidsim';
-        this.app.FluidSimulationContainer.setActive(isFluid);
-
-        this.app.ImagePlaneManager.createDefaultLandscape();
-
+        this.app.ComputeManager.switchMode(newSystemMode);
+        
         this._updateGpgpuModeVisibility();
     },
 
@@ -723,8 +717,8 @@ export const UIManager = {
         }
 
         if (!isDisabled) {
-            if (this.app.FluidSimulationContainer.velocityVariable) {
-                const targetUniform = this.app.FluidSimulationContainer.velocityVariable.material.uniforms.u_targetState.value;
+            if (this.app.ComputeManager.velocityVariable) {
+                const targetUniform = this.app.ComputeManager.velocityVariable.material.uniforms.u_targetState.value;
                 this.app.FluidDirector.currentState = (targetUniform == 1) 
                     ? 'IDLE_ON_MODEL' 
                     : 'IDLE_ON_CANVAS';
@@ -826,24 +820,27 @@ export const UIManager = {
             if (slider) {
                 slider.addEventListener('input', (e) => {
                     if (this._isProgrammaticUpdate) return;
-                    const FSIM = this.app.FluidSimulationContainer;
-                    if (!FSIM.gpuCompute) return;
+                    const CM = this.app.ComputeManager;
+                    if (!CM.gpuCompute) return;
                     this.app.FluidDirector.interruptAndStop();
-                    FSIM.startPhysics();
+                    
                     const value = parseFloat(e.target.value);
-                    const uniformsV = FSIM.velocityVariable.material.uniforms;
-                    const uniformsP = FSIM.positionVariable.material.uniforms;
+                    const uniformsV = CM.velocityVariable.material.uniforms;
+                    const uniformsP = CM.positionVariable.material.uniforms;
+
+                    uniformsV.u_physicsState.value = 1;
+
                     if (id === 'fluidAttraction') {
                         uniformsP.u_manualMorph.value = value;
-                        uniformsV.u_attractionStrength.value = value * 2.5; 
+                        uniformsV.fluid_attractionStrength.value = value * 2.5; 
                     } else if (id === 'fluid_gravity') {
                         uniformsV.u_gravity.value.y = value;
                     } else if (id === 'fluid_curlStrength') {
-                        uniformsV.u_curlStrength.value = value;
+                        uniformsV.fluid_curlStrength.value = value;
                     } else if (id === 'fluid_curlScale') {
-                        uniformsV.u_curlScale.value = value;
+                        uniformsV.fluid_curlScale.value = value;
                     } else if (id === 'fluid_curlSpeed') {
-                        uniformsV.u_curlSpeed.value = value;
+                        uniformsV.fluid_curlSpeed.value = value;
                     }
                     this.updateRangeDisplay(id, value);
                 });
@@ -857,7 +854,6 @@ export const UIManager = {
                     fluidTargetToggle.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
                     e.target.classList.add('active');
                     const target = parseInt(e.target.dataset.target);
-                    // ** THE FIX IS HERE: Call the central helper function **
                     const sliderValue = (target === 1) ? 1.0 : 0.0;
                     this.app.setFluidMorphState(target, sliderValue);
                 });
@@ -1095,7 +1091,7 @@ export const UIManager = {
     handleMorphSlider(progress) {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
-        if (!CM || !CM.particleGpuCompute) return;
+        if (!CM || !CM.gpuCompute) return;
         
         const targetState = (progress > 0.5) ? 'model' : 'flat';
         
@@ -1111,9 +1107,9 @@ export const UIManager = {
                     this.updateRangeDisplay('particle_morphProgress', 0.0);
                     return;
                 }
-                CM.particleVelocityVar.material.uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
+                CM.velocityVariable.material.uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
             } else {
-                CM.particleVelocityVar.material.uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
+                CM.velocityVariable.material.uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
             }
         }
     },
@@ -1192,8 +1188,7 @@ export const UIManager = {
         this.app.isDemoModeActive = true;
         document.getElementById('demoModeButton').textContent = 'STOP DEMO';
         
-        this.app.vizSettings.gpgpuGeometryMode = 'faceted';
-        this.app.ImagePlaneManager.createDefaultLandscape();
+        this._switchGpgpuMode('deformation');
 
         this.app.ImagePlaneManager.startAutopilot('autopilotPreset3');
         this.app.ModelManager.startAutopilot('autopilotPreset2');
@@ -1237,17 +1232,25 @@ export const UIManager = {
             this.demoShaderInterval = null;
         }
 
-        this.app.vizSettings = JSON.parse(JSON.stringify(this.app.defaultVisualizerSettings));
+        // --- BUG FIX: EXPLICITLY RESET AND SYNCHRONIZE STATE ---
+        const defaultMode = this.app.defaultVisualizerSettings.gpgpuGeometryMode;
         
-        this.app.ImagePlaneManager.createDefaultLandscape();
+        // 1. Switch the core simulation state FIRST
+        this._switchGpgpuMode(defaultMode);
+
+        // 2. NOW reset the entire settings object
+        this.app.vizSettings = JSON.parse(JSON.stringify(this.app.defaultVisualizerSettings));
         
         const defaultShaderId = 'presetBg6';
         this.app.vizSettings.shaderToyGLSL = this.app.shaderPresets[defaultShaderId];
         this.loadUserShader(defaultShaderId);
         
+        // 3. Sync all UI elements to the newly reset state
         this.syncAllControlsToSettings();
         this.updateMasterControls();
+        this.updateBackgroundControlsVisibility();
         this._updateDeformationPanelStates();
+        // --- END BUG FIX ---
     },
     
     cycleDemoShader() {
