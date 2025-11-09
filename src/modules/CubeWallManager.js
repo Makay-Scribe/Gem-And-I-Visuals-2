@@ -38,7 +38,32 @@ export const CubeWallManager = {
     },
 
     _calculateGpgpuOffsetCPU() {
-        return 0;
+        if (!this.app.ComputeManager.landscapeGpuCompute) return 0;
+
+        const CM = this.app.ComputeManager;
+        const target = CM.landscapeGpuCompute.getCurrentRenderTarget(CM.landscapePositionVariable);
+        const initialTexture = CM.landscapeInitialPositionTexture;
+        if (!target || !initialTexture) return 0;
+        
+        const buffer = new Float32Array(4);
+        const renderer = this.app.renderer;
+        
+        const uv = this.app.ImagePlaneManager.getUvFromGridCoords(this.playerGridPos.x, this.playerGridPos.y);
+        const texelX = Math.floor(uv.x * target.width);
+        const texelY = Math.floor(uv.y * target.height);
+        
+        try {
+            renderer.readRenderTargetPixels(target, texelX, texelY, 1, 1, buffer);
+            const finalZ = buffer[2];
+            
+            const initialIndex = (texelY * initialTexture.image.width + texelX) * 4;
+            const initialZ = initialTexture.image.data[initialIndex + 2];
+
+            return finalZ - initialZ;
+        } catch (e) {
+            console.warn("Could not read from GPGPU texture for player cube offset.", e);
+            return 0;
+        }
     },
 
     _createPlayerCube() {
@@ -125,6 +150,10 @@ export const CubeWallManager = {
 
         this.playerCube = new THREE.Mesh(playerGeometry, materials);
         
+        // *** THE FIX IS HERE: Disable frustum culling for the player cube. ***
+        this.playerCube.frustumCulled = false;
+        // *** END FIX ***
+        
         this.app.ImagePlaneManager.landscapeContainer.add(this.playerCube);
     },
 
@@ -159,10 +188,10 @@ export const CubeWallManager = {
         if (initialPlayerPos) {
             const landscapeCubeSize = this._getCubeSize();
             const playerCubeSize = landscapeCubeSize * 0.9;
-            const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
+            const zOffset = (landscapeCubeSize) + (playerCubeSize / 2);
 
             this.playerCube.position.copy(initialPlayerPos);
-            this.playerCube.position.z += zOffset;
+            this.playerCube.position.z = zOffset - (landscapeCubeSize * 0.5); // Apply depth offset
             this.playerCube.quaternion.identity();
         }
         
@@ -216,10 +245,10 @@ export const CubeWallManager = {
         const targetPos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
         const landscapeCubeSize = this._getCubeSize();
         const playerCubeSize = landscapeCubeSize * 0.9;
-        const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
+        const zOffset = (landscapeCubeSize) + (playerCubeSize / 2);
         
         state.targetPosition.copy(targetPos);
-        state.targetPosition.z += zOffset;
+        state.targetPosition.z = zOffset - (landscapeCubeSize * 0.5); // Apply depth offset
         
         const rotationAxis = new THREE.Vector3();
         if (nextMove.dx !== 0) rotationAxis.set(0, nextMove.dx, 0);
@@ -234,7 +263,7 @@ export const CubeWallManager = {
         const S = this.app.vizSettings;
         const isGeoCubeMode = S.gpgpuGeometryMode === 'geocube';
 
-        if (!this.playerCube || !S.playerCube_enabled || !isGeoCubeMode) {
+        if (!this.playerCube || !isGeoCubeMode) {
             if (this.playerCube) this.playerCube.visible = false;
             if (this.moveTimeoutId) {
                 clearTimeout(this.moveTimeoutId);
@@ -242,9 +271,11 @@ export const CubeWallManager = {
             }
             return;
         }
-        this.playerCube.visible = true;
+        
+        this.playerCube.visible = S.playerCube_enabled;
+        if (!S.playerCube_enabled) return;
 
-        // --- BUG FIX: UPDATE PLAYER CUBE MATERIAL UNIFORMS ---
+
         if (Array.isArray(this.playerCube.material)) {
             this.playerCube.material.forEach(material => {
                 material.roughness = S.roughness;
@@ -259,13 +290,15 @@ export const CubeWallManager = {
                 }
             });
         }
-        // --- END BUG FIX ---
 
         const state = this.animationState;
         const landscapeBasePos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
         const gpgpuOffset = this._calculateGpgpuOffsetCPU();
-        const playerHeightOffset = (this._getCubeSize() / 2) + ((this._getCubeSize() * 0.9) / 2);
-        const finalTargetZ = landscapeBasePos.z + gpgpuOffset + playerHeightOffset;
+        const landscapeCubeSize = this._getCubeSize();
+        
+        const playerHeightOffset = (landscapeCubeSize / 2) + ((landscapeCubeSize * 0.9) / 2);
+        const finalTargetZ = landscapeBasePos.z + gpgpuOffset + playerHeightOffset - (landscapeCubeSize * 0.5);
+
 
         if (state.isMoving) {
             const progress = Math.min(1, (performance.now() - state.startTime) / this.PLAYER_MOVE_DURATION);
@@ -274,7 +307,6 @@ export const CubeWallManager = {
 
             const tempPosition = new THREE.Vector3().lerpVectors(state.startPosition, state.targetPosition, progress);
             
-            const landscapeCubeSize = this._getCubeSize();
             tempPosition.z += this.PLAYER_ROLL_LIFT_AMOUNT * landscapeCubeSize * Math.sin(progress * Math.PI);
             
             this.playerCube.position.copy(tempPosition);

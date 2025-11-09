@@ -76,6 +76,7 @@ export const ImagePlaneManager = {
 
         this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionLandscape);
         this.state.targetPosition.copy(this.state.homePosition);
+        
         this.landscapeContainer = new this.app.THREE.Group();
         this.app.scene.add(this.landscapeContainer);
     },
@@ -211,7 +212,7 @@ export const ImagePlaneManager = {
         } else if (S.gpgpuGeometryMode === 'geocube') {
             this._createInstancedCubeMesh();
         } else if (S.gpgpuGeometryMode === 'faceted') { 
-            this._createPlaneMesh('faceted');
+            this._createPlaneMesh();
         } else if (S.gpgpuGeometryMode === 'fluidsim') {
             this._createFluidSystem();
         }
@@ -261,7 +262,7 @@ export const ImagePlaneManager = {
         }
     },
 
-    _createPlaneMesh(mode) {
+    _createPlaneMesh() {
         const geometry = new this.app.THREE.PlaneGeometry(
             this.planeDimensions.x, 
             this.planeDimensions.y, 
@@ -345,7 +346,22 @@ export const ImagePlaneManager = {
         this.createGPGPUMaterial();
         
         this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.landscapeMaterial, COUNT);
+
+        // *** THE FIX IS HERE ***
+        // Manually define a large bounding box and sphere that encompasses the entire plane.
+        // This prevents the renderer from incorrectly culling the entire object when it's rotated.
+        const size = this.planeDimensions.x; // Use the largest dimension
+        this.instancedMesh.geometry.boundingBox = new THREE.Box3(
+            new THREE.Vector3(-size, -size, -size),
+            new THREE.Vector3(size, size, size)
+        );
+        this.instancedMesh.geometry.boundingSphere = new THREE.Sphere(
+            new THREE.Vector3(0, 0, 0),
+            size
+        );
+        // This secondary flag is a failsafe.
         this.instancedMesh.frustumCulled = false;
+        // *** END FIX ***
 
         const instanceIds = new Float32Array(COUNT);
         for (let i = 0; i < COUNT; i++) {
@@ -459,7 +475,7 @@ export const ImagePlaneManager = {
 
         const uniforms = {
             u_map: { value: textureToUse },
-            u_positionTexture: { value: null }, 
+            u_positionTexture: { value: null },
             u_initialPosition: { value: CM.landscapeInitialPositionTexture },
             u_metalness: { value: S.metalness },
             u_roughness: { value: S.roughness },
@@ -629,7 +645,7 @@ export const ImagePlaneManager = {
         const GRID_SIZE = S.gpgpu_cubeWallGridSize;
         
         const u = gridX / (GRID_SIZE - 1.0);
-        const v = 1.0 - (gridY / (GRID_SIZE - 1.0)); 
+        const v = gridY / (GRID_SIZE - 1.0);
 
         return new this.app.THREE.Vector2(u, v);
     },

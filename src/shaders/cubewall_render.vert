@@ -23,26 +23,27 @@ void main() {
     float gridX = mod(instanceId, u_gpgpu_cubeWallGridSize.x);
     float gridY = floor(instanceId / u_gpgpu_cubeWallGridSize.x);
 
-    // This UV is for sampling the GPGPU textures
+    // This UV is for sampling the GPGPU textures. It must NOT be flipped.
     vec2 gpgpu_uv = vec2(
         gridX / (u_gpgpu_cubeWallGridSize.x - 1.0),
-        1.0 - (gridY / (u_gpgpu_cubeWallGridSize.y - 1.0))
+        gridY / (u_gpgpu_cubeWallGridSize.y - 1.0)
     );
 
-    // --- 2. Calculate the Cube's MATHEMATICAL Base Position (Fixes Gaps & Alignment) ---
+    // --- 2. Get Displacement-Only from GPGPU Simulation ---
+    vec3 displacedPosFromGPGPU = texture2D(u_positionTexture, gpgpu_uv).xyz;
+    vec3 flatPosFromGPGPU = texture2D(u_initialPosition, gpgpu_uv).xyz;
+    vec3 displacement = displacedPosFromGPGPU - flatPosFromGPGPU;
+
+    // --- 3. Calculate the Cube's MATHEMATICAL Base Position ---
     float cubeSize = u_planeDimensions.x / u_gpgpu_cubeWallGridSize.x;
     float offsetX = (u_gpgpu_cubeWallGridSize.x * cubeSize) / 2.0 - cubeSize / 2.0;
     float offsetY = (u_gpgpu_cubeWallGridSize.y * cubeSize) / 2.0 - cubeSize / 2.0;
+    
     vec3 mathematicalBasePosition = vec3(
         gridX * cubeSize - offsetX,
         gridY * cubeSize - offsetY,
         0.0
     );
-
-    // --- 3. Get Displacement from GPGPU Simulation ---
-    vec3 displacedPosFromGPGPU = texture2D(u_positionTexture, gpgpu_uv).xyz;
-    vec3 flatPosFromGPGPU = texture2D(u_initialPosition, gpgpu_uv).xyz;
-    vec3 displacement = displacedPosFromGPGPU - flatPosFromGPGPU;
 
     // --- 4. Calculate Stepped Z-offset for the Morph effect ---
     float maxSteppedDisplacement = u_planeDimensions.x * 0.4;
@@ -59,13 +60,14 @@ void main() {
     float zMorphOffset = mix(0.0, steppedZ, u_gpgpu_cubeWallMorph);
 
     // --- 5. Calculate Final Vertex Position ---
-    vec3 finalPosition = mathematicalBasePosition + displacement + vec3(0.0, 0.0, zMorphOffset) + position;
+    // *** THE FIX IS HERE: We add a permanent Z-offset to push the cubes back. ***
+    vec3 finalPosition = mathematicalBasePosition + displacement + vec3(0.0, 0.0, zMorphOffset - cubeSize * 0.5) + position;
+    
     vec4 worldPos4 = modelMatrix * vec4(finalPosition, 1.0);
     gl_Position = projectionMatrix * viewMatrix * worldPos4;
 
-    // --- 6. Calculate Custom UV for Texture Mapping (Fixes Flipped Image) ---
+    // --- 6. Calculate Custom UV for Texture Mapping ---
     vec2 flippedUv = vec2(uv.x, 1.0 - uv.y);
-    // ** THE FIX IS HERE: Invert the gridY to correctly map the texture **
     vec2 uvOffset = vec2(gridX, (u_gpgpu_cubeWallGridSize.y - 1.0) - gridY) / u_gpgpu_cubeWallGridSize;
     vec2 uvScale = 1.0 / u_gpgpu_cubeWallGridSize;
     vUv = (flippedUv * uvScale) + uvOffset;

@@ -860,6 +860,31 @@ export const UIManager = {
             });
         }
         
+        // *** THE FIX IS HERE ***
+        // Add a new event listener specifically for the geocube controls.
+        document.querySelectorAll('#geocubeControlsContainer input, #geocubeControlsContainer select').forEach(control => {
+            control.addEventListener('input', (e) => {
+                if (this._isProgrammaticUpdate) return;
+                const id = e.target.id;
+                if (this.app.vizSettings[id] !== undefined) {
+                    const S = this.app.vizSettings;
+                    let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+                    
+                    // Handle color picker separately as its value is a string
+                    if (e.target.type === 'color') {
+                        S[id] = value;
+                    } else {
+                        S[id] = (e.target.type === 'range' || e.target.type === 'number') ? parseFloat(value) : value;
+                    }
+        
+                    if (e.target.type === 'range' || e.target.type === 'number') {
+                        this.updateRangeDisplay(id, value);
+                    }
+                }
+            });
+        });
+        // *** END FIX ***
+        
         document.querySelectorAll('input[type="range"], select').forEach(control => {
             if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleControlsContainer') || control.closest('#geocubeControlsContainer') || control.closest('#fluidSimControlsContainer')) return;
             control.addEventListener('input', (e) => {
