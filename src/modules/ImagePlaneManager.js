@@ -78,6 +78,11 @@ export const ImagePlaneManager = {
         this.state.targetPosition.copy(this.state.homePosition);
         
         this.landscapeContainer = new this.app.THREE.Group();
+        
+        // *** THE FIX IS HERE: This tells the renderer to always draw this group and its children. ***
+        this.landscapeContainer.frustumCulled = false;
+        // *** END FIX ***
+        
         this.app.scene.add(this.landscapeContainer);
     },
 
@@ -346,22 +351,7 @@ export const ImagePlaneManager = {
         this.createGPGPUMaterial();
         
         this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.landscapeMaterial, COUNT);
-
-        // *** THE FIX IS HERE ***
-        // Manually define a large bounding box and sphere that encompasses the entire plane.
-        // This prevents the renderer from incorrectly culling the entire object when it's rotated.
-        const size = this.planeDimensions.x; // Use the largest dimension
-        this.instancedMesh.geometry.boundingBox = new THREE.Box3(
-            new THREE.Vector3(-size, -size, -size),
-            new THREE.Vector3(size, size, size)
-        );
-        this.instancedMesh.geometry.boundingSphere = new THREE.Sphere(
-            new THREE.Vector3(0, 0, 0),
-            size
-        );
-        // This secondary flag is a failsafe.
         this.instancedMesh.frustumCulled = false;
-        // *** END FIX ***
 
         const instanceIds = new Float32Array(COUNT);
         for (let i = 0; i < COUNT; i++) {

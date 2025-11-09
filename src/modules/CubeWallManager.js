@@ -49,8 +49,11 @@ export const CubeWallManager = {
         const renderer = this.app.renderer;
         
         const uv = this.app.ImagePlaneManager.getUvFromGridCoords(this.playerGridPos.x, this.playerGridPos.y);
-        const texelX = Math.floor(uv.x * target.width);
-        const texelY = Math.floor(uv.y * target.height);
+        
+        // *** THE FIX IS HERE: Clamp the texel coordinates to prevent out-of-bounds reading. ***
+        const texelX = Math.min(target.width - 1, Math.floor(uv.x * target.width));
+        const texelY = Math.min(target.height - 1, Math.floor(uv.y * target.height));
+        // *** END FIX ***
         
         try {
             renderer.readRenderTargetPixels(target, texelX, texelY, 1, 1, buffer);
@@ -149,10 +152,7 @@ export const CubeWallManager = {
 
 
         this.playerCube = new THREE.Mesh(playerGeometry, materials);
-        
-        // *** THE FIX IS HERE: Disable frustum culling for the player cube. ***
         this.playerCube.frustumCulled = false;
-        // *** END FIX ***
         
         this.app.ImagePlaneManager.landscapeContainer.add(this.playerCube);
     },
@@ -188,10 +188,10 @@ export const CubeWallManager = {
         if (initialPlayerPos) {
             const landscapeCubeSize = this._getCubeSize();
             const playerCubeSize = landscapeCubeSize * 0.9;
-            const zOffset = (landscapeCubeSize) + (playerCubeSize / 2);
+            const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
 
             this.playerCube.position.copy(initialPlayerPos);
-            this.playerCube.position.z = zOffset - (landscapeCubeSize * 0.5); // Apply depth offset
+            this.playerCube.position.z = zOffset - (landscapeCubeSize * 0.5);
             this.playerCube.quaternion.identity();
         }
         
@@ -245,10 +245,10 @@ export const CubeWallManager = {
         const targetPos = this.app.ImagePlaneManager.getCubeLocalPosition(this.playerGridPos.x, this.playerGridPos.y);
         const landscapeCubeSize = this._getCubeSize();
         const playerCubeSize = landscapeCubeSize * 0.9;
-        const zOffset = (landscapeCubeSize) + (playerCubeSize / 2);
+        const zOffset = (landscapeCubeSize / 2) + (playerCubeSize / 2);
         
         state.targetPosition.copy(targetPos);
-        state.targetPosition.z = zOffset - (landscapeCubeSize * 0.5); // Apply depth offset
+        state.targetPosition.z = zOffset - (landscapeCubeSize * 0.5);
         
         const rotationAxis = new THREE.Vector3();
         if (nextMove.dx !== 0) rotationAxis.set(0, nextMove.dx, 0);
