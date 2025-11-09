@@ -270,7 +270,7 @@ export const ComputeManager = {
         const pUniforms = this.positionVariable.material.uniforms;
         pUniforms['u_delta'] = { value: 0.0 };
         pUniforms['u_worldSize'] = vUniforms.u_worldSize;
-        pUniforms['u_manualMorph'] = { value: 0.0 };
+        pUniforms['u_manualMorph'] = { value: 0.0 }; // This is now deprecated but kept for safety
         pUniforms['u_targetState'] = vUniforms.u_targetState;
         pUniforms['u_initialPosition'] = vUniforms.u_initialPosition;
         pUniforms['u_modelPosition'] = vUniforms.u_modelPosition;
@@ -420,7 +420,6 @@ export const ComputeManager = {
         if (isLandscape && this.landscapeGpuCompute) {
             const uniforms = this.landscapePositionVariable.material.uniforms;
             
-            // --- BUG FIX: CORRECTLY UPDATE THE .value PROPERTY OF EXISTING UNIFORMS ---
             if (S.gpgpu_enableCloth && this.clothEnableTime < 0) this.clothEnableTime = this.app.currentTime;
             else if (!S.gpgpu_enableCloth) this.clothEnableTime = -1;
     
@@ -496,7 +495,6 @@ export const ComputeManager = {
             uniforms.u_delta.value = delta;
             uniforms.u_audioLow.value = A.energy.low;
             if (A.audioTexture) uniforms.u_audioTexture.value = A.audioTexture;
-            // --- END BUG FIX ---
 
             this.landscapeGpuCompute.compute();
         }
@@ -517,16 +515,24 @@ export const ComputeManager = {
                 vUniforms.particle_attractionStrength.value = S.particle_attractionStrength;
             } else if (this._currentMode === 'fluidsim') {
                 const isDirectorActive = this.app.FluidDirector.activeScript;
-                const isManualActive = pUniforms.u_manualMorph.value > 0.0;
-
+                
+                // *** THE FIX IS HERE ***
+                // The simulation now runs if the director is active OR any of the manual forces are non-zero.
+                // This correctly handles both scripted transitions and manual slider interaction.
+                const anyManualForces = S.fluid_gravity !== 0.0 || S.fluid_curlStrength > 0.0 || vUniforms.fluid_attractionStrength.value > 0.0;
+                if (isDirectorActive || anyManualForces) {
+                    vUniforms.u_physicsState.value = 1;
+                } else {
+                    vUniforms.u_physicsState.value = 0;
+                }
+                
+                // Only allow manual sliders to affect state if a script is NOT running.
                 if (!isDirectorActive) {
                     vUniforms.fluid_curlStrength.value = S.fluid_curlStrength;
                     vUniforms.fluid_curlScale.value = S.fluid_curlScale;
                     vUniforms.fluid_curlSpeed.value = S.fluid_curlSpeed;
+                    vUniforms.u_gravity.value.y = S.fluid_gravity;
                 }
-                
-                vUniforms.u_physicsState.value = (isDirectorActive || isManualActive) ? 1 : 0;
-                if (vUniforms.u_physicsState.value === 0) return;
             }
 
             this.gpuCompute.compute();

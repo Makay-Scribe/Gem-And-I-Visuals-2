@@ -66,10 +66,10 @@ export const UIManager = {
         const S = this.app.vizSettings;
         
         const fluidAttractionSlider = document.getElementById('fluidAttraction');
-        if (fluidAttractionSlider && this.app.ComputeManager?.positionVariable) {
-            const morphValue = this.app.ComputeManager.positionVariable.material.uniforms.u_manualMorph.value;
-            fluidAttractionSlider.value = morphValue;
-            this.updateRangeDisplay('fluidAttraction', morphValue);
+        if (fluidAttractionSlider && this.app.ComputeManager?.velocityVariable) {
+             const strengthValue = this.app.ComputeManager.velocityVariable.material.uniforms.fluid_attractionStrength.value;
+             fluidAttractionSlider.value = strengthValue;
+             this.updateRangeDisplay('fluidAttraction', strengthValue);
         }
 
         const particleMorphSlider = document.getElementById('particle_morphProgress');
@@ -680,31 +680,13 @@ export const UIManager = {
         this._updateGpgpuModeVisibility();
     },
 
-    setFluidControlsDisabled(isDisabled, preserveManualMorph = true) {
+    setFluidControlsDisabled(isDisabled) {
         const container = document.getElementById('fluidSimControlsContainer');
         if (!container) return;
         
-        const manualMorphSlider = document.getElementById('fluidAttraction');
-        const buttons = document.querySelectorAll('#fluidTargetToggle button');
-
         container.querySelectorAll('button, input').forEach(el => {
-            if (el.id === 'fluidMeltAndReform' || el.id === 'fluidExplosion' || el.id === 'fluidVortex' || el.id === 'fluidSwirlReform' || el.id === 'fluidStopAndReset') {
-                el.disabled = isDisabled;
-            }
-            
-            if (el.closest('.accordion-content') && el !== manualMorphSlider && el.id !== 'fluid_gravity' && isDisabled) {
-                el.disabled = isDisabled;
-            }
+            el.disabled = isDisabled;
         });
-        
-        if (!isDisabled) {
-             container.querySelectorAll('button, input').forEach(el => {
-                el.disabled = false;
-            });
-        }
-        
-        buttons.forEach(btn => btn.disabled = isDisabled);
-
 
         const buttonRow1 = document.getElementById('fluid-preset-buttons-row1');
         const buttonRow2 = document.getElementById('fluid-preset-buttons-row2');
@@ -714,21 +696,6 @@ export const UIManager = {
             buttonRow2.style.opacity = isDisabled ? 0.5 : 1.0;
             buttonRow1.style.pointerEvents = isDisabled ? 'none' : 'auto';
             buttonRow2.style.pointerEvents = isDisabled ? 'none' : 'auto';
-        }
-
-        if (!isDisabled) {
-            if (this.app.ComputeManager.velocityVariable) {
-                const targetUniform = this.app.ComputeManager.velocityVariable.material.uniforms.u_targetState.value;
-                this.app.FluidDirector.currentState = (targetUniform == 1) 
-                    ? 'IDLE_ON_MODEL' 
-                    : 'IDLE_ON_CANVAS';
-                
-                buttons.forEach(btn => btn.classList.remove('active'));
-                const targetButton = document.querySelector(`#fluidTargetToggle button[data-target="${targetUniform}"]`);
-                if (targetButton) targetButton.classList.add('active');
-            } else {
-                 this.app.FluidDirector.currentState = 'IDLE_ON_CANVAS';
-            }
         }
     },
 
@@ -826,13 +793,9 @@ export const UIManager = {
                     
                     const value = parseFloat(e.target.value);
                     const uniformsV = CM.velocityVariable.material.uniforms;
-                    const uniformsP = CM.positionVariable.material.uniforms;
-
-                    uniformsV.u_physicsState.value = 1;
 
                     if (id === 'fluidAttraction') {
-                        uniformsP.u_manualMorph.value = value;
-                        uniformsV.fluid_attractionStrength.value = value * 2.5; 
+                        uniformsV.fluid_attractionStrength.value = value; 
                     } else if (id === 'fluid_gravity') {
                         uniformsV.u_gravity.value.y = value;
                     } else if (id === 'fluid_curlStrength') {
@@ -847,42 +810,32 @@ export const UIManager = {
             }
         });
 
+        // *** THE FIX IS HERE ***
         const fluidTargetToggle = document.getElementById('fluidTargetToggle');
         if (fluidTargetToggle) {
             fluidTargetToggle.querySelectorAll('button').forEach(button => {
                 button.addEventListener('click', (e) => {
+                    if (this._isProgrammaticUpdate) return;
+                    this.app.FluidDirector.interruptAndStop();
+                    
                     fluidTargetToggle.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
                     e.target.classList.add('active');
+                    
                     const target = parseInt(e.target.dataset.target);
-                    const sliderValue = (target === 1) ? 1.0 : 0.0;
-                    this.app.setFluidMorphState(target, sliderValue);
+                    const HOLDING_STRENGTH = 1.5;
+                    
+                    const CM = this.app.ComputeManager;
+                    if (!CM.gpuCompute) return;
+                    
+                    const uniformsV = CM.velocityVariable.material.uniforms;
+                    
+                    uniformsV.u_targetState.value = target;
+                    uniformsV.fluid_attractionStrength.value = HOLDING_STRENGTH;
+                    
+                    this.setSliderValue('fluidAttraction', HOLDING_STRENGTH);
                 });
             });
         }
-        
-        // *** THE FIX IS HERE ***
-        // Add a new event listener specifically for the geocube controls.
-        document.querySelectorAll('#geocubeControlsContainer input, #geocubeControlsContainer select').forEach(control => {
-            control.addEventListener('input', (e) => {
-                if (this._isProgrammaticUpdate) return;
-                const id = e.target.id;
-                if (this.app.vizSettings[id] !== undefined) {
-                    const S = this.app.vizSettings;
-                    let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-                    
-                    // Handle color picker separately as its value is a string
-                    if (e.target.type === 'color') {
-                        S[id] = value;
-                    } else {
-                        S[id] = (e.target.type === 'range' || e.target.type === 'number') ? parseFloat(value) : value;
-                    }
-        
-                    if (e.target.type === 'range' || e.target.type === 'number') {
-                        this.updateRangeDisplay(id, value);
-                    }
-                }
-            });
-        });
         // *** END FIX ***
         
         document.querySelectorAll('input[type="range"], select').forEach(control => {
@@ -1090,7 +1043,7 @@ export const UIManager = {
                                 this.app.ImagePlaneManager.particlePBRMaterial.uniforms.u_particleModelTexture.value = this.particleModelTexture;
                             }
                         } else {
-                            this.logError(`Model "${preset.name}" has no texture map.`);
+                            this.logError(`Model "${file.name}" has no texture map.`);
                             this.particleModelTexture = null; 
                         }
 
@@ -1257,25 +1210,20 @@ export const UIManager = {
             this.demoShaderInterval = null;
         }
 
-        // --- BUG FIX: EXPLICITLY RESET AND SYNCHRONIZE STATE ---
         const defaultMode = this.app.defaultVisualizerSettings.gpgpuGeometryMode;
         
-        // 1. Switch the core simulation state FIRST
         this._switchGpgpuMode(defaultMode);
 
-        // 2. NOW reset the entire settings object
         this.app.vizSettings = JSON.parse(JSON.stringify(this.app.defaultVisualizerSettings));
         
         const defaultShaderId = 'presetBg6';
         this.app.vizSettings.shaderToyGLSL = this.app.shaderPresets[defaultShaderId];
         this.loadUserShader(defaultShaderId);
         
-        // 3. Sync all UI elements to the newly reset state
         this.syncAllControlsToSettings();
         this.updateMasterControls();
         this.updateBackgroundControlsVisibility();
         this._updateDeformationPanelStates();
-        // --- END BUG FIX ---
     },
     
     cycleDemoShader() {
