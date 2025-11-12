@@ -684,6 +684,7 @@ export const UIManager = {
         const container = document.getElementById('fluidSimControlsContainer');
         if (!container) return;
         
+        // This is now the ONLY logic. It disables everything when a script is running.
         container.querySelectorAll('button, input').forEach(el => {
             el.disabled = isDisabled;
         });
