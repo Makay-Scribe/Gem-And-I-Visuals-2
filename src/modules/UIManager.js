@@ -78,11 +78,10 @@ export const UIManager = {
             this.updateRangeDisplay('particle_morphProgress', S.particle_morphProgress);
         }
 
-        // *** ADDED: Sync the new debug slider ***
-        const fireProgressSlider = document.getElementById('fire_progress');
+        const fireProgressSlider = document.getElementById('fire_visual_progress');
         if (fireProgressSlider) {
-            fireProgressSlider.value = S.fire_progress;
-            this.updateRangeDisplay('fire_progress', S.fire_progress);
+            fireProgressSlider.value = S.fire_visual_progress;
+            this.updateRangeDisplay('fire_visual_progress', S.fire_visual_progress);
         }
 
         this._isProgrammaticUpdate = false;
@@ -433,7 +432,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowScale', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'fluidAttraction', 'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed', 'fire_progress'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowScale', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'fluidAttraction', 'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed', 'fire_visual_progress'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity', 'fluid_gravity'].includes(id)) {
                 precision = 2;
@@ -645,7 +644,7 @@ export const UIManager = {
             'playerCube_enabled', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity',
             'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed',
             // *** ADDED: Fire settings for reset ***
-            'fire_progress', 'fire_ashColor'
+            'fire_visual_progress', 'fire_ashColor'
         ];
 
         gpgpuKeys.forEach(key => {
@@ -693,9 +692,8 @@ export const UIManager = {
         const container = document.getElementById('fluidSimControlsContainer');
         if (!container) return;
         
-        // Disable all controls, but keep the debug slider enabled so we can see it
         container.querySelectorAll('button, input, select').forEach(el => {
-            if (el.id !== 'fire_progress') { // Keep debug slider active
+            if (el.id !== 'fire_visual_progress') { 
                 el.disabled = isDisabled;
             }
         });
@@ -777,7 +775,6 @@ export const UIManager = {
             });
         });
         
-        // *** ADDED: Event listener for the new button ***
         document.getElementById('fluidFireAndAsh').addEventListener('click', () => this.app.FluidDirector.run('fireAndAsh'));
 
         document.getElementById('fluidMeltAndReform').addEventListener('click', () => this.app.FluidDirector.run('meltAndReform'));
@@ -788,7 +785,7 @@ export const UIManager = {
         
         document.querySelectorAll('#particleControlsContainer input[type="range"], #fluidSimControlsContainer input[type="range"], #fluidSimControlsContainer input[type="color"]').forEach(control => {
             control.addEventListener('input', (e) => {
-                if (this._isProgrammaticUpdate || e.target.id === 'fire_progress') return;
+                if (this._isProgrammaticUpdate || e.target.id === 'fire_visual_progress') return;
                 const S = this.app.vizSettings; const CM = this.app.ComputeManager; const id = e.target.id;
                 
                 if (S[id] !== undefined) {

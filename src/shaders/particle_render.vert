@@ -33,8 +33,13 @@ void main() {
 
     // Calculate the particle's normal by sampling its neighbors in the GPGPU texture
     vec2 texelSize = 1.0 / vec2(textureSize(u_positionTexture, 0));
-    vec3 pos_right = texture(u_positionTexture, gpgpu_uv + vec2(texelSize.x, 0.0)).xyz;
-    vec3 pos_up = texture(u_positionTexture, gpgpu_uv + vec2(0.0, texelSize.y)).xyz; 
+    
+    // ** THE FIX IS HERE: Clamp UVs to prevent edge sampling artifacts **
+    vec2 uv_right = clamp(gpgpu_uv + vec2(texelSize.x, 0.0), 0.0, 1.0);
+    vec2 uv_up = clamp(gpgpu_uv + vec2(0.0, texelSize.y), 0.0, 1.0);
+
+    vec3 pos_right = texture(u_positionTexture, uv_right).xyz;
+    vec3 pos_up = texture(u_positionTexture, uv_up).xyz; 
     vNormal = safeNormalize(cross(pos_right - pos_center, pos_up - pos_center));
     
     // Standard transformations for rendering

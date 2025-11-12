@@ -30,58 +30,79 @@ export const FluidDirector = {
                 const uniforms = CM.velocityVariable.material.uniforms;
                 const S = this.app.vizSettings;
 
+                // --- ALWAYS RESET UNRELATED FORCES ---
                 uniforms.fluid_attractionStrength.value = 0.0;
                 uniforms.u_vortexStrength.value = 0.0;
                 uniforms.u_explosionStrength.value = 0.0;
+                S.ash_twinkleIntensity = 0.0; // Reset ash effect at start
+
+                // --- PHYSICS & VISUALS ARE NOW DECOUPLED ---
 
                 if (progress < 0.25) { // ACT I: ERUPTION
                     const phaseProgress = progress / 0.25;
+                    // Physics: Blast particles upwards with curl
                     uniforms.u_gravity.value.y = THREE.MathUtils.lerp(0.0, 15.0, phaseProgress);
                     uniforms.fluid_curlStrength.value = THREE.MathUtils.lerp(0.0, 20.0, phaseProgress);
                     uniforms.fluid_curlScale.value = 0.5;
                     uniforms.fluid_curlSpeed.value = 1.5;
-                    S.fire_progress = phaseProgress;
-                    S.particle_size_mix = 0.0;
+                    // Visuals: Fire ignites quickly to full intensity
+                    S.fire_visual_progress = phaseProgress;
+                    S.particle_size_mix = 0.0; // Keep particles large and fiery
                 }
                 else if (progress < 0.5) { // ACT II: RISING EMBERS
                     const phaseProgress = (progress - 0.25) / 0.25;
+                    // Physics: Gravity fades, particles hang in the air
                     uniforms.u_gravity.value.y = THREE.MathUtils.lerp(15.0, 0.0, phaseProgress);
                     uniforms.fluid_curlStrength.value = THREE.MathUtils.lerp(20.0, 5.0, phaseProgress);
-                    S.fire_progress = 1.0 - (phaseProgress * 0.2);
+                    // Visuals: Fire starts to die down, turning into embers
+                    S.fire_visual_progress = THREE.MathUtils.lerp(1.0, 0.6, phaseProgress);
                     S.particle_size_mix = THREE.MathUtils.lerp(0.0, 0.5, phaseProgress);
                 }
                 else if (progress < 0.8) { // ACT III: THE TURN & ASH FALL
                     const phaseProgress = (progress - 0.5) / 0.3;
+                    // Physics: Gravity reverses, pulling ash down and to the side
                     uniforms.u_gravity.value.y = THREE.MathUtils.lerp(0.0, -2.0, phaseProgress);
                     uniforms.u_gravity.value.x = THREE.MathUtils.lerp(0.0, 1.0, phaseProgress);
                     uniforms.fluid_curlStrength.value = THREE.MathUtils.lerp(5.0, 1.0, phaseProgress);
-                    S.fire_progress = THREE.MathUtils.lerp(0.8, 0.0, phaseProgress);
+                    // Visuals: Fire is almost out, ash begins to form and twinkle
+                    S.fire_visual_progress = THREE.MathUtils.lerp(0.6, 0.0, phaseProgress);
+                    S.ash_twinkleIntensity = phaseProgress; // Start twinkling the dying embers
                 }
                 else { // ACT IV: SETTLING
                     const phaseProgress = (progress - 0.8) / 0.2;
+                    // Physics: Gravity normalizes, attraction to the 3D model takes over
                     uniforms.u_gravity.value.y = THREE.MathUtils.lerp(-2.0, 0.0, phaseProgress);
                     uniforms.u_gravity.value.x = THREE.MathUtils.lerp(1.0, 0.0, phaseProgress);
                     uniforms.u_targetState.value = 1;
                     uniforms.fluid_attractionStrength.value = THREE.MathUtils.lerp(0.0, 3.0, phaseProgress);
+                    // Visuals: Fire is out. Ash settles, morphs color, and twinkles into its final form.
+                    S.fire_visual_progress = 0.0;
+                    S.ash_twinkleIntensity = 1.0;
                     S.particle_morphProgress = phaseProgress;
                     S.particle_size_mix = THREE.MathUtils.lerp(0.5, 1.0, phaseProgress);
-                    S.particle_twinkleIntensity = phaseProgress;
+                    S.particle_twinkleIntensity = phaseProgress; // The final model twinkle
                 }
             },
             reverse(CM, progress, easedProgress) {
                 const S = this.app.vizSettings;
                 const uniforms = CM.velocityVariable.material.uniforms;
+                // Reverse is just a simple attraction back to the canvas, no fire.
                 uniforms.u_targetState.value = 0;
                 uniforms.fluid_attractionStrength.value = 3.0 * easedProgress;
                 S.particle_morphProgress = 1.0 - easedProgress;
                 S.particle_size_mix = 1.0 - easedProgress;
                 S.particle_twinkleIntensity = 1.0 - easedProgress;
+                S.fire_visual_progress = 0.0;
+                S.ash_twinkleIntensity = 0.0;
             },
             onEnd(CM) {
-                // When the fire ends, revert to NormalBlending.
+                const S = this.app.vizSettings;
+                // When the animation ends, always reset visuals and blending.
                 if (this.app.ImagePlaneManager.fluidMaterial) {
                     this.app.ImagePlaneManager.fluidMaterial.blending = THREE.NormalBlending;
                 }
+                S.fire_visual_progress = 0.0;
+                S.ash_twinkleIntensity = 0.0;
             }
         },
 

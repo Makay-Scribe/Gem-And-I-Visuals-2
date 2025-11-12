@@ -20,10 +20,13 @@ uniform float u_particleColorMix;
 uniform float u_time;
 uniform float u_particle_twinkleIntensity;
 
-// *** NEW: FIRE EFFECT UNIFORMS ***
-uniform float u_fire_progress;      // 0.0 = normal PBR, 1.0 = full fire effect
+// *** FIRE & ASH EFFECT UNIFORMS ***
+uniform float u_fire_progress;      // This now represents VISUAL progress (0.0 to 1.0)
 uniform sampler2D u_fire_colorRamp; // A 1D texture (gradient) for fire colors
-uniform vec3 u_fire_ashColor;      // The color for the "ash" phase
+uniform vec3 u_fire_ashColor;       // The color for the "ash" phase
+uniform float u_ash_twinkleIntensity; // New uniform to control ash flicker
+uniform float u_ash_twinkleSpeed;     // New uniform to control ash flicker speed
+
 
 // Varyings from the vertex shader
 varying vec2 vUv;
@@ -83,29 +86,34 @@ void main() {
     // --- Final Color Initialization ---
     vec3 final_color = pbr_color;
 
-    // *** NEW: FIRE & ASH EFFECT LOGIC ***
-    if (u_fire_progress > 0.0) {
-        // Generate noise to make the fire flicker and look organic
-        float fire_noise = snoise(vec3(vGpgpuUV * 15.0, u_time * 5.0)) * 0.5 + 0.5;
+    // *** DECOUPLED FIRE & ASH EFFECT LOGIC ***
+    // This logic branch is taken if either the fire is burning OR the ash is still visible.
+    // The ash_fade_progress allows the ash to have its own lifecycle after the fire is out.
+    float ash_fade_progress = (1.0 - u_fire_progress);
+    if (u_fire_progress > 0.0 || u_ash_twinkleIntensity > 0.0) {
         
-        // Sample the color ramp. We use noise to vary which part of the gradient each particle samples.
+        // --- Fire Calculation (Only happens when u_fire_progress is > 0) ---
+        float fire_noise = snoise(vec3(vGpgpuUV * 15.0, u_time * 5.0)) * 0.5 + 0.5;
         float ramp_coord = clamp(fire_noise, 0.0, 1.0);
         vec3 fire_color = texture(u_fire_colorRamp, vec2(ramp_coord, 0.5)).rgb;
-        
-        // The fire is emissive, so we make it glow. The intensity is controlled by u_fire_progress.
-        // We use an exponential curve (pow) to make the glow more intense at its peak.
         vec3 emissive_fire = fire_color * pow(u_fire_progress, 2.0) * 5.0;
 
-        // For the ash, we'll just use the designated ash color, also controlled by u_fire_progress.
-        // The ash appears as the fire dies down.
-        vec3 ash_color = u_fire_ashColor * (1.0 - u_fire_progress);
+        // --- Ash Calculation (Happens as fire fades and ash twinkles) ---
+        vec3 ash_color = u_fire_ashColor;
+        if (u_ash_twinkleIntensity > 0.0) {
+            float twinkle_noise = snoise(vec3(vGpgpuUV * 40.0, u_time * u_ash_twinkleSpeed)); // Fast noise
+            float twinkle_factor = mix(1.0, twinkle_noise * 0.5 + 0.5, u_ash_twinkleIntensity);
+            ash_color *= twinkle_factor;
+        }
         
-        // Blend the emissive fire and the dark ash. The fire is dominant at high progress.
-        vec3 effect_color = emissive_fire + ash_color;
+        // --- Blending ---
+        // Blend the emissive fire and the dark ash. Fire is dominant at high progress.
+        vec3 effect_color = mix(ash_color, emissive_fire, u_fire_progress);
         
         // Mix the final PBR color with our effect color.
-        // This allows the particles to smoothly transition from their normal color to fire, and then to ash.
-        final_color = mix(pbr_color, effect_color, u_fire_progress);
+        // We use a separate progress for fading to ash to make it linger.
+        float total_effect_mix = clamp(u_fire_progress + u_ash_twinkleIntensity, 0.0, 1.0);
+        final_color = mix(pbr_color, effect_color, total_effect_mix);
     }
     
     // Twinkle Effect (unchanged)

@@ -199,9 +199,11 @@ const App = {
         gpgpu_cubeWallBevelIntensity: 0.5,
         fluid_gravity: 0.0,
 
-        // *** NEW FIRE SETTINGS ***
-        fire_progress: 0.0,
+        // *** DECOUPLED FIRE SETTINGS ***
+        fire_visual_progress: 0.0,
         fire_ashColor: '#202020',
+        ash_twinkleIntensity: 0.0,
+        ash_twinkleSpeed: 1.0,
         
         backgroundMode: 'shader', 
         shaderToyGLSL: "",

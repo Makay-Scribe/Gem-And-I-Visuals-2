@@ -33,8 +33,13 @@ void main() {
 
     // --- 2. Calculate Accurate Normal based on Displacement ---
     vec2 texelSize = 1.0 / vec2(textureSize(u_positionTexture, 0));
-    vec3 neighborPos_X = texture2D(u_positionTexture, uv_gpgpu + vec2(texelSize.x, 0.0)).xyz;
-    vec3 neighborPos_Y = texture2D(u_positionTexture, uv_gpgpu + vec2(0.0, texelSize.y)).xyz;
+    
+    // ** THE FIX IS HERE: Clamp UVs to prevent edge sampling artifacts **
+    vec2 uv_right = clamp(uv_gpgpu + vec2(texelSize.x, 0.0), 0.0, 1.0);
+    vec2 uv_up = clamp(uv_gpgpu + vec2(0.0, texelSize.y), 0.0, 1.0);
+
+    vec3 neighborPos_X = texture2D(u_positionTexture, uv_right).xyz;
+    vec3 neighborPos_Y = texture2D(u_positionTexture, uv_up).xyz;
 
     vec3 tangent = neighborPos_X - displacedPosition;
     vec3 bitangent = neighborPos_Y - displacedPosition;

@@ -382,15 +382,17 @@ export const ImagePlaneManager = {
                 u_time: { value: 0.0 },
                 u_pixelRatio: { value: window.devicePixelRatio },
                 u_particle_twinkleIntensity: { value: S.particle_twinkleIntensity },
-                u_fire_progress: { value: 0.0 },
+                u_fire_progress: { value: S.fire_visual_progress },
                 u_fire_colorRamp: { value: this.fireColorRampTexture },
                 u_fire_ashColor: { value: new THREE.Color(S.fire_ashColor) },
+                u_ash_twinkleIntensity: { value: S.ash_twinkleIntensity },
+                u_ash_twinkleSpeed: { value: S.ash_twinkleSpeed },
             },
             vertexShader: particleRenderVertexShader,
             fragmentShader: particleRenderFragmentShader,
             transparent: true,
             depthWrite: false,
-            blending: THREE.NormalBlending, // *** THE FIX IS HERE ***
+            blending: THREE.NormalBlending,
         });
     },
 
@@ -491,9 +493,9 @@ export const ImagePlaneManager = {
             const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
             const fineSize = S.particle_min_size;
             
-            const finalSize = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
-            U.particle_base_size.value = finalSize;
-            U.particle_min_size.value = finalSize; // This is now redundant, but harmless
+            U.particle_base_size.value = coarseSize;
+            U.particle_min_size.value = fineSize;
+            U.u_particle_size_mix.value = S.particle_size_mix;
             
             U.u_pixelRatio.value = window.devicePixelRatio;
             U.u_particleColorMix.value = S.particle_morphProgress;
@@ -509,8 +511,11 @@ export const ImagePlaneManager = {
             U.u_time.value = this.app.currentTime;
             U.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
             
-            U.u_fire_progress.value = S.fire_progress;
+            // ** THE FIX IS HERE **
+            U.u_fire_progress.value = S.fire_visual_progress;
             U.u_fire_ashColor.value.set(S.fire_ashColor);
+            U.u_ash_twinkleIntensity.value = S.ash_twinkleIntensity;
+            U.u_ash_twinkleSpeed.value = S.ash_twinkleSpeed;
 
         } else { 
             if (!this.landscapeMaterial || !CM.landscapeGpuCompute) return;
