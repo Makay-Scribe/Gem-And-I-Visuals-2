@@ -16,7 +16,6 @@ import { CubeWallManager } from './modules/CubeWallManager.js';
 import { DirectorManager } from './modules/DirectorManager.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ParticleTransitions } from './modules/ParticleTransitions.js';
-// REFACTOR: The FluidSimulationContainer import is now removed.
 import { FluidDirector } from './compute/FluidDirector.js';
 
 
@@ -64,7 +63,6 @@ const App = {
     
     isDefaultSculptureBaked: false,
 
-    // --- MANAGERS ---
     UIManager: UIManager,
     ButterchurnManager: ButterchurnManager,
     AudioProcessor: AudioProcessor,
@@ -79,7 +77,6 @@ const App = {
     Debugger: Debugger,
     DirectorManager: DirectorManager,
     ParticleTransitions: ParticleTransitions,
-    // REFACTOR: FluidSimulationContainer is removed. FluidDirector remains.
     FluidDirector: FluidDirector,
 
     defaultVisualizerSettings: {
@@ -113,7 +110,7 @@ const App = {
         imageEffect_joltStrength: 0.1,
         imageEffect_joltSpeed: 10.0,
         imageEffect_joltAudioInfluence: 1.0,
-        // --- GPGPU SETTINGS ---
+        
         gpgpuGeometryMode: 'particles',
         gpgpu_enableWaterRipple: false,
         gpgpu_rippleSpeed: 0.5,
@@ -179,7 +176,7 @@ const App = {
         
         particle_resolution: 512,
         particle_base_size: 3.0,
-        particle_min_size: 0.0,
+        particle_min_size: 0.1,
         particle_size_mix: 0.0,
         particle_twinkleIntensity: 0.0,
         particle_flowScale: 0.1,
@@ -192,8 +189,7 @@ const App = {
         fluid_curlStrength: 0.0,
         fluid_curlScale: 0.05,
         fluid_curlSpeed: 0.3,
-
-        // --- CUBEWALL SETTINGS ---
+        
         gpgpu_cubeWallGridSize: 10,
         playerCube_enabled: true,
         gpgpu_cubeWallMorph: 0.0,
@@ -202,7 +198,11 @@ const App = {
         gpgpu_cubeWallBevelWidth: 0.02,
         gpgpu_cubeWallBevelIntensity: 0.5,
         fluid_gravity: 0.0,
-        // --- END GPGPU SETTINGS ---
+
+        // *** NEW FIRE SETTINGS ***
+        fire_progress: 0.0,
+        fire_ashColor: '#202020',
+        
         backgroundMode: 'shader', 
         shaderToyGLSL: "",
         enableShaderMouse: false,
@@ -230,7 +230,6 @@ const App = {
         enableOnScreenDebugger: true,
     },
 
-    // REFACTOR: This helper function now correctly targets the unified ComputeManager
     setFluidMorphState(target, sliderValue) {
         const CM = this.ComputeManager;
         if (!CM.gpuCompute) return;
@@ -238,19 +237,14 @@ const App = {
         this.FluidDirector.interruptAndStop();
         
         const vUniforms = CM.velocityVariable.material.uniforms;
-        vUniforms.u_physicsState.value = 1; // Ensure physics is running for manual control
+        vUniforms.u_physicsState.value = 1;
         vUniforms.u_targetState.value = target;
         vUniforms.fluid_attractionStrength.value = sliderValue * 2.5;
-
-        const pUniforms = CM.positionVariable.material.uniforms;
-        pUniforms.u_targetState.value = target;
-        pUniforms.u_manualMorph.value = sliderValue;
 
         this.UIManager.setSliderValue('fluidAttraction', sliderValue);
     },
 
     async preloadDevAssets() {
-        console.log("Attempting to preload developer assets...");
         try {
             const audioPath = '/Devmedia/Devaudio.mp3';
             const audioResponse = await fetch(audioPath);
@@ -259,10 +253,8 @@ const App = {
             const audioFile = new File([audioBlob], audioPath.split('/').pop(), { type: 'audio/mpeg' });
             this.AudioProcessor.loadAudioFile(audioFile);
             this.UIManager.updateFileNameDisplay('audio', audioPath.split('/').pop());
-            console.log(`Preloaded ${audioPath} successfully.`);
         } catch (error) {
-            console.warn(`Could not preload development audio: ${error.message}. App will start without it.`);
-            if (this.UIManager) this.UIManager.logError(`Dev audio preload failed: ${error.message.substring(0, 100)}...`);
+            console.warn(`Could not preload development audio: ${error.message}.`);
         }
         try {
             const imageResponse = await fetch('/Devmedia/Devimage.jpeg');
@@ -271,15 +263,12 @@ const App = {
             const imageFile = new File([imageBlob], 'Devimage.jpeg', { type: 'image/jpeg' });
             this.ImagePlaneManager.loadTexture(imageFile);
             this.UIManager.updateFileNameDisplay('image', 'Devimage.jpeg');
-            console.log("Preloaded Devimage.jpeg successfully.");
         } catch (error) {
-            console.warn(`Could not preload Devimage.jpeg: ${error.message}. App will start without it.`);
-            if (this.UIManager) this.UIManager.logError(`Devimage.jpeg preload failed: ${error.message.substring(0, 100)}...`);
+            console.warn(`Could not preload Devimage.jpeg: ${error.message}.`);
         }
     },
 
     async preloadDefaultSculpture() {
-        console.log("Preloading default sculpture model (/Devmedia/Devmodel.glb)...");
         const loader = new GLTFLoader();
         try {
             const gltf = await loader.loadAsync('/Devmedia/Devmodel.glb');
@@ -294,7 +283,6 @@ const App = {
                     this.UIManager.particleModelTexture = null;
                 }
                 
-                // REFACTOR: Now bakes to the unified ComputeManager's texture
                 this.ComputeManager.bakeToTexture(bestMesh, this.ComputeManager.particleModelPositionTexture);
                 this.isDefaultSculptureBaked = true;
                 
@@ -305,19 +293,16 @@ const App = {
             }
         } catch (error) {
             console.error("Failed to preload and bake default sculpture:", error);
-            this.UIManager.logError("Default sculpture /Devmedia/Devmodel.glb failed. 3D Model features disabled until a model is baked.");
+            this.UIManager.logError("Default sculpture failed. 3D Model features disabled.");
         }
     },
 
     onWindowResize() {
         if (!this.camera || !this.renderer) return;
-    
         const canvas = this.renderer.domElement;
         const pixelRatio = window.devicePixelRatio;
-    
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
-    
         const targetWidth = Math.floor(width * pixelRatio);
         const targetHeight = Math.floor(height * pixelRatio);
     
@@ -329,17 +314,12 @@ const App = {
         this.camera.updateProjectionMatrix();
     
         this.BackgroundManager.onWindowResize(); 
-        if (this.GPGPUDebugger && this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
-        if (this.UIManager && this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
+        if (this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
+        if (this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
     },
 
     _getActiveManager() {
-        if (this.vizSettings.activeControl === 'landscape') {
-            return this.ImagePlaneManager;
-        } else if (this.vizSettings.activeControl === 'model') {
-            return this.ModelManager;
-        }
-        return null;
+        return this.vizSettings.activeControl === 'landscape' ? this.ImagePlaneManager : this.ModelManager;
     },
     
     _startManualControlTimeout(activeManager) {
@@ -359,11 +339,9 @@ const App = {
         event.preventDefault();
         const activeManager = this._getActiveManager();
         if (!activeManager || !activeManager.state) return;
-
         activeManager.state.isUnderManualControl = true;
         const delta = -Math.sign(event.deltaY);
         activeManager.state.targetPosition.z += delta * this.mouseInteraction.zoomSpeed;
-        
         this._startManualControlTimeout(activeManager);
     },
 
@@ -371,50 +349,36 @@ const App = {
         const MI = this.mouseInteraction;
         const activeManager = this._getActiveManager();
         if (!activeManager || !activeManager.state) return;
-        
         if (activeManager.state.manualControlTimeoutId) {
             clearTimeout(activeManager.state.manualControlTimeoutId);
             activeManager.state.manualControlTimeoutId = null;
         }
-
         activeManager.state.isUnderManualControl = true;
-
-        if (event.button === 0) {
-            MI.isRotating = true;
-        } else if (event.button === 2) {
-            event.preventDefault();
-            MI.isDragging = true;
-        }
+        if (event.button === 0) MI.isRotating = true;
+        else if (event.button === 2) { event.preventDefault(); MI.isDragging = true; }
         MI.startMouse.set(event.clientX, event.clientY);
     },
     
     onPointerMove(event) {
         const MI = this.mouseInteraction;
         const activeManager = this._getActiveManager();
-        if (!activeManager || !activeManager.state) return;
-        
-        if (!MI.isDragging && !MI.isRotating) return; 
+        if (!activeManager || !activeManager.state || (!MI.isDragging && !MI.isRotating)) return; 
 
         if (MI.isDragging) {
             const deltaX = event.clientX - MI.startMouse.x;
             const deltaY = event.clientY - MI.startMouse.y;
-            
             const distanceFactor = Math.abs(activeManager.state.targetPosition.z / 100) + 0.1;
-
             activeManager.state.targetPosition.x += deltaX * MI.panSpeed * distanceFactor;
             activeManager.state.targetPosition.y -= deltaY * MI.panSpeed * distanceFactor;
-
             MI.startMouse.set(event.clientX, event.clientY);
         } else if (MI.isRotating) {
             const deltaX = event.clientX - MI.startMouse.x;
             const deltaY = event.clientY - MI.startMouse.y;
-
             const targetEuler = new THREE.Euler().setFromQuaternion(activeManager.state.targetQuaternion, 'YXZ');
             targetEuler.y += deltaX * MI.rotationSpeed;
             targetEuler.x += deltaY * MI.rotationSpeed;
             targetEuler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetEuler.x));
             activeManager.state.targetQuaternion.setFromEuler(targetEuler);
-
             MI.startMouse.set(event.clientX, event.clientY);
         }
     },
@@ -422,11 +386,9 @@ const App = {
     onPointerUp(event) {
         const MI = this.mouseInteraction;
         const activeManager = this._getActiveManager();
-        
         if (activeManager && activeManager.state.isUnderManualControl) {
             this._startManualControlTimeout(activeManager);
         }
-
         MI.isRotating = false;
         MI.isDragging = false;
     },
@@ -435,28 +397,22 @@ const App = {
         this.vizSettings = JSON.parse(JSON.stringify(this.defaultVisualizerSettings));
         
         window.onerror = (message, source, lineno, colno, error) => {
-            console.error("Uncaught Error (Global Handler):", message, source, lineno, colno, error);
-            const displayMessage = `Runtime Error: ${message.toString().substring(0, 150)}...`;
-            if (this.UIManager) this.UIManager.logError(displayMessage);
+            console.error("Uncaught Error:", message, source, lineno, colno, error);
+            if (this.UIManager) this.UIManager.logError(`Runtime Error: ${message.toString().substring(0, 150)}...`);
             return true; 
         };
-
         window.onunhandledrejection = (event) => {
-            console.error("Unhandled Promise Rejection (Global Handler):", event.reason);
-            const displayMessage = `Promise Error: ${event.reason.message || event.reason.toString().substring(0, 150)}...`;
-            if (this.UIManager) this.UIManager.logError(displayMessage);
+            console.error("Unhandled Promise Rejection:", event.reason);
+            if (this.UIManager) this.UIManager.logError(`Promise Error: ${event.reason.message || event.reason.toString().substring(0, 150)}...`);
             event.preventDefault(); 
         };
 
         this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('glCanvas'), antialias: true, powerPreference: "high-performance" });
-        
         this.renderer.autoClear = false;
-
         const toneMappingOptions = { 'ACESFilmic': THREE.ACESFilmicToneMapping, 'Reinhard': THREE.ReinhardToneMapping, 'Linear': THREE.LinearToneMapping };
         this.renderer.toneMapping = toneMappingOptions[this.vizSettings.toneMappingMode] || THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = this.vizSettings.toneMappingExposure;
 
-        // --- Manager Initialization Order ---
         this.SceneManager.init(this);
         this.BackgroundManager.init(this);
         this.CameraManager.init(this);
@@ -469,25 +425,15 @@ const App = {
         this.ParticleTransitions.init(this);
         this.FluidDirector.init(this);
         this.ImagePlaneManager.init(this); 
-        
-        // REFACTOR: ComputeManager is now the single source of truth and is initialized here.
         this.ComputeManager.init(this);
-        
         this.GPGPUDebugger.init(this);
         this.UIManager.init(this); 
         
-        // --- Scene Setup ---
         this.ambientLight = new THREE.AmbientLight(this.vizSettings.ambientLightColor, 1.0);
         this.scene.add(this.ambientLight);
-
         this.directionalLight = new THREE.DirectionalLight(this.vizSettings.lightColor, 1.0);
-        this.directionalLight.position.set(
-            this.vizSettings.lightDirectionX,
-            this.vizSettings.lightDirectionY,
-            this.vizSettings.lightDirectionZ
-        ).normalize();
+        this.directionalLight.position.set(this.vizSettings.lightDirectionX, this.vizSettings.lightDirectionY, this.vizSettings.lightDirectionZ).normalize();
         this.scene.add(this.directionalLight);
-
         const laserMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
         const laserPoints = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)];
         const laserGeometry = new THREE.BufferGeometry().setFromPoints(laserPoints);
@@ -496,32 +442,23 @@ const App = {
         this.guideLaser.visible = this.vizSettings.enableGuideLaser;
         this.scene.add(this.guideLaser);
         
-        // --- Asset Preloading ---
-        const assetLoadingPromise = this.preloadDevAssets(); 
-        const sculptureLoadingPromise = this.preloadDefaultSculpture();
-        await Promise.all([assetLoadingPromise, sculptureLoadingPromise]);
+        await Promise.all([this.preloadDevAssets(), this.preloadDefaultSculpture()]);
 
-        // REFACTOR: This call creates the initial visible geometry (particles)
         this.ImagePlaneManager.createDefaultLandscape(); 
-        
         this.BackgroundManager.render(); 
         this.GPGPUDebugger.update(); 
         
         const defaultShaderId = 'presetBg6';
         const defaultShaderCode = this.shaderPresets[defaultShaderId];
         if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
-            console.log("Loading default background shader preset...");
             const shaderToyGLSLEl = document.getElementById('shaderToyGLSL');
             if (shaderToyGLSLEl) {
                 shaderToyGLSLEl.value = defaultShaderCode;
                 this.vizSettings.shaderToyGLSL = defaultShaderCode;
-                if (this.UIManager) {
-                    this.UIManager.loadUserShader(defaultShaderId); 
-                }
+                if (this.UIManager) { this.UIManager.loadUserShader(defaultShaderId); }
             }
         }
 
-        console.log("Loading default 3D model preset...");
         const modelPreset = this.modelPresets['modelPreset5'];
         if (modelPreset && this.ModelManager) {
             this.ModelManager.loadGLTFModel(modelPreset);
@@ -531,31 +468,19 @@ const App = {
         window.addEventListener('resize', this.onWindowResize.bind(this));
         this.onWindowResize(); 
         
-        window.addEventListener('mousemove', (event) => {
+        const canvas = this.renderer.domElement;
+        canvas.addEventListener('mousemove', (event) => {
             if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
                 this.mouseState.x = event.clientX;
                 this.mouseState.y = event.clientY;
             }
-            if (this.GPGPUDebugger) {
-                this.GPGPUDebugger.handleMouseMove(event);
-            }
+            if (this.GPGPUDebugger) { this.GPGPUDebugger.handleMouseMove(event); }
         });
-        
-        const canvas = this.renderer.domElement;
-        canvas.addEventListener('mousedown', (event) => {
-             if (event.target !== canvas) return;
-             if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
-                this.mouseState.z = 1;
-             }
-        });
-        canvas.addEventListener('mouseup', () => {
-            this.mouseState.z = 0;
-        });
-        
+        canvas.addEventListener('mousedown', (event) => { if (event.target === canvas && this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') { this.mouseState.z = 1; }});
+        canvas.addEventListener('mouseup', () => { this.mouseState.z = 0; });
         canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
         canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
         canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
-        
         canvas.addEventListener('wheel', this.onMouseWheel.bind(this), { passive: false });
         canvas.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -573,7 +498,6 @@ const App = {
                 }
             });
         }
-
         this.animate();
     },
 
@@ -589,19 +513,12 @@ const App = {
             const orbitTime = this.currentTime * S.lightOrbitSpeed;
             const newX = Math.cos(orbitTime);
             const newZ = Math.sin(orbitTime);
-
             this.directionalLight.position.x = newX;
             this.directionalLight.position.z = newZ;
-            
             S.lightDirectionX = newX;
             S.lightDirectionZ = newZ;
-            
-            const sliderX = document.getElementById('lightDirectionX');
-            const sliderZ = document.getElementById('lightDirectionZ');
-            if (sliderX && sliderZ) {
-                this.UIManager.setSliderValue('lightDirectionX', newX);
-                this.UIManager.setSliderValue('lightDirectionZ', newZ);
-            }
+            if (document.getElementById('lightDirectionX')) this.UIManager.setSliderValue('lightDirectionX', newX);
+            if (document.getElementById('lightDirectionZ')) this.UIManager.setSliderValue('lightDirectionZ', newZ);
         }
         
         this.guideLaser.visible = S.enableGuideLaser;
@@ -609,28 +526,23 @@ const App = {
             const laserStart = new THREE.Vector3().copy(this.directionalLight.position).multiplyScalar(100);
             const laserEnd = new THREE.Vector3(0,0,0);
             const positions = this.guideLaser.geometry.attributes.position.array;
-            positions[0] = laserStart.x;
-            positions[1] = laserStart.y;
-            positions[2] = laserStart.z;
-            positions[3] = laserEnd.x;
-            positions[4] = laserEnd.y;
-            positions[5] = laserEnd.z;
+            positions[0] = laserStart.x; positions[1] = laserStart.y; positions[2] = laserStart.z;
+            positions[3] = laserEnd.x; positions[4] = laserEnd.y; positions[5] = laserEnd.z;
             this.guideLaser.geometry.attributes.position.needsUpdate = true;
         }
         
-        // --- Manager Update Calls ---
         this.AudioProcessor.updateAudioData();
         if(this.animationMixer) this.animationMixer.update(cappedDelta);
         
-        // REFACTOR: The single ComputeManager.update() call handles all GPGPU work.
         this.ComputeManager.update(cappedDelta); 
         
-        this.FluidDirector.update(); // FluidDirector now modifies ComputeManager's state
+        if (S.gpgpuGeometryMode === 'fluidsim') { this.FluidDirector.update(); } 
+        else if (S.gpgpuGeometryMode === 'particles') { this.ParticleTransitions.update(); }
+        
         this.DirectorManager.update(cappedDelta);
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
         this.CubeWallManager.update();
-        this.ParticleTransitions.update();
         
         this.CameraManager.update(cappedDelta); 
         this.SceneManager.update(cappedDelta);
@@ -639,7 +551,6 @@ const App = {
         this.Debugger.update();
         this.UIManager.syncSlidersFromState();
 
-        // --- Rendering ---
         this.renderer.clear();
         this.BackgroundManager.render();
         this.renderer.clearDepth();
@@ -650,10 +561,8 @@ const App = {
 
 const attemptToStartApp = () => {
     if (document.getElementById('controlsPanel')) {
-        console.log("DOM is ready. Initializing App.");
         App.init();
     } else {
-        console.warn("DOM not ready yet, retrying in 10ms...");
         setTimeout(attemptToStartApp, 10);
     }
 };

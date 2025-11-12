@@ -78,6 +78,13 @@ export const UIManager = {
             this.updateRangeDisplay('particle_morphProgress', S.particle_morphProgress);
         }
 
+        // *** ADDED: Sync the new debug slider ***
+        const fireProgressSlider = document.getElementById('fire_progress');
+        if (fireProgressSlider) {
+            fireProgressSlider.value = S.fire_progress;
+            this.updateRangeDisplay('fire_progress', S.fire_progress);
+        }
+
         this._isProgrammaticUpdate = false;
     },
 
@@ -426,7 +433,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowScale', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'fluidAttraction', 'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowScale', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'fluidAttraction', 'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed', 'fire_progress'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity', 'fluid_gravity'].includes(id)) {
                 precision = 2;
@@ -636,7 +643,9 @@ export const UIManager = {
             'gpgpu_enablePeel', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelEnableAudio', 'gpgpu_peelTextureAmount', 'gpgpu_peelDrift',
             'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress',
             'playerCube_enabled', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity',
-            'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed'
+            'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed',
+            // *** ADDED: Fire settings for reset ***
+            'fire_progress', 'fire_ashColor'
         ];
 
         gpgpuKeys.forEach(key => {
@@ -684,9 +693,11 @@ export const UIManager = {
         const container = document.getElementById('fluidSimControlsContainer');
         if (!container) return;
         
-        // This is now the ONLY logic. It disables everything when a script is running.
-        container.querySelectorAll('button, input').forEach(el => {
-            el.disabled = isDisabled;
+        // Disable all controls, but keep the debug slider enabled so we can see it
+        container.querySelectorAll('button, input, select').forEach(el => {
+            if (el.id !== 'fire_progress') { // Keep debug slider active
+                el.disabled = isDisabled;
+            }
         });
 
         const buttonRow1 = document.getElementById('fluid-preset-buttons-row1');
@@ -766,52 +777,38 @@ export const UIManager = {
             });
         });
         
+        // *** ADDED: Event listener for the new button ***
+        document.getElementById('fluidFireAndAsh').addEventListener('click', () => this.app.FluidDirector.run('fireAndAsh'));
+
         document.getElementById('fluidMeltAndReform').addEventListener('click', () => this.app.FluidDirector.run('meltAndReform'));
         document.getElementById('fluidExplosion').addEventListener('click', () => this.app.FluidDirector.run('explosion'));
         document.getElementById('fluidVortex').addEventListener('click', () => this.app.FluidDirector.run('vortex'));
         document.getElementById('fluidSwirlReform').addEventListener('click', () => this.app.FluidDirector.run('swirl_reform'));
         document.getElementById('fluidStopAndReset').addEventListener('click', () => this.app.FluidDirector.run('reset'));
         
-        document.querySelectorAll('#particleControlsContainer input[type="range"]').forEach(slider => {
-            slider.addEventListener('input', (e) => {
-                if (this._isProgrammaticUpdate) return;
-                const S = this.app.vizSettings;
-                const id = e.target.id;
-                S[id] = parseFloat(e.target.value);
-                this.updateRangeDisplay(id, S[id]);
+        document.querySelectorAll('#particleControlsContainer input[type="range"], #fluidSimControlsContainer input[type="range"], #fluidSimControlsContainer input[type="color"]').forEach(control => {
+            control.addEventListener('input', (e) => {
+                if (this._isProgrammaticUpdate || e.target.id === 'fire_progress') return;
+                const S = this.app.vizSettings; const CM = this.app.ComputeManager; const id = e.target.id;
+                
+                if (S[id] !== undefined) {
+                    S[id] = (e.target.type === 'color') ? e.target.value : parseFloat(e.target.value);
+                }
+                if(e.target.type === 'range') this.updateRangeDisplay(id, S[id]);
+
+                if (CM?.gpuCompute && S.gpgpuGeometryMode === 'fluidsim') {
+                    this.app.FluidDirector.interruptAndStop();
+                    const uniformsV = CM.velocityVariable.material.uniforms;
+                    const value = parseFloat(e.target.value);
+                    if (id === 'fluidAttraction') { uniformsV.fluid_attractionStrength.value = value; }
+                    else if (id === 'fluid_gravity') { uniformsV.u_gravity.value.y = value; }
+                    else if (id === 'fluid_curlStrength') { uniformsV.fluid_curlStrength.value = value; }
+                    else if (id === 'fluid_curlScale') { uniformsV.fluid_curlScale.value = value; }
+                    else if (id === 'fluid_curlSpeed') { uniformsV.fluid_curlSpeed.value = value; }
+                }
             });
         });
         
-        const fluidSliders = ['fluidAttraction', 'fluid_gravity', 'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed'];
-        fluidSliders.forEach(id => {
-            const slider = document.getElementById(id);
-            if (slider) {
-                slider.addEventListener('input', (e) => {
-                    if (this._isProgrammaticUpdate) return;
-                    const CM = this.app.ComputeManager;
-                    if (!CM.gpuCompute) return;
-                    this.app.FluidDirector.interruptAndStop();
-                    
-                    const value = parseFloat(e.target.value);
-                    const uniformsV = CM.velocityVariable.material.uniforms;
-
-                    if (id === 'fluidAttraction') {
-                        uniformsV.fluid_attractionStrength.value = value; 
-                    } else if (id === 'fluid_gravity') {
-                        uniformsV.u_gravity.value.y = value;
-                    } else if (id === 'fluid_curlStrength') {
-                        uniformsV.fluid_curlStrength.value = value;
-                    } else if (id === 'fluid_curlScale') {
-                        uniformsV.fluid_curlScale.value = value;
-                    } else if (id === 'fluid_curlSpeed') {
-                        uniformsV.fluid_curlSpeed.value = value;
-                    }
-                    this.updateRangeDisplay(id, value);
-                });
-            }
-        });
-
-        // *** THE FIX IS HERE ***
         const fluidTargetToggle = document.getElementById('fluidTargetToggle');
         if (fluidTargetToggle) {
             fluidTargetToggle.querySelectorAll('button').forEach(button => {
@@ -837,10 +834,9 @@ export const UIManager = {
                 });
             });
         }
-        // *** END FIX ***
         
-        document.querySelectorAll('input[type="range"], select').forEach(control => {
-            if (control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list') || control.closest('#particleControlsContainer') || control.closest('#geocubeControlsContainer') || control.closest('#fluidSimControlsContainer')) return;
+        document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(control => {
+            if (control.closest('#fluidSimControlsContainer') || control.closest('#particleControlsContainer') || control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list')) return;
             control.addEventListener('input', (e) => {
                 if (this._isProgrammaticUpdate) return;
                 const id = e.target.id;

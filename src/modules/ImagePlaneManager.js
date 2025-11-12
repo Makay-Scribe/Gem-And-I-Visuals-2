@@ -21,6 +21,7 @@ export const ImagePlaneManager = {
     currentTexture: null, 
     spinAccumulator: null, 
     calculatedParticleBaseSize: 1.0,
+    fireColorRampTexture: null,
 
     state: {
         isUnderManualControl: false,
@@ -78,12 +79,35 @@ export const ImagePlaneManager = {
         this.state.targetPosition.copy(this.state.homePosition);
         
         this.landscapeContainer = new this.app.THREE.Group();
-        
-        // *** THE FIX IS HERE: This tells the renderer to always draw this group and its children. ***
         this.landscapeContainer.frustumCulled = false;
-        // *** END FIX ***
-        
         this.app.scene.add(this.landscapeContainer);
+
+        this._createFireColorRamp();
+    },
+
+    _createFireColorRamp() {
+        const width = 256;
+        const data = new Uint8Array(width * 4);
+        const color = new THREE.Color();
+
+        for (let i = 0; i < width; i++) {
+            const t = i / (width - 1);
+            if (t < 0.25) {
+                color.setRGB(t / 0.25, 0, 0);
+            } else if (t < 0.5) {
+                color.setRGB(1.0, (t - 0.25) / 0.25, 0);
+            } else {
+                color.setRGB(1.0, 1.0, (t - 0.5) / 0.5);
+            }
+            
+            data[i * 4 + 0] = Math.floor(color.r * 255);
+            data[i * 4 + 1] = Math.floor(color.g * 255);
+            data[i * 4 + 2] = Math.floor(color.b * 255);
+            data[i * 4 + 3] = 255;
+        }
+
+        this.fireColorRampTexture = new THREE.DataTexture(data, width, 1, THREE.RGBAFormat);
+        this.fireColorRampTexture.needsUpdate = true;
     },
 
     startAutopilot(presetId) {
@@ -93,14 +117,12 @@ export const ImagePlaneManager = {
         ap.preset = presetId;
         if (this.app.UIManager) this.app.UIManager.updateMasterControls();
         ap.waypointProgress = 1.0; 
-        console.log(`ImagePlane Autopilot STARTED with preset: ${presetId}`);
     },
 
     stopAutopilot() {
         const ap = this.autopilot;
         ap.active = false;
         ap.preset = null;
-        console.log("ImagePlane Autopilot STOP triggered. Will return to home.");
     },
     
     generateNewRandomWaypoint() {
@@ -232,58 +254,24 @@ export const ImagePlaneManager = {
     },
 
     _cleanupMeshes() {
-        if (this.landscape) {
-            this.landscape.geometry.dispose();
-            this.landscapeContainer.remove(this.landscape);
-            this.landscape = null;
-        }
-        if (this.instancedMesh) {
-            this.instancedMesh.geometry.dispose();
-            this.landscapeContainer.remove(this.instancedMesh);
-            this.instancedMesh = null;
-        }
-        if (this.particleSystem) {
-            this.particleSystem.geometry.dispose();
-            this.landscapeContainer.remove(this.particleSystem);
-            this.particleSystem = null;
-        }
-        if (this.fluidSystem) {
-            this.fluidSystem.geometry.dispose();
-            this.landscapeContainer.remove(this.fluidSystem);
-            this.fluidSystem = null;
-        }
-
-        if (this.landscapeMaterial) {
-            this.landscapeMaterial.dispose();
-            this.landscapeMaterial = null;
-        }
-        if (this.particlePBRMaterial) {
-            this.particlePBRMaterial.dispose();
-            this.particlePBRMaterial = null;
-        }
-        if (this.fluidMaterial) {
-            this.fluidMaterial.dispose();
-            this.fluidMaterial = null;
-        }
+        if (this.landscape) { this.landscape.geometry.dispose(); this.landscapeContainer.remove(this.landscape); this.landscape = null; }
+        if (this.instancedMesh) { this.instancedMesh.geometry.dispose(); this.landscapeContainer.remove(this.instancedMesh); this.instancedMesh = null; }
+        if (this.particleSystem) { this.particleSystem.geometry.dispose(); this.landscapeContainer.remove(this.particleSystem); this.particleSystem = null; }
+        if (this.fluidSystem) { this.fluidSystem.geometry.dispose(); this.landscapeContainer.remove(this.fluidSystem); this.fluidSystem = null; }
+        if (this.landscapeMaterial) { this.landscapeMaterial.dispose(); this.landscapeMaterial = null; }
+        if (this.particlePBRMaterial) { this.particlePBRMaterial.dispose(); this.particlePBRMaterial = null; }
+        if (this.fluidMaterial) { this.fluidMaterial.dispose(); this.fluidMaterial = null; }
     },
 
     _createPlaneMesh() {
-        const geometry = new this.app.THREE.PlaneGeometry(
-            this.planeDimensions.x, 
-            this.planeDimensions.y, 
-            this.planeResolution.x, 
-            this.planeResolution.y
-        );
-
+        const geometry = new this.app.THREE.PlaneGeometry( this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y );
         const gpgpuUvs = new Float32Array(geometry.attributes.position.count * 2);
         for (let i = 0; i < geometry.attributes.uv.count; i++) {
             gpgpuUvs[i * 2] = geometry.attributes.uv.getX(i);
             gpgpuUvs[i * 2 + 1] = geometry.attributes.uv.getY(i);
         }
         geometry.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
-
         this.createGPGPUMaterial();
-
         this.landscape = new this.app.THREE.Mesh(geometry, this.landscapeMaterial);
         this.landscape.frustumCulled = false;
         this.landscapeContainer.add(this.landscape);
@@ -293,10 +281,8 @@ export const ImagePlaneManager = {
         const CM = this.app.ComputeManager;
         const count = CM.AREA;
         const resolution = CM.WIDTH;
-
         const geometry = new this.app.THREE.BufferGeometry();
         geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
-
         const gpgpuUvs = new Float32Array(count * 2);
         for (let y = 0; y < resolution; y++) {
             for (let x = 0; x < resolution; x++) {
@@ -306,9 +292,7 @@ export const ImagePlaneManager = {
             }
         }
         geometry.setAttribute('gpgpu_uv', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
-
         this._createFluidPBRMaterial();
-
         this.fluidSystem = new this.app.THREE.Points(geometry, this.fluidMaterial);
         this.fluidSystem.frustumCulled = false;
         this.landscapeContainer.add(this.fluidSystem);
@@ -318,13 +302,9 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const resolution = S.particle_resolution;
         const count = resolution * resolution;
-
-        const cellSize = this.planeDimensions.x / (resolution - 1); 
-        this.calculatedParticleBaseSize = cellSize * Math.sqrt(2);
-        
+        this.calculatedParticleBaseSize = this.planeDimensions.x / (resolution - 1) * Math.sqrt(2);
         const geometry = new this.app.THREE.BufferGeometry();
         geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
-
         const uvs = new Float32Array(count * 2);
         for (let y = 0; y < resolution; y++) {
             for (let x = 0; x < resolution; x++) {
@@ -334,9 +314,7 @@ export const ImagePlaneManager = {
             }
         }
         geometry.setAttribute('gpgpu_uv', new this.app.THREE.BufferAttribute(uvs, 2));
-
         this._createParticlePBRMaterial();
-
         this.particleSystem = new this.app.THREE.Points(geometry, this.particlePBRMaterial);
         this.particleSystem.frustumCulled = false;
         this.landscapeContainer.add(this.particleSystem);
@@ -346,18 +324,12 @@ export const ImagePlaneManager = {
         const GRID_SIZE = this.app.vizSettings.gpgpu_cubeWallGridSize;
         const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
         const COUNT = GRID_SIZE * GRID_SIZE;
-
         const cubeGeom = new this.app.THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
         this.createGPGPUMaterial();
-        
         this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.landscapeMaterial, COUNT);
         this.instancedMesh.frustumCulled = false;
-
         const instanceIds = new Float32Array(COUNT);
-        for (let i = 0; i < COUNT; i++) {
-            instanceIds[i] = i;
-        }
-
+        for (let i = 0; i < COUNT; i++) { instanceIds[i] = i; }
         this.instancedMesh.geometry.setAttribute('instanceId', new this.app.THREE.InstancedBufferAttribute(instanceIds, 1));
         this.landscapeContainer.add(this.instancedMesh);
     },
@@ -370,7 +342,6 @@ export const ImagePlaneManager = {
 
     applyAndStoreHomeOrientation() {
         const S = this.app.vizSettings;
-        
         this.state.homeQuaternion.identity(); 
         if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
         } else {
@@ -381,61 +352,25 @@ export const ImagePlaneManager = {
         }
     },
     
-    _createFluidPBRMaterial() {
+    _createUnifiedPBRMaterial() {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
-        if(!this.currentTexture) textureToUse.needsUpdate = true;
-        
+        if (!this.currentTexture) textureToUse.needsUpdate = true;
+
         this.calculatedParticleBaseSize = this.planeDimensions.x / (CM.WIDTH - 1) * Math.sqrt(2);
 
-        this.fluidMaterial = new this.app.THREE.ShaderMaterial({
-            defines: { 'USE_ENVMAP': '' },
-            uniforms: {
-                u_map: { value: textureToUse },
-                u_positionTexture: { value: null },
-                u_particleModelUVTexture: { value: CM.particleModelUVTexture }, 
-                u_particleModelTexture: { value: this.app.UIManager?.particleModelTexture || null }, 
-                u_particleColorMix: { value: 0.0 }, 
-                particle_base_size: { value: 1.0 }, 
-                particle_min_size: { value: 0.0 }, 
-                u_particle_size_mix: { value: 0.0 }, 
-                u_metalness: { value: S.metalness },
-                u_roughness: { value: S.roughness },
-                u_envMapIntensity: { value: S.reflectionStrength },
-                u_lightColor: { value: new this.app.THREE.Color(S.lightColor) },
-                u_ambientLightColor: { value: new this.app.THREE.Color(S.ambientLightColor) },
-                u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
-                u_cameraPosition: { value: this.app.camera.position },
-                t_envMap: { value: this.app.hdrTexture },
-                u_time: { value: 0.0 },
-                u_pixelRatio: { value: window.devicePixelRatio },
-                u_particle_twinkleIntensity: { value: 0.0 },
-            },
-            vertexShader: particleRenderVertexShader,
-            fragmentShader: particleRenderFragmentShader,
-            transparent: true,
-            depthWrite: false
-        });
-    },
-    
-    _createParticlePBRMaterial() {
-        const S = this.app.vizSettings;
-        const CM = this.app.ComputeManager;
-        const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
-        if(!this.currentTexture) textureToUse.needsUpdate = true;
-
-        this.particlePBRMaterial = new this.app.THREE.ShaderMaterial({
+        return new this.app.THREE.ShaderMaterial({
             defines: { 'USE_ENVMAP': '' },
             uniforms: {
                 u_map: { value: textureToUse },
                 u_positionTexture: { value: null },
                 u_particleModelUVTexture: { value: CM.particleModelUVTexture },
                 u_particleModelTexture: { value: this.app.UIManager?.particleModelTexture || null },
-                u_particleColorMix: { value: 0.0 },
-                particle_base_size: { value: 1.0 },
-                particle_min_size: { value: 0.1 }, 
-                u_particle_size_mix: { value: 1.0 }, 
+                u_particleColorMix: { value: S.particle_morphProgress },
+                particle_base_size: { value: S.particle_base_size },
+                particle_min_size: { value: S.particle_min_size },
+                u_particle_size_mix: { value: S.particle_size_mix },
                 u_metalness: { value: S.metalness },
                 u_roughness: { value: S.roughness },
                 u_envMapIntensity: { value: S.reflectionStrength },
@@ -447,12 +382,24 @@ export const ImagePlaneManager = {
                 u_time: { value: 0.0 },
                 u_pixelRatio: { value: window.devicePixelRatio },
                 u_particle_twinkleIntensity: { value: S.particle_twinkleIntensity },
+                u_fire_progress: { value: 0.0 },
+                u_fire_colorRamp: { value: this.fireColorRampTexture },
+                u_fire_ashColor: { value: new THREE.Color(S.fire_ashColor) },
             },
             vertexShader: particleRenderVertexShader,
             fragmentShader: particleRenderFragmentShader,
             transparent: true,
-            depthWrite: false
+            depthWrite: false,
+            blending: THREE.NormalBlending, // *** THE FIX IS HERE ***
         });
+    },
+
+    _createFluidPBRMaterial() {
+        this.fluidMaterial = this._createUnifiedPBRMaterial();
+    },
+    
+    _createParticlePBRMaterial() {
+        this.particlePBRMaterial = this._createUnifiedPBRMaterial();
     },
 
     createGPGPUMaterial() {
@@ -522,9 +469,7 @@ export const ImagePlaneManager = {
             new this.app.THREE.TextureLoader().load(objectURL, (texture) => {
                 applyTextureSettings(texture);
                 URL.revokeObjectURL(objectURL);
-            }, undefined, (error) => {
-                console.error("An error occurred loading the texture:", error);
-            });
+            }, undefined, (error) => { console.error("An error occurred loading the texture:", error); });
         }
     },
 
@@ -545,15 +490,14 @@ export const ImagePlaneManager = {
             
             const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
             const fineSize = S.particle_min_size;
-            U.particle_base_size.value = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
-            U.particle_min_size.value = U.particle_base_size.value;
-            U.u_particle_size_mix.value = 0.0;
+            
+            const finalSize = this.app.THREE.MathUtils.lerp(coarseSize, fineSize, S.particle_size_mix);
+            U.particle_base_size.value = finalSize;
+            U.particle_min_size.value = finalSize; // This is now redundant, but harmless
             
             U.u_pixelRatio.value = window.devicePixelRatio;
             U.u_particleColorMix.value = S.particle_morphProgress;
-            if (this.app.UIManager.particleModelTexture) {
-                U.u_particleModelTexture.value = this.app.UIManager.particleModelTexture;
-            }
+            if (this.app.UIManager.particleModelTexture) { U.u_particleModelTexture.value = this.app.UIManager.particleModelTexture; }
             U.u_metalness.value = S.metalness;
             U.u_roughness.value = S.roughness;
             U.u_envMapIntensity.value = S.reflectionStrength;
@@ -564,11 +508,13 @@ export const ImagePlaneManager = {
             U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
             U.u_time.value = this.app.currentTime;
             U.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
+            
+            U.u_fire_progress.value = S.fire_progress;
+            U.u_fire_ashColor.value.set(S.fire_ashColor);
 
         } else { 
             if (!this.landscapeMaterial || !CM.landscapeGpuCompute) return;
             const U = this.landscapeMaterial.uniforms;
-            
             const positionTarget = CM.landscapeGpuCompute.getCurrentRenderTarget(CM.landscapePositionVariable);
             U.u_positionTexture.value = positionTarget.texture;
             
@@ -604,13 +550,10 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const GRID_SIZE = S.gpgpu_cubeWallGridSize;
         const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
-        
         const offsetX = (GRID_SIZE * CUBE_SIZE) / 2 - CUBE_SIZE / 2;
         const offsetY = (GRID_SIZE * CUBE_SIZE) / 2 - CUBE_SIZE / 2;
-
         const x = gridX * CUBE_SIZE - offsetX;
         const y = gridY * CUBE_SIZE - offsetY;
-        
         const maxSteppedDisplacement = this.planeDimensions.x * 0.4;
         const PIVOT_CUBE_ID = 40.0;
         const pivotGridX_logic = PIVOT_CUBE_ID % GRID_SIZE;
@@ -621,22 +564,17 @@ export const ImagePlaneManager = {
         const maxSteppedInput = (GRID_SIZE - 1) + (GRID_SIZE - 1) - pivotValue;
         const largestDisplacement = Math.max(Math.abs(minSteppedInput), Math.abs(maxSteppedInput));
         const wallStepDepth = largestDisplacement > 0 ? maxSteppedDisplacement / largestDisplacement : 0;
-    
         const steppedZ = (currentValue - pivotValue) * wallStepDepth;
         const flatZ = 0;
-
         const z = this.app.THREE.MathUtils.lerp(flatZ, steppedZ, S.gpgpu_cubeWallMorph);
-
         return new this.app.THREE.Vector3(x, y, z);
     },
     
     getUvFromGridCoords(gridX, gridY) {
         const S = this.app.vizSettings;
         const GRID_SIZE = S.gpgpu_cubeWallGridSize;
-        
         const u = gridX / (GRID_SIZE - 1.0);
         const v = gridY / (GRID_SIZE - 1.0);
-
         return new this.app.THREE.Vector2(u, v);
     },
 
