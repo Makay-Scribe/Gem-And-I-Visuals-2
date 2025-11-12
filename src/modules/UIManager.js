@@ -15,6 +15,7 @@ export const UIManager = {
     gltfLoader: new GLTFLoader(),
     
     _isProgrammaticUpdate: false, 
+    _sliderCache: new Map(), // ** THE FIX IS HERE: Cache for debouncing **
     
     isFluidManualActive: false,
     
@@ -62,44 +63,62 @@ export const UIManager = {
     
     syncSlidersFromState() {
         if (!this.app) return;
-        this._isProgrammaticUpdate = true;
         const S = this.app.vizSettings;
         
-        const fluidAttractionSlider = document.getElementById('fluidAttraction');
-        if (fluidAttractionSlider && this.app.ComputeManager?.velocityVariable) {
+        // ** THE FIX IS HERE: Only update sliders if their values have changed **
+
+        // 1. Fluid Attraction
+        if (this.app.ComputeManager?.velocityVariable) {
              const strengthValue = this.app.ComputeManager.velocityVariable.material.uniforms.fluid_attractionStrength.value;
-             fluidAttractionSlider.value = strengthValue;
-             this.updateRangeDisplay('fluidAttraction', strengthValue);
+             if (this._sliderCache.get('fluidAttraction') !== strengthValue) {
+                const slider = document.getElementById('fluidAttraction');
+                if (slider) {
+                    slider.value = strengthValue;
+                    this.updateRangeDisplay('fluidAttraction', strengthValue);
+                    this._sliderCache.set('fluidAttraction', strengthValue);
+                }
+             }
         }
 
-        const particleMorphSlider = document.getElementById('particle_morphProgress');
-        if (particleMorphSlider) {
-            particleMorphSlider.value = S.particle_morphProgress;
-            this.updateRangeDisplay('particle_morphProgress', S.particle_morphProgress);
+        // 2. Particle Morph
+        const morphValue = S.particle_morphProgress;
+        if (this._sliderCache.get('particle_morphProgress') !== morphValue) {
+            const slider = document.getElementById('particle_morphProgress');
+            if (slider) {
+                slider.value = morphValue;
+                this.updateRangeDisplay('particle_morphProgress', morphValue);
+                this._sliderCache.set('particle_morphProgress', morphValue);
+            }
         }
 
-        const fireProgressSlider = document.getElementById('fire_visual_progress');
-        if (fireProgressSlider) {
-            fireProgressSlider.value = S.fire_visual_progress;
-            this.updateRangeDisplay('fire_visual_progress', S.fire_visual_progress);
+        // 3. Fire Visual Progress
+        const fireValue = S.fire_visual_progress;
+        if (this._sliderCache.get('fire_visual_progress') !== fireValue) {
+            const slider = document.getElementById('fire_visual_progress');
+            if (slider) {
+                slider.value = fireValue;
+                this.updateRangeDisplay('fire_visual_progress', fireValue);
+                this._sliderCache.set('fire_visual_progress', fireValue);
+            }
         }
-
-        this._isProgrammaticUpdate = false;
     },
 
     syncAllControlsToSettings() {
         this._isProgrammaticUpdate = true;
+        this._sliderCache.clear(); // Clear cache before a full sync
         
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
             if (el) { 
+                const value = this.app.vizSettings[key];
                 if (el.type === 'checkbox') {
-                    el.checked = this.app.vizSettings[key];
+                    el.checked = value;
                 } else if (el.type === 'range') {
-                    el.value = this.app.vizSettings[key];
-                    this.updateRangeDisplay(key, el.value);
+                    el.value = value;
+                    this.updateRangeDisplay(key, value);
+                    this._sliderCache.set(key, value); // Populate cache on full sync
                 } else {
-                    el.value = this.app.vizSettings[key];
+                    el.value = value;
                 }
             }
         });
@@ -643,7 +662,6 @@ export const UIManager = {
             'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress',
             'playerCube_enabled', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity',
             'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed',
-            // *** ADDED: Fire settings for reset ***
             'fire_visual_progress', 'fire_ashColor'
         ];
 
@@ -1143,6 +1161,7 @@ export const UIManager = {
             this._isProgrammaticUpdate = true;
             slider.value = value;
             this.updateRangeDisplay(id, value);
+            this._sliderCache.set(id, value); // ** THE FIX IS HERE: Keep cache in sync **
             this._isProgrammaticUpdate = false;
         }
     },
