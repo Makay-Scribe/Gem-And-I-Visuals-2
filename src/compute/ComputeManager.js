@@ -12,7 +12,7 @@ import droopShader from './shaders/effects/droop.glsl?raw';
 import peelShader from './shaders/effects/peel.glsl?raw';
 import gpgpuPositionShader from './shaders/gpgpu_position.glsl?raw';
 
-import particlePositionShader from './shaders/effects/particle_position.glsl?raw';
+import sphPositionShader from './shaders/sph_position.glsl?raw';
 import particleVelocityShader from './shaders/effects/particle_velocity.glsl?raw';
 import fluidVelocityShader from './shaders/sph_velocity.glsl?raw';
 
@@ -71,16 +71,25 @@ export const ComputeManager = {
         const oldMode = this._currentMode;
         this._currentMode = newMode;
 
-        if (oldMode === 'particles') this._resetParticleUniforms();
-        if (oldMode === 'fluidsim') this._resetFluidUniforms();
+        // --- Interrupt any running transitions from the old mode ---
+        if (oldMode === 'particles' && this.app.ParticleTransitions.transitionAnimation) {
+             this.app.ParticleTransitions.interrupt(); // We will need to add this function
+        }
+        if (oldMode === 'fluidsim' && this.app.FluidDirector.activeScript) {
+            this.app.FluidDirector.interruptAndStop();
+        }
+
+        // --- Reset uniforms to a clean state ---
+        this._resetParticleUniforms();
+        this._resetFluidUniforms();
 
         const isParticleOrFluid = (newMode === 'particles' || newMode === 'fluidsim');
         const isLandscape = (newMode === 'faceted' || newMode === 'geocube');
 
         if (isParticleOrFluid) {
-            const shader = (newMode === 'fluidsim') ? this._fluidVelocityShader : this._particleVelocityShader;
-            if (this.velocityVariable.material.fragmentShader !== shader) {
-                this.velocityVariable.material.fragmentShader = shader;
+            const velShader = (newMode === 'fluidsim') ? this._fluidVelocityShader : this._particleVelocityShader;
+            if (this.velocityVariable.material.fragmentShader !== velShader) {
+                this.velocityVariable.material.fragmentShader = velShader;
                 this.velocityVariable.material.needsUpdate = true;
             }
         }
@@ -233,7 +242,7 @@ export const ComputeManager = {
         this._fillInitialParticleData(this.particleFlatPositionTexture.image.data, []);
 
         this.velocityVariable = this.gpuCompute.addVariable("textureVelocity", this._particleVelocityShader, dtVelocity);
-        this.positionVariable = this.gpuCompute.addVariable("texturePosition", particlePositionShader, dtPosition);
+        this.positionVariable = this.gpuCompute.addVariable("texturePosition", sphPositionShader, dtPosition);
 
         this.gpuCompute.setVariableDependencies(this.velocityVariable, [this.positionVariable, this.velocityVariable]);
         this.gpuCompute.setVariableDependencies(this.positionVariable, [this.positionVariable, this.velocityVariable]);
@@ -270,10 +279,6 @@ export const ComputeManager = {
         const pUniforms = this.positionVariable.material.uniforms;
         pUniforms['u_delta'] = { value: 0.0 };
         pUniforms['u_worldSize'] = vUniforms.u_worldSize;
-        pUniforms['u_manualMorph'] = { value: 0.0 };
-        pUniforms['u_targetState'] = vUniforms.u_targetState;
-        pUniforms['u_initialPosition'] = vUniforms.u_initialPosition;
-        pUniforms['u_modelPosition'] = vUniforms.u_modelPosition;
         
         const error = this.gpuCompute.init();
         if (error !== null) {
@@ -516,7 +521,8 @@ export const ComputeManager = {
             } else if (this._currentMode === 'fluidsim') {
                 const isDirectorActive = this.app.FluidDirector.activeScript;
                 
-                // *** THE FIX IS HERE ***
+                // If a director script is NOT active, update uniforms from the UI sliders.
+                // The director scripts will handle these values themselves when they are active.
                 if (!isDirectorActive) {
                     vUniforms.fluid_curlStrength.value = S.fluid_curlStrength;
                     vUniforms.fluid_curlScale.value = S.fluid_curlScale;
@@ -524,8 +530,9 @@ export const ComputeManager = {
                     vUniforms.u_gravity.value.y = S.fluid_gravity;
                 }
                 
-                const anyActiveForces = vUniforms.fluid_attractionStrength.value > 0.0 || vUniforms.fluid_curlStrength.value > 0.0 || vUniforms.u_gravity.value.y !== 0.0;
-                vUniforms.u_physicsState.value = (isDirectorActive || anyActiveForces) ? 1 : 0;
+                // The physics state is ALWAYS 1 (running) in fluid sim mode.
+                // Damping in the shader will bring particles to a halt if no forces are active.
+                vUniforms.u_physicsState.value = 1;
             }
 
             this.gpuCompute.compute();
