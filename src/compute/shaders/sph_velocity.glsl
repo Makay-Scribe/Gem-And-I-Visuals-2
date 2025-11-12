@@ -5,7 +5,6 @@ uniform float u_time;
 uniform float u_delta;
 
 // --- GPGPU Internal Uniforms ---
-// CRITICAL FIX: We must declare the samplers that GPUComputationRenderer uses internally.
 uniform sampler2D texturePosition;
 uniform sampler2D textureVelocity;
 
@@ -17,7 +16,7 @@ uniform sampler2D u_initialPosition;
 uniform sampler2D u_modelPosition;
 
 // --- Artistic Uniforms (Renamed for Uniqueness) ---
-uniform float fluid_attractionStrength; // REFACTORED: Renamed from u_attractionStrength
+uniform float fluid_attractionStrength; 
 uniform float u_flowStrength;
 uniform float u_flowScale;
 uniform float u_flowSpeed;
@@ -25,9 +24,13 @@ uniform vec3 u_explosionCenter;
 uniform float u_explosionStrength;
 uniform vec2 u_vortexCenter;
 uniform float u_vortexStrength;
-uniform float fluid_curlStrength; // REFACTORED: Renamed from u_curlStrength
-uniform float fluid_curlScale;    // REFACTORED: Renamed from u_curlScale
-uniform float fluid_curlSpeed;    // REFACTORED: Renamed from u_curlSpeed
+uniform float fluid_curlStrength; 
+uniform float fluid_curlScale;    
+uniform float fluid_curlSpeed;    
+
+// ** NEW: Cohesion Uniforms **
+uniform float u_cohesionStrength;
+uniform sampler2D u_blurredPosition;
 
 // --- Physics Constants (Simplified) ---
 const float PARTICLE_MASS = 1.0;
@@ -98,7 +101,14 @@ void main() {
             vortexForce = vec3(swirlDir, 0.0) * u_vortexStrength / (1.0 + dist * 0.1);
         }
         
-        vec3 totalForce = attractionForce + u_gravity + flowForce + curlForce + explosionForce + vortexForce;
+        // ** NEW: Calculate Cohesion Force **
+        vec3 cohesionForce = vec3(0.0);
+        if (u_cohesionStrength > 0.0) {
+            vec3 blurredPos = texture(u_blurredPosition, uv).xyz;
+            cohesionForce = (blurredPos - position) * u_cohesionStrength;
+        }
+
+        vec3 totalForce = attractionForce + u_gravity + flowForce + curlForce + explosionForce + vortexForce + cohesionForce;
 
         vec3 acceleration = totalForce / PARTICLE_MASS;
 

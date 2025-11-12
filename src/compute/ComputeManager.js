@@ -16,10 +16,30 @@ import sphPositionShader from './shaders/sph_position.glsl?raw';
 import particleVelocityShader from './shaders/effects/particle_velocity.glsl?raw';
 import fluidVelocityShader from './shaders/sph_velocity.glsl?raw';
 
+// ** NEW: A simple box blur shader for our cohesion effect **
+const _blurShader = `
+    uniform sampler2D tInput;
+    uniform vec2 u_texelSize;
+    varying vec2 vUv;
+
+    void main() {
+        // Sample the center pixel and its four direct neighbors
+        vec4 center = texture2D(tInput, vUv);
+        vec4 right  = texture2D(tInput, vUv + vec2(u_texelSize.x, 0.0));
+        vec4 left   = texture2D(tInput, vUv - vec2(u_texelSize.x, 0.0));
+        vec4 up     = texture2D(tInput, vUv + vec2(0.0, u_texelSize.y));
+        vec4 down   = texture2D(tInput, vUv - vec2(0.0, u_texelSize.y));
+
+        // Average the positions to get the blurred result
+        gl_FragColor = (center + right + left + up + down) / 5.0;
+    }
+`;
+
 export const ComputeManager = {
     app: null,
     _currentMode: null,
 
+    // --- Unified Particle/Fluid System ---
     gpuCompute: null,
     positionVariable: null,
     velocityVariable: null,
@@ -31,7 +51,12 @@ export const ComputeManager = {
     WIDTH: 0,
     HEIGHT: 0,
     AREA: 0,
+    
+    // ** NEW: Cohesion Effect Infrastructure **
+    blurPass: null, // Holds scene, camera, material for the blur pass
+    blurredPositionTexture: null, // The output of the blur pass
 
+    // --- Landscape/Deformation System ---
     landscapeGpuCompute: null,
     landscapePositionVariable: null,
     landscapePreviousPositionVariable: null,
@@ -71,15 +96,13 @@ export const ComputeManager = {
         const oldMode = this._currentMode;
         this._currentMode = newMode;
 
-        // --- Interrupt any running transitions from the old mode ---
         if (oldMode === 'particles' && this.app.ParticleTransitions.transitionAnimation) {
-             this.app.ParticleTransitions.interrupt(); // We will need to add this function
+             this.app.ParticleTransitions.interrupt();
         }
         if (oldMode === 'fluidsim' && this.app.FluidDirector.activeScript) {
             this.app.FluidDirector.interruptAndStop();
         }
 
-        // --- Reset uniforms to a clean state ---
         this._resetParticleUniforms();
         this._resetFluidUniforms();
 
@@ -231,6 +254,30 @@ export const ComputeManager = {
         const renderer = this.app.renderer;
         this.gpuCompute = new GPUComputationRenderer(this.WIDTH, this.HEIGHT, renderer);
 
+        // ** NEW: Setup for the blur pass **
+        this.blurPass = {};
+        this.blurPass.scene = new this.app.THREE.Scene();
+        this.blurPass.camera = new this.app.THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        this.blurPass.renderTarget = new this.app.THREE.WebGLRenderTarget(this.WIDTH, this.HEIGHT, {
+            type: this.app.THREE.FloatType,
+            minFilter: this.app.THREE.NearestFilter,
+            magFilter: this.app.THREE.NearestFilter,
+            format: this.app.THREE.RGBAFormat,
+            stencilBuffer: false
+        });
+        this.blurredPositionTexture = this.blurPass.renderTarget.texture;
+        this.blurPass.material = new this.app.THREE.ShaderMaterial({
+            uniforms: {
+                tInput: { value: null },
+                u_texelSize: { value: new this.app.THREE.Vector2(1 / this.WIDTH, 1 / this.HEIGHT) }
+            },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }`,
+            fragmentShader: _blurShader
+        });
+        this.blurPass.mesh = new this.app.THREE.Mesh(new this.app.THREE.PlaneGeometry(2, 2), this.blurPass.material);
+        this.blurPass.scene.add(this.blurPass.mesh);
+
+
         this.particleFlatPositionTexture = this.gpuCompute.createTexture();
         this.particleModelPositionTexture = this.gpuCompute.createTexture();
         this.particleModelUVTexture = this.gpuCompute.createTexture();
@@ -275,6 +322,9 @@ export const ComputeManager = {
         vUniforms['fluid_curlScale'] = { value: D.fluid_curlScale };
         vUniforms['fluid_curlSpeed'] = { value: D.fluid_curlSpeed };
         vUniforms['fluid_attractionStrength'] = { value: 0.0 };
+        // ** NEW: Cohesion uniforms added to the main velocity shader **
+        vUniforms['u_cohesionStrength'] = { value: 0.0 };
+        vUniforms['u_blurredPosition'] = { value: this.blurredPositionTexture };
 
         const pUniforms = this.positionVariable.material.uniforms;
         pUniforms['u_delta'] = { value: 0.0 };
@@ -299,6 +349,7 @@ export const ComputeManager = {
         u.particle_morphProgress.value = D.particle_morphProgress;
         u.u_gravityWellStrength.value = 0.0;
         u.u_orbitalStrength.value = 0.0;
+        u.u_cohesionStrength.value = D.particle_cohesionStrength; // Reset cohesion
     },
 
     _resetFluidUniforms() {
@@ -313,6 +364,7 @@ export const ComputeManager = {
         u.fluid_curlScale.value = D.fluid_curlScale;
         u.fluid_curlSpeed.value = D.fluid_curlSpeed;
         u.u_physicsState.value = 0;
+        u.u_cohesionStrength.value = D.fluid_cohesionStrength; // Reset cohesion
     },
 
     _fillInitialParticleData(positionData, velocityData) {
@@ -405,12 +457,16 @@ export const ComputeManager = {
             if (this.particleFlatPositionTexture) this.particleFlatPositionTexture.dispose();
             if (this.particleModelPositionTexture) this.particleModelPositionTexture.dispose();
             if (this.particleModelUVTexture) this.particleModelUVTexture.dispose();
+            if (this.blurPass && this.blurPass.renderTarget) this.blurPass.renderTarget.dispose(); // ** NEW **
+            if (this.blurPass && this.blurPass.material) this.blurPass.material.dispose(); // ** NEW **
             this.gpuCompute = null;
             this.positionVariable = null;
             this.velocityVariable = null;
             this.particleFlatPositionTexture = null;
             this.particleModelPositionTexture = null;
             this.particleModelUVTexture = null;
+            this.blurPass = null; // ** NEW **
+            this.blurredPositionTexture = null; // ** NEW **
             console.log("Unified Particle GPGPU system disposed.");
         }
     },
@@ -512,17 +568,18 @@ export const ComputeManager = {
             vUniforms.u_delta.value = delta;
             pUniforms.u_delta.value = delta;
             
+            let cohesion = 0;
             if (this._currentMode === 'particles') {
+                cohesion = S.particle_cohesionStrength;
                 vUniforms.particle_flowScale.value = S.particle_flowScale;
                 vUniforms.particle_flowSpeed.value = S.particle_flowSpeed;
                 vUniforms.particle_flowStrength.value = S.particle_flowStrength;
                 vUniforms.particle_morphProgress.value = S.particle_morphProgress;
                 vUniforms.particle_attractionStrength.value = S.particle_attractionStrength;
             } else if (this._currentMode === 'fluidsim') {
+                cohesion = S.fluid_cohesionStrength;
                 const isDirectorActive = this.app.FluidDirector.activeScript;
                 
-                // If a director script is NOT active, update uniforms from the UI sliders.
-                // The director scripts will handle these values themselves when they are active.
                 if (!isDirectorActive) {
                     vUniforms.fluid_curlStrength.value = S.fluid_curlStrength;
                     vUniforms.fluid_curlScale.value = S.fluid_curlScale;
@@ -530,12 +587,27 @@ export const ComputeManager = {
                     vUniforms.u_gravity.value.y = S.fluid_gravity;
                 }
                 
-                // The physics state is ALWAYS 1 (running) in fluid sim mode.
-                // Damping in the shader will bring particles to a halt if no forces are active.
                 vUniforms.u_physicsState.value = 1;
             }
 
+            vUniforms.u_cohesionStrength.value = cohesion;
+
             this.gpuCompute.compute();
+
+            // ** NEW: Run the blur pass if cohesion is active **
+            if (cohesion > 0 && this.blurPass) {
+                const renderer = this.app.renderer;
+                const currentRenderTarget = renderer.getRenderTarget(); // Save current state
+
+                // Set the input for the blur shader to the output of the position pass
+                this.blurPass.material.uniforms.tInput.value = this.gpuCompute.getCurrentRenderTarget(this.positionVariable).texture;
+
+                // Render the blur pass to our dedicated render target
+                renderer.setRenderTarget(this.blurPass.renderTarget);
+                renderer.render(this.blurPass.scene, this.blurPass.camera);
+                
+                renderer.setRenderTarget(currentRenderTarget); // Restore original state
+            }
         }
     }
 };

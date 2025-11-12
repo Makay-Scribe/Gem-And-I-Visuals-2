@@ -185,10 +185,12 @@ const App = {
         particle_attractionStrength: 0.1,
         particle_morphProgress: 0.0, 
         particle_target: 'flat', 
+        particle_cohesionStrength: 0.0, // ** NEW **
         
         fluid_curlStrength: 0.0,
         fluid_curlScale: 0.05,
         fluid_curlSpeed: 0.3,
+        fluid_cohesionStrength: 0.0, // ** NEW **
         
         gpgpu_cubeWallGridSize: 10,
         playerCube_enabled: true,
@@ -199,7 +201,6 @@ const App = {
         gpgpu_cubeWallBevelIntensity: 0.5,
         fluid_gravity: 0.0,
 
-        // *** DECOUPLED FIRE SETTINGS ***
         fire_visual_progress: 0.0,
         fire_ashColor: '#202020',
         ash_twinkleIntensity: 0.0,
