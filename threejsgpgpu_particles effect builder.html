@@ -1,316 +1,263 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPGPU Particle Morph Test (Fixed)</title>
+    <title>Three.js GPGPU Hydrofluid Particle Simulator</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link rel="icon" href="data:,">
     <style>
-        /* Basic CSS Reset & Styling */
         body {
-            margin: 0;
-            overflow: hidden;
-            font-family: Arial, sans-serif;
-            background-color: #111;
             color: #fff;
+            font-family: Monospace;
+            font-size: 13px;
+            text-align: center;
+            font-weight: bold;
+            background-color: #000;
+            margin: 0px;
+            overflow: hidden;
         }
-        canvas {
-            display: block;
-            position: fixed;
+        #info {
+            position: absolute;
+            top: 0px;
+            width: 100%;
+            padding: 5px;
+            z-index: 5;
+        }
+        #container {
+            position: absolute;
             top: 0;
             left: 0;
-            z-index: 1;
+            right: 0;
+            bottom: 0;
         }
-        #ui-panel {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.6);
-            border-radius: 5px;
-            z-index: 2;
-            width: 280px;
-        }
-        #ui-panel h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #444;
-            padding-bottom: 10px;
-        }
-        .ui-row {
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .ui-row label {
-            margin-right: 10px;
-        }
-        .ui-row input[type="range"] {
-            flex-grow: 1;
-        }
-        #loading-indicator {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 1.5em;
-            z-index: 3;
+        .lil-gui {
+            z-index: 10;
         }
     </style>
-
-    <!-- 
-      FIX: IMPORT MAP
-      This tells the browser how to resolve "bare" module specifiers like 'three'.
-      When any imported file (including addons) says `import ... from 'three'`, 
-      the browser will now know to load it from the specified CDN URL.
-    -->
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
-        }
-    }
-    </script>
-
 </head>
 <body>
 
-    <canvas id="webgl-canvas"></canvas>
-
-    <div id="ui-panel">
-        <h3>Controls</h3>
-        <div id="loading-indicator">Loading Model...</div>
-        <div id="controls-container" style="display: none;">
-            <div class="ui-row">
-                <label for="morph-slider">Morph</label>
-                <input type="range" id="morph-slider" min="0" max="1" step="0.001" value="0">
-            </div>
-            <div class="ui-row">
-                <label for="size-slider">Particle Size</label>
-                <input type="range" id="size-slider" min="1" max="15" step="0.1" value="3.0">
-            </div>
-            <div class="ui-row">
-                <label for="speed-slider">Rotate Speed</label>
-                <input type="range" id="speed-slider" min="0" max="1" step="0.01" value="0.2">
-            </div>
-        </div>
+    <div id="container"></div>
+    <div id="info">
+        Three.js GPGPU Hydrofluid Particle Simulator
     </div>
 
-    <!-- GPGPU Position Computation Shader -->
-    <script id="positionFragmentShader" type="x-shader/x-fragment">
-        // This shader calculates the new position of each particle by mixing
-        // between its starting position on the plane and its target position on the model.
-        uniform sampler2D u_initialPositionMap;
-        uniform sampler2D u_modelPositionMap;
-        uniform float u_morphProgress; // The 0.0 to 1.0 value from the slider
-
-        void main() {
-            // Get the UV coordinate for this pixel, which corresponds to a particle
-            vec2 uv = gl_FragCoord.xy / resolution.xy;
-
-            // Fetch the position from the two state textures
-            vec4 initialPos = texture2D(u_initialPositionMap, uv);
-            vec4 modelPos = texture2D(u_modelPositionMap, uv);
-
-            // Linearly interpolate (mix) between the two positions
-            vec3 newPosition = mix(initialPos.xyz, modelPos.xyz, u_morphProgress);
-
-            // Output the new position to be stored in the GPGPU texture
-            gl_FragColor = vec4(newPosition, 1.0);
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/",
+                 "lil-gui": "https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.esm.js"
+            }
         }
     </script>
 
-    <!-- Particle Rendering Vertex Shader -->
-    <script id="particleVertexShader" type="x-shader/x-vertex">
-        // This shader reads the particle's position from the GPGPU texture
-        // and places it in the 3D world.
-        uniform sampler2D u_positions; // The GPGPU texture with current particle positions
-        uniform float u_pointSize;
-        attribute vec2 uv; // Each particle has a UV to look up its data in the texture
-
-        void main() {
-            // Fetch the position of this particle from the GPGPU texture
-            vec3 pos = texture2D(u_positions, uv).xyz;
-
-            // Standard projection
-            vec4 modelViewPosition = modelViewMatrix * vec4(pos, 1.0);
-            gl_Position = projectionMatrix * modelViewPosition;
-            gl_PointSize = u_pointSize;
-        }
-    </script>
-
-    <!-- Particle Rendering Fragment Shader -->
-    <script id="particleFragmentShader" type="x-shader/x-fragment">
-        // This shader determines the color and shape of each particle.
-        void main() {
-            // Create a circular shape for the particle
-            if (length(gl_PointCoord - vec2(0.5, 0.5)) > 0.475) discard;
-            gl_FragColor = vec4(0.2, 0.5, 1.0, 1.0); // Set particle color
-        }
-    </script>
-
-
-    <!-- Main JavaScript Application -->
     <script type="module">
-        // FIX: Imports now use the bare specifiers defined in the importmap
         import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { GUI } from 'lil-gui';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
-        import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
-        // --- Configuration ---
-        const PARTICLE_WIDTH = 512; // 512x512 grid
-        const PARTICLE_COUNT = PARTICLE_WIDTH * PARTICLE_WIDTH; // 262,144 particles
-        const PLANE_SIZE = 40; // World units for the initial flat plane
-        const MODEL_URL = 'https://threejs.org/examples/models/gltf/Flower.glb'; // Free model from Three.js examples
+        let container;
+        let camera, scene, renderer;
+        let controls;
+        let particles;
+        let gpuCompute;
+        let velocityVariable;
+        let positionVariable;
+        let velocityUniforms;
+        let particleUniforms;
+        let clock;
 
-        let scene, camera, renderer, clock, particlePoints;
-        let gpuCompute, positionVariable;
-        let modelPositionTexture = null;
+        const WIDTH = 256;
+        const PARTICLES = WIDTH * WIDTH;
+
+        // Using texture2D for maximum compatibility between WebGL1 and WebGL2
+        const fragmentShaderPosition = `
+            uniform float delta;
+            void main() {
+                vec2 uv = gl_FragCoord.xy / resolution.xy;
+                vec4 posTex = texture2D( texturePosition, uv );
+                vec4 velTex = texture2D( textureVelocity, uv );
+                vec3 pos = posTex.xyz;
+                vec3 vel = velTex.xyz;
+                pos += vel * delta * 50.0;
+                gl_FragColor = vec4( pos, 1.0 );
+            }
+        `;
+
+        const fragmentShaderVelocity = `
+            uniform vec2 mouse;
+            uniform float viscosity;
+            uniform float mouseRadius;
+            uniform float time;
+
+            void main() {
+                vec2 uv = gl_FragCoord.xy / resolution.xy;
+                vec4 posTex = texture2D( texturePosition, uv );
+                vec4 velTex = texture2D( textureVelocity, uv );
+                vec3 pos = posTex.xyz;
+                vec3 vel = velTex.xyz;
+                vec2 toMouse = mouse - pos.xy;
+                float dist = length(toMouse);
+
+                // Safeguard against division by zero in normalize()
+                if (dist < mouseRadius && dist > 0.001) {
+                    float force = (mouseRadius - dist) * 0.02;
+                    vel.xy += normalize(toMouse) * force;
+                }
+
+                vel.xy -= pos.xy * 0.0001;
+                vel.x += sin(pos.y * 0.1 + time) * 0.01;
+                vel.y += cos(pos.x * 0.1 + time) * 0.01;
+                vel *= viscosity;
+                gl_FragColor = vec4( vel, 1.0 );
+            }
+        `;
+
+        init();
+        animate();
 
         function init() {
-            // --- Basic Scene Setup ---
-            scene = new THREE.Scene();
+            container = document.getElementById('container');
             clock = new THREE.Clock();
-            
-            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('webgl-canvas'), antialias: true });
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 3000);
+            camera.position.set(0, 150, 500);
+
+            scene = new THREE.Scene();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 0, 35);
-            camera.lookAt(0, 0, 0);
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
 
-            // --- GPGPU Setup ---
-            gpuCompute = new GPUComputationRenderer(PARTICLE_WIDTH, PARTICLE_WIDTH, renderer);
-            if (!gpuCompute.isSupported) {
-                alert('GPGPU not supported. Please use a modern browser and hardware.');
-                return;
+            initComputeRenderer();
+            initParticles();
+            initGUI();
+        }
+
+        function initComputeRenderer() {
+            gpuCompute = new GPUComputationRenderer(WIDTH, WIDTH, renderer);
+            if (renderer.capabilities.isWebGL2 === false) {
+                gpuCompute.setDataType(THREE.HalfFloatType);
             }
 
-            // --- State A: Initial Plane Data Texture ---
-            const initialPositionData = gpuCompute.createTexture();
-            fillInitialPositionTexture(initialPositionData);
+            const dtPosition = gpuCompute.createTexture();
+            const dtVelocity = gpuCompute.createTexture();
+            fillPositionTexture(dtPosition);
+            fillVelocityTexture(dtVelocity);
 
-            // --- GPGPU Position Variable ---
-            positionVariable = gpuCompute.addVariable("texturePosition", document.getElementById('positionFragmentShader').textContent, initialPositionData);
-            
-            // --- GPGPU Uniforms ---
-            positionVariable.material.uniforms['u_initialPositionMap'] = { value: initialPositionData };
-            positionVariable.material.uniforms['u_modelPositionMap'] = { value: null }; // Will be set after model load
-            positionVariable.material.uniforms['u_morphProgress'] = { value: 0.0 };
+            velocityVariable = gpuCompute.addVariable("textureVelocity", fragmentShaderVelocity, dtVelocity);
+            positionVariable = gpuCompute.addVariable("texturePosition", fragmentShaderPosition, dtPosition);
+
+            gpuCompute.setVariableDependencies(velocityVariable, [positionVariable, velocityVariable]);
+            gpuCompute.setVariableDependencies(positionVariable, [positionVariable, velocityVariable]);
+
+            velocityUniforms = velocityVariable.material.uniforms;
+            velocityUniforms['mouse'] = { value: new THREE.Vector2(10000, 10000) };
+            velocityUniforms['viscosity'] = { value: 0.98 };
+            velocityUniforms['mouseRadius'] = { value: 50.0 };
+            velocityUniforms['time'] = { value: 0.0 };
 
             const error = gpuCompute.init();
-            if (error !== null) {
-                console.error(error);
-            }
+            if (error !== null) { console.error(error); }
+        }
 
-            // --- Particle System (Points) ---
+        function initParticles() {
             const geometry = new THREE.BufferGeometry();
-            const uv = new Float32Array(PARTICLE_COUNT * 2);
-
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const u = (i % PARTICLE_WIDTH) / PARTICLE_WIDTH;
-                const v = Math.floor(i / PARTICLE_WIDTH) / PARTICLE_WIDTH;
-                uv[i * 2] = u;
-                uv[i * 2 + 1] = v;
+            const uvs = new Float32Array(PARTICLES * 2);
+            for (let j = 0, p = 0; j < WIDTH; j++) {
+                for (let i = 0; i < WIDTH; i++) {
+                    uvs[p++] = i / (WIDTH - 1);
+                    uvs[p++] = j / (WIDTH - 1);
+                }
             }
-            geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+            geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+
+            particleUniforms = {
+                'texturePosition': { value: null },
+                'particleColor': { value: new THREE.Color(0xffffff) },
+                'particleSize': { value: 2.0 },
+            };
 
             const material = new THREE.ShaderMaterial({
-                uniforms: {
-                    u_positions: { value: null }, // Will be linked to GPGPU output
-                    u_pointSize: { value: 3.0 },
-                },
-                vertexShader: document.getElementById('particleVertexShader').textContent,
-                fragmentShader: document.getElementById('particleFragmentShader').textContent,
-                transparent: true,
+                uniforms: particleUniforms,
+                vertexShader: `
+                    uniform sampler2D texturePosition;
+                    uniform float particleSize;
+                    void main() {
+                        vec3 pos = texture2D(texturePosition, uv).xyz;
+                        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                        gl_PointSize = particleSize * (300.0 / -mvPosition.z);
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 particleColor;
+                    void main() {
+                        if (length(gl_PointCoord - vec2(0.5, 0.5)) > 0.475) discard;
+                        gl_FragColor = vec4(particleColor, 1.0);
+                    }
+                `,
                 blending: THREE.AdditiveBlending,
-                depthWrite: false,
+                transparent: true,
+                depthTest: false,
+                depthWrite: false
             });
 
-            particlePoints = new THREE.Points(geometry, material);
-            scene.add(particlePoints);
-
-            // --- Load 3D Model for State B ---
-            loadModel();
-
-            // --- UI & Event Listeners ---
-            setupUI();
-            window.addEventListener('resize', onWindowResize);
+            particles = new THREE.Points(geometry, material);
+            particles.frustumCulled = false;
+            scene.add(particles);
         }
 
-        function fillInitialPositionTexture(texture) {
+        function fillPositionTexture(texture) {
             const arr = texture.image.data;
             for (let i = 0; i < arr.length; i += 4) {
-                const particleIndex = i / 4;
-                const col = particleIndex % PARTICLE_WIDTH;
-                const row = Math.floor(particleIndex / PARTICLE_WIDTH);
-
-                // Map grid position to a centered plane
-                arr[i + 0] = (col / PARTICLE_WIDTH - 0.5) * PLANE_SIZE; // x
-                arr[i + 1] = (row / PARTICLE_WIDTH - 0.5) * PLANE_SIZE; // y
-                arr[i + 2] = 0; // z
-                arr[i + 3] = 1; // w
+                arr[i + 0] = Math.random() * 100 - 50;
+                arr[i + 1] = Math.random() * 100 - 50;
+                arr[i + 2] = Math.random() * 100 - 50;
+                arr[i + 3] = 1;
             }
         }
 
-        function loadModel() {
-            const loader = new GLTFLoader();
-            loader.load(MODEL_URL, (gltf) => {
-                let modelMesh = null;
-                gltf.scene.traverse(child => {
-                    if (child.isMesh && !modelMesh) {
-                        modelMesh = child;
-                    }
-                });
-
-                if (!modelMesh) {
-                    console.error("No mesh found in the GLTF file.");
-                    return;
-                }
-
-                // --- Bake Model into Data Texture ---
-                modelPositionTexture = gpuCompute.createTexture();
-                const sampler = new MeshSurfaceSampler(modelMesh).build();
-                const position = new THREE.Vector3();
-                const arr = modelPositionTexture.image.data;
-
-                for (let i = 0; i < arr.length; i += 4) {
-                    sampler.sample(position);
-                    arr[i + 0] = position.x;
-                    arr[i + 1] = position.y;
-                    arr[i + 2] = position.z;
-                    arr[i + 3] = 1;
-                }
-                
-                // Link the baked texture to the GPGPU shader
-                positionVariable.material.uniforms['u_modelPositionMap'].value = modelPositionTexture;
-
-                // Hide loading indicator and show controls
-                document.getElementById('loading-indicator').style.display = 'none';
-                document.getElementById('controls-container').style.display = 'block';
-
-                // Start the animation loop only after the model is ready
-                animate();
-            }, undefined, (error) => {
-                console.error(error);
-                document.getElementById('loading-indicator').innerText = 'Error loading model.';
-            });
+        function fillVelocityTexture(texture) {
+            const arr = texture.image.data;
+            for (let i = 0; i < arr.length; i += 4) {
+                arr[i + 0] = (Math.random() - 0.5) * 2;
+                arr[i + 1] = (Math.random() - 0.5) * 2;
+                arr[i + 2] = (Math.random() - 0.5) * 2;
+                arr[i + 3] = 1;
+            }
         }
-        
-        function setupUI() {
-            const morphSlider = document.getElementById('morph-slider');
-            const sizeSlider = document.getElementById('size-slider');
 
-            morphSlider.addEventListener('input', (e) => {
-                positionVariable.material.uniforms['u_morphProgress'].value = parseFloat(e.target.value);
-            });
+        function initGUI() {
+            const gui = new GUI({ title: 'Controls' });
+            const effectController = {
+                viscosity: 0.98,
+                mouseRadius: 50.0,
+                particleSize: 2.0,
+                particleColor: 0x00c0ff,
+                bgColor: 0x000000,
+            };
+
+            const simulationFolder = gui.addFolder('Simulation').open();
+            simulationFolder.add(effectController, 'viscosity', 0.9, 0.999, 0.001).onChange(v => velocityUniforms.viscosity.value = v);
+            simulationFolder.add(effectController, 'mouseRadius', 1.0, 200.0).onChange(v => velocityUniforms.mouseRadius.value = v);
+
+            const particlesFolder = gui.addFolder('Particles').open();
+            particlesFolder.add(effectController, 'particleSize', 0.1, 10.0).onChange(v => particleUniforms.particleSize.value = v);
+            particlesFolder.addColor(effectController, 'particleColor').onChange(v => particleUniforms.particleColor.value.set(v));
+
+            const worldFolder = gui.addFolder('Camera & World').open();
+            worldFolder.addColor(effectController, 'bgColor').onChange(v => scene.background = new THREE.Color(v));
             
-            sizeSlider.addEventListener('input', (e) => {
-                particlePoints.material.uniforms.u_pointSize.value = parseFloat(e.target.value);
-            });
+            scene.background = new THREE.Color(effectController.bgColor);
+            particleUniforms.particleColor.value.set(effectController.particleColor);
         }
 
         function onWindowResize() {
@@ -318,31 +265,47 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
+        window.addEventListener('resize', onWindowResize);
+
+        function onPointerMove(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / rect.width * 2 - 1;
+            const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            const vector = new THREE.Vector3(x, y, 0.5);
+            vector.unproject(camera);
+            const dir = vector.sub(camera.position).normalize();
+            
+            // --- THE CRITICAL FIX ---
+            // If the ray from the camera is parallel to the Z=0 plane, the projection calculation
+            // will result in Infinity, which corrupts the simulation. We must prevent this.
+            if (Math.abs(dir.z) < 0.0001) {
+                return; // Ignore mouse movement along the horizon
+            }
+            
+            const distance = -camera.position.z / dir.z;
+            const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+            velocityUniforms.mouse.value.set(pos.x, pos.y);
+        }
+        document.addEventListener('pointermove', onPointerMove);
 
         function animate() {
             requestAnimationFrame(animate);
-
-            // --- GPGPU Update ---
-            gpuCompute.compute();
-            
-            // --- Link GPGPU output to particle shader ---
-            particlePoints.material.uniforms.u_positions.value = gpuCompute.getCurrentRenderTarget(positionVariable).texture;
-
-            // --- Animate Scene ---
-            const rotateSpeed = document.getElementById('speed-slider').value;
-            if(particlePoints){
-                const elapsedTime = clock.getElapsedTime();
-                particlePoints.rotation.y = elapsedTime * rotateSpeed * 0.5;
-                particlePoints.rotation.x = elapsedTime * rotateSpeed * 0.2;
-            }
-
-            // --- Render ---
-            renderer.render(scene, camera);
+            render();
         }
 
-        // --- Start the application ---
-        init();
+        function render() {
+            let delta = clock.getDelta();
+            // Clamp delta to prevent physics explosions on long frames
+            if (delta > 0.1) delta = 0.1;
 
+            velocityUniforms.time.value += delta;
+            
+            gpuCompute.compute();
+            particleUniforms.texturePosition.value = gpuCompute.getCurrentRenderTarget(positionVariable).texture;
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
     </script>
 </body>
 </html>

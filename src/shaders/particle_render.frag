@@ -86,34 +86,30 @@ void main() {
     // --- Final Color Initialization ---
     vec3 final_color = pbr_color;
 
-    // *** DECOUPLED FIRE & ASH EFFECT LOGIC ***
-    // This logic branch is taken if either the fire is burning OR the ash is still visible.
-    // The ash_fade_progress allows the ash to have its own lifecycle after the fire is out.
+    // ** THE FIX IS HERE: Modified Blending Logic **
     float ash_fade_progress = (1.0 - u_fire_progress);
     if (u_fire_progress > 0.0 || u_ash_twinkleIntensity > 0.0) {
         
-        // --- Fire Calculation (Only happens when u_fire_progress is > 0) ---
         float fire_noise = snoise(vec3(vGpgpuUV * 15.0, u_time * 5.0)) * 0.5 + 0.5;
         float ramp_coord = clamp(fire_noise, 0.0, 1.0);
         vec3 fire_color = texture(u_fire_colorRamp, vec2(ramp_coord, 0.5)).rgb;
         vec3 emissive_fire = fire_color * pow(u_fire_progress, 2.0) * 5.0;
 
-        // --- Ash Calculation (Happens as fire fades and ash twinkles) ---
         vec3 ash_color = u_fire_ashColor;
         if (u_ash_twinkleIntensity > 0.0) {
-            float twinkle_noise = snoise(vec3(vGpgpuUV * 40.0, u_time * u_ash_twinkleSpeed)); // Fast noise
+            float twinkle_noise = snoise(vec3(vGpgpuUV * 40.0, u_time * u_ash_twinkleSpeed));
             float twinkle_factor = mix(1.0, twinkle_noise * 0.5 + 0.5, u_ash_twinkleIntensity);
             ash_color *= twinkle_factor;
         }
         
-        // --- Blending ---
-        // Blend the emissive fire and the dark ash. Fire is dominant at high progress.
+        // Blend between fire and ash based on the fire's visual progress
         vec3 effect_color = mix(ash_color, emissive_fire, u_fire_progress);
         
-        // Mix the final PBR color with our effect color.
-        // We use a separate progress for fading to ash to make it linger.
+        // ** ADD the effect color to the PBR base color instead of replacing it. **
+        // This creates a smooth dissolve to white (additive blending) and back.
+        // The mix factor ensures the original color fades out as the effect takes over.
         float total_effect_mix = clamp(u_fire_progress + u_ash_twinkleIntensity, 0.0, 1.0);
-        final_color = mix(pbr_color, effect_color, total_effect_mix);
+        final_color = mix(pbr_color, pbr_color + effect_color, total_effect_mix);
     }
     
     // Twinkle Effect (unchanged)

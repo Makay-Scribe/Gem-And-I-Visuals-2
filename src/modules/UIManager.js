@@ -14,8 +14,8 @@ export const UIManager = {
     particleModelTexture: null,
     gltfLoader: new GLTFLoader(),
     
-    _isProgrammaticUpdate: false, 
-    _sliderCache: new Map(), // ** THE FIX IS HERE: Cache for debouncing **
+    _isProgrammaticUpdate: false,
+    _sliderCache: new Map(),
     
     isFluidManualActive: false,
     
@@ -61,51 +61,46 @@ export const UIManager = {
         this.app.ParticleTransitions.setActivePreset('default');
     },
     
+    // ** THE FIX IS HERE: This function now ONLY updates sliders from vizSettings **
+    // It is called every frame to keep the UI in sync with running animations.
     syncSlidersFromState() {
         if (!this.app) return;
         const S = this.app.vizSettings;
-        
-        // ** THE FIX IS HERE: Only update sliders if their values have changed **
 
-        // 1. Fluid Attraction
-        if (this.app.ComputeManager?.velocityVariable) {
-             const strengthValue = this.app.ComputeManager.velocityVariable.material.uniforms.fluid_attractionStrength.value;
-             if (this._sliderCache.get('fluidAttraction') !== strengthValue) {
-                const slider = document.getElementById('fluidAttraction');
+        const idsToSync = [
+            'fluidAttraction',
+            'particle_morphProgress',
+            'fire_visual_progress',
+            'fluid_cohesionStrength',
+            'particle_cohesionStrength',
+            'fluid_gravity',
+            'fluid_curlStrength',
+            'fluid_curlScale',
+            'fluid_curlSpeed'
+        ];
+
+        idsToSync.forEach(id => {
+            let valueToSync;
+            if (id === 'fluidAttraction' && this.app.ComputeManager?.velocityVariable) {
+                valueToSync = this.app.ComputeManager.velocityVariable.material.uniforms.fluid_attractionStrength.value;
+            } else if (S[id] !== undefined) {
+                valueToSync = S[id];
+            }
+
+            if (valueToSync !== undefined && this._sliderCache.get(id) !== valueToSync) {
+                const slider = document.getElementById(id);
                 if (slider) {
-                    slider.value = strengthValue;
-                    this.updateRangeDisplay('fluidAttraction', strengthValue);
-                    this._sliderCache.set('fluidAttraction', strengthValue);
+                    slider.value = valueToSync;
+                    this.updateRangeDisplay(id, valueToSync);
+                    this._sliderCache.set(id, valueToSync);
                 }
-             }
-        }
-
-        // 2. Particle Morph
-        const morphValue = S.particle_morphProgress;
-        if (this._sliderCache.get('particle_morphProgress') !== morphValue) {
-            const slider = document.getElementById('particle_morphProgress');
-            if (slider) {
-                slider.value = morphValue;
-                this.updateRangeDisplay('particle_morphProgress', morphValue);
-                this._sliderCache.set('particle_morphProgress', morphValue);
             }
-        }
-
-        // 3. Fire Visual Progress
-        const fireValue = S.fire_visual_progress;
-        if (this._sliderCache.get('fire_visual_progress') !== fireValue) {
-            const slider = document.getElementById('fire_visual_progress');
-            if (slider) {
-                slider.value = fireValue;
-                this.updateRangeDisplay('fire_visual_progress', fireValue);
-                this._sliderCache.set('fire_visual_progress', fireValue);
-            }
-        }
+        });
     },
 
     syncAllControlsToSettings() {
         this._isProgrammaticUpdate = true;
-        this._sliderCache.clear(); // Clear cache before a full sync
+        this._sliderCache.clear();
         
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
@@ -116,7 +111,7 @@ export const UIManager = {
                 } else if (el.type === 'range') {
                     el.value = value;
                     this.updateRangeDisplay(key, value);
-                    this._sliderCache.set(key, value); // Populate cache on full sync
+                    this._sliderCache.set(key, value);
                 } else {
                     el.value = value;
                 }
@@ -155,6 +150,7 @@ export const UIManager = {
     },
 
     syncManualSlidersFromState() {
+        // This function remains as-is, it's for a different system (camera controls).
         this._isProgrammaticUpdate = true;
 
         const S = this.app.vizSettings;
@@ -451,7 +447,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowScale', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'fluidAttraction', 'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed', 'fire_visual_progress'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowScale', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'fluidAttraction', 'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed', 'fire_visual_progress', 'particle_cohesionStrength', 'fluid_cohesionStrength'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity', 'fluid_gravity'].includes(id)) {
                 precision = 2;
@@ -659,9 +655,9 @@ export const UIManager = {
             'gpgpu_enableSag', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod',
             'gpgpu_enableDroop', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor',
             'gpgpu_enablePeel', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelEnableAudio', 'gpgpu_peelTextureAmount', 'gpgpu_peelDrift',
-            'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress',
+            'particle_base_size', 'particle_min_size', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_cohesionStrength',
             'playerCube_enabled', 'gpgpu_cubeWallMorph', 'gpgpu_cubeWallUseImageTexture', 'gpgpu_cubeWallSideColor', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity',
-            'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed',
+            'fluid_curlStrength', 'fluid_curlScale', 'fluid_curlSpeed', 'fluid_cohesionStrength',
             'fire_visual_progress', 'fire_ashColor'
         ];
 
@@ -794,23 +790,29 @@ export const UIManager = {
         });
         
         document.getElementById('fluidFireAndAsh').addEventListener('click', () => this.app.FluidDirector.run('fireAndAsh'));
-
         document.getElementById('fluidMeltAndReform').addEventListener('click', () => this.app.FluidDirector.run('meltAndReform'));
         document.getElementById('fluidExplosion').addEventListener('click', () => this.app.FluidDirector.run('explosion'));
         document.getElementById('fluidVortex').addEventListener('click', () => this.app.FluidDirector.run('vortex'));
-        document.getElementById('fluidSwirlReform').addEventListener('click', () => this.app.FluidDirector.run('swirl_reform'));
+        document.getElementById('fluidCosmicGeode').addEventListener('click', () => this.app.FluidDirector.run('cosmicGeode'));
         document.getElementById('fluidStopAndReset').addEventListener('click', () => this.app.FluidDirector.run('reset'));
         
+        // ** THE FIX IS HERE: The event listener that interrupts the director is now separated **
         document.querySelectorAll('#particleControlsContainer input[type="range"], #fluidSimControlsContainer input[type="range"], #fluidSimControlsContainer input[type="color"]').forEach(control => {
             control.addEventListener('input', (e) => {
-                if (this._isProgrammaticUpdate || e.target.id === 'fire_visual_progress') return;
-                const S = this.app.vizSettings; const CM = this.app.ComputeManager; const id = e.target.id;
+                const S = this.app.vizSettings; 
+                const CM = this.app.ComputeManager; 
+                const id = e.target.id;
                 
+                // Always update vizSettings from manual input
                 if (S[id] !== undefined) {
                     S[id] = (e.target.type === 'color') ? e.target.value : parseFloat(e.target.value);
                 }
-                if(e.target.type === 'range') this.updateRangeDisplay(id, S[id]);
+                if(e.target.type === 'range') {
+                    this.updateRangeDisplay(id, S[id]);
+                    this._sliderCache.set(id, S[id]); // Keep cache in sync with manual changes
+                }
 
+                // If it's a fluid sim control, interrupt the director and apply the change directly
                 if (CM?.gpuCompute && S.gpgpuGeometryMode === 'fluidsim') {
                     this.app.FluidDirector.interruptAndStop();
                     const uniformsV = CM.velocityVariable.material.uniforms;
@@ -820,6 +822,7 @@ export const UIManager = {
                     else if (id === 'fluid_curlStrength') { uniformsV.fluid_curlStrength.value = value; }
                     else if (id === 'fluid_curlScale') { uniformsV.fluid_curlScale.value = value; }
                     else if (id === 'fluid_curlSpeed') { uniformsV.fluid_curlSpeed.value = value; }
+                    else if (id === 'fluid_cohesionStrength') { uniformsV.u_cohesionStrength.value = value; }
                 }
             });
         });
@@ -828,7 +831,6 @@ export const UIManager = {
         if (fluidTargetToggle) {
             fluidTargetToggle.querySelectorAll('button').forEach(button => {
                 button.addEventListener('click', (e) => {
-                    if (this._isProgrammaticUpdate) return;
                     this.app.FluidDirector.interruptAndStop();
                     
                     fluidTargetToggle.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
@@ -853,7 +855,7 @@ export const UIManager = {
         document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(control => {
             if (control.closest('#fluidSimControlsContainer') || control.closest('#particleControlsContainer') || control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list')) return;
             control.addEventListener('input', (e) => {
-                if (this._isProgrammaticUpdate) return;
+                this._isProgrammaticUpdate = true; // Use flag for these simple listeners
                 const id = e.target.id;
                 if (!id || this.app.vizSettings[id] === undefined) return;
                 
@@ -883,6 +885,7 @@ export const UIManager = {
                 } else if ((id === 'planeAspectRatio' || id === 'planeOrientation')) {
                     this.app.ImagePlaneManager.createDefaultLandscape();
                 }
+                this._isProgrammaticUpdate = false;
             });
         });
         
@@ -894,7 +897,6 @@ export const UIManager = {
         const morphSlider = document.getElementById('particle_morphProgress');
         if (morphSlider) {
             morphSlider.addEventListener('input', (e) => {
-                if (this._isProgrammaticUpdate) return;
                 const S = this.app.vizSettings;
                 const value = parseFloat(e.target.value);
                 S.particle_morphProgress = value;
@@ -933,7 +935,7 @@ export const UIManager = {
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
              if (checkbox.id === 'enableGPGPUDebugger' || checkbox.closest('#gpgpuEffectsAccordion') || checkbox.closest('#butterchurnControls')) return;
              checkbox.addEventListener('input', (e) => {
-                 if (this._isProgrammaticUpdate) return;
+                 this._isProgrammaticUpdate = true;
                  if (this.app.vizSettings[e.target.id] !== undefined) {
                      this.app.vizSettings[e.target.id] = e.target.checked;
                  }
@@ -946,6 +948,7 @@ export const UIManager = {
                         ipm.currentTexture.needsUpdate = true;
                     }
                 }
+                this._isProgrammaticUpdate = false;
              });
         });
         
@@ -1161,7 +1164,7 @@ export const UIManager = {
             this._isProgrammaticUpdate = true;
             slider.value = value;
             this.updateRangeDisplay(id, value);
-            this._sliderCache.set(id, value); // ** THE FIX IS HERE: Keep cache in sync **
+            this._sliderCache.set(id, value);
             this._isProgrammaticUpdate = false;
         }
     },
