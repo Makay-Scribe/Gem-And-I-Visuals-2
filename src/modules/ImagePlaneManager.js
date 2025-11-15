@@ -283,11 +283,26 @@ export const ImagePlaneManager = {
     _createHydroSimPlane() {
         const geometry = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y);
         
-        // ** THE FIX IS HERE: Reverting to a simple MeshBasicMaterial. **
-        this.hydroSimMaterial = new THREE.MeshBasicMaterial({
-            color: 0x000000,
+        // ** THE FIX IS HERE: Reverting to the ShaderMaterial that works. **
+        this.hydroSimMaterial = new THREE.ShaderMaterial({
+            uniforms: { u_densityTexture: { value: null } },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `
+                uniform sampler2D u_densityTexture;
+                varying vec2 vUv;
+                void main() {
+                    vec4 color = texture2D(u_densityTexture, vUv);
+                    // If the source is transparent black (alpha < 0.1), output opaque black.
+                    // Otherwise, show the color from the simulation.
+                    if (color.a < 0.1) {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    } else {
+                        gl_FragColor = vec4(color.rgb, 1.0);
+                    }
+                }
+            `,
             transparent: false,
-            map: null // We will set the map in the update loop
+            blending: THREE.NormalBlending,
         });
 
         this.hydroSimPlane = new this.app.THREE.Mesh(geometry, this.hydroSimMaterial);
@@ -508,9 +523,7 @@ export const ImagePlaneManager = {
         
         if (S.gpgpuGeometryMode === 'hydrosim') {
             if (this.hydroSimMaterial && this.app.HydroSimManager) {
-                // ** THE FIX IS HERE: Connect the simulation output to the material's map property. **
-                this.hydroSimMaterial.map = this.app.HydroSimManager.getOutputTexture();
-                this.hydroSimMaterial.needsUpdate = true;
+                this.hydroSimMaterial.uniforms.u_densityTexture.value = this.app.HydroSimManager.getOutputTexture();
             }
         } else if (S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
             if (!CM || !CM.gpuCompute) return;

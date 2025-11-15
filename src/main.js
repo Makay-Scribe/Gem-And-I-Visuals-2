@@ -189,12 +189,12 @@ const App = {
         particle_attractionStrength: 0.1,
         particle_morphProgress: 0.0, 
         particle_target: 'flat', 
-        particle_cohesionStrength: 0.0, // ** NEW **
+        particle_cohesionStrength: 0.0,
         
         fluid_curlStrength: 0.0,
         fluid_curlScale: 0.05,
         fluid_curlSpeed: 0.3,
-        fluid_cohesionStrength: 0.0, // ** NEW **
+        fluid_cohesionStrength: 0.0,
         
         gpgpu_cubeWallGridSize: 10,
         playerCube_enabled: true,
@@ -235,6 +235,7 @@ const App = {
         enableLightOrbit: true, lightOrbitSpeed: 0.2, enableGuideLaser: false,
         enableGPGPUDebugger: true, 
         enableOnScreenDebugger: true,
+        hydro_splatRadius: 0.01,
     },
 
     setFluidMorphState(target, sliderValue) {
@@ -356,11 +357,9 @@ const App = {
         const MI = this.mouseInteraction;
         const S = this.vizSettings;
         
-        // ** THE FIX IS HERE: The logic is now non-exclusive **
-        if (S.gpgpuGeometryMode === 'hydrosim') {
-            MI.isSplatting = true;
+        MI.isSplatting = (S.gpgpuGeometryMode === 'hydrosim');
+        if (MI.isSplatting) {
             MI.lastMouse.set(event.clientX, event.clientY);
-            // We DO NOT return here, allowing the event to be processed further.
         }
 
         const activeManager = this._getActiveManager();
@@ -379,14 +378,15 @@ const App = {
         const MI = this.mouseInteraction;
         const S = this.vizSettings;
 
+        // ** THE FIX IS HERE: The logic is now non-exclusive, as it was before. **
         if (MI.isSplatting && S.gpgpuGeometryMode === 'hydrosim') {
             const currentPos = new THREE.Vector2(event.clientX, event.clientY);
             const delta = new THREE.Vector2().subVectors(currentPos, MI.lastMouse);
             MI.lastMouse.copy(currentPos);
             
-            if (delta.length() > 0) {
+            if (delta.length() > 0.1) {
                 const uvPos = new THREE.Vector2(event.clientX / window.innerWidth, 1.0 - (event.clientY / window.innerHeight));
-                const splatRadius = document.getElementById('hydro_splatRadius')?.value || 0.01;
+                const splatRadius = S.hydro_splatRadius || 0.01;
                 const forceStrength = 60;
     
                 this.HydroSimManager.applyForceSplat(uvPos, new THREE.Vector3(delta.x * forceStrength, delta.y * -forceStrength, 0.0), splatRadius);
@@ -421,7 +421,7 @@ const App = {
     onPointerUp(event) {
         const MI = this.mouseInteraction;
         
-        MI.isSplatting = false; // Always turn off splatting
+        MI.isSplatting = false;
         
         const activeManager = this._getActiveManager();
         if (activeManager && activeManager.state.isUnderManualControl) {
