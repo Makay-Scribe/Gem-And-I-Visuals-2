@@ -143,6 +143,7 @@
                     <button class="segmented-control-button" data-mode="geocube">GeoCube</button>
                     <button class="segmented-control-button active" data-mode="particles">Particles</button>
                     <button class="segmented-control-button" data-mode="fluidsim">Fluid Sim</button>
+                    <button class="segmented-control-button" data-mode="hydrosim">Hydro Sim</button>
                 </div>
 
                 <div id="deformationControlsContainer" style="display: none;">
@@ -537,6 +538,19 @@
                             <input type="color" id="fire_ashColor" value="#202020">
                         </div>
                     </div>
+                </div>
+
+                <div id="hydroSimControlsContainer" style="display: none;">
+                    <p class="sub-group-title">SIMULATION</p>
+                    <label>Viscosity: <span id="hydro_viscosityValue" class="range-value-display"></span></label>
+                    <input type="range" id="hydro_viscosity" min="0" max="50" step="1" value="5">
+                    
+                    <label>Pressure Iterations: <span id="hydro_pressureIterationsValue" class="range-value-display"></span></label>
+                    <input type="range" id="hydro_pressureIterations" min="1" max="60" step="1" value="20">
+        
+                    <p class="sub-group-title">INTERACTION</p>
+                    <label>Splat Radius: <span id="hydro_splatRadiusValue" class="range-value-display"></span></label>
+                    <input type="range" id="hydro_splatRadius" min="0.001" max="0.05" step="0.001" value="0.01">
                 </div>
                 
                 <button id="gpgpuResetButton">Reset GPGPU Sliders</button>

@@ -11,9 +11,11 @@ export const ImagePlaneManager = {
     instancedMesh: null,
     particleSystem: null,
     fluidSystem: null, 
+    hydroSimPlane: null, // New plane for our Hydro Sim engine
     landscapeMaterial: null,
     particlePBRMaterial: null,
     fluidMaterial: null,
+    hydroSimMaterial: null, // New material for the Hydro Sim plane
     landscapeContainer: null, 
     boundingBox: null, 
     planeDimensions: null, 
@@ -164,11 +166,13 @@ export const ImagePlaneManager = {
         const isCubeMode = S.gpgpuGeometryMode === 'geocube';
         const isParticleMode = S.gpgpuGeometryMode === 'particles';
         const isDeformationMode = S.gpgpuGeometryMode === 'faceted';
+        const isHydroMode = S.gpgpuGeometryMode === 'hydrosim';
 
         if (this.landscape) this.landscape.visible = isDeformationMode;
         if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
         if (this.particleSystem) this.particleSystem.visible = isParticleMode;
         if (this.fluidSystem) this.fluidSystem.visible = isFluidMode;
+        if (this.hydroSimPlane) this.hydroSimPlane.visible = isHydroMode;
         
         const state = this.state;
         const ap = this.autopilot;
@@ -234,15 +238,12 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         this._cleanupMeshes(); 
 
-        if (S.gpgpuGeometryMode === 'particles') {
-            this._createParticleSystem();
-        } else if (S.gpgpuGeometryMode === 'geocube') {
-            this._createInstancedCubeMesh();
-        } else if (S.gpgpuGeometryMode === 'faceted') { 
-            this._createPlaneMesh();
-        } else if (S.gpgpuGeometryMode === 'fluidsim') {
-            this._createFluidSystem();
-        }
+        // Always create all possible meshes, but their visibility will be controlled in the update loop.
+        this._createPlaneMesh();
+        this._createInstancedCubeMesh();
+        this._createParticleSystem();
+        this._createFluidSystem();
+        this._createHydroSimPlane();
 
         this.applyAndStoreHomeOrientation();
         
@@ -258,9 +259,12 @@ export const ImagePlaneManager = {
         if (this.instancedMesh) { this.instancedMesh.geometry.dispose(); this.landscapeContainer.remove(this.instancedMesh); this.instancedMesh = null; }
         if (this.particleSystem) { this.particleSystem.geometry.dispose(); this.landscapeContainer.remove(this.particleSystem); this.particleSystem = null; }
         if (this.fluidSystem) { this.fluidSystem.geometry.dispose(); this.landscapeContainer.remove(this.fluidSystem); this.fluidSystem = null; }
+        if (this.hydroSimPlane) { this.hydroSimPlane.geometry.dispose(); this.landscapeContainer.remove(this.hydroSimPlane); this.hydroSimPlane = null; }
+        
         if (this.landscapeMaterial) { this.landscapeMaterial.dispose(); this.landscapeMaterial = null; }
         if (this.particlePBRMaterial) { this.particlePBRMaterial.dispose(); this.particlePBRMaterial = null; }
         if (this.fluidMaterial) { this.fluidMaterial.dispose(); this.fluidMaterial = null; }
+        if (this.hydroSimMaterial) { this.hydroSimMaterial.dispose(); this.hydroSimMaterial = null; }
     },
 
     _createPlaneMesh() {
@@ -275,6 +279,20 @@ export const ImagePlaneManager = {
         this.landscape = new this.app.THREE.Mesh(geometry, this.landscapeMaterial);
         this.landscape.frustumCulled = false;
         this.landscapeContainer.add(this.landscape);
+    },
+
+    _createHydroSimPlane() {
+        const geometry = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y);
+        this.hydroSimMaterial = new this.app.THREE.ShaderMaterial({
+            uniforms: { u_densityTexture: { value: null } },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `uniform sampler2D u_densityTexture; varying vec2 vUv; void main() { if (texture2D(u_densityTexture, vUv).a == 0.0) discard; gl_FragColor = texture2D(u_densityTexture, vUv); }`,
+            transparent: true,
+            blending: THREE.AdditiveBlending, // Good for glowing fluid effects
+        });
+        this.hydroSimPlane = new this.app.THREE.Mesh(geometry, this.hydroSimMaterial);
+        this.hydroSimPlane.frustumCulled = false;
+        this.landscapeContainer.add(this.hydroSimPlane);
     },
 
     _createFluidSystem() {
@@ -343,7 +361,7 @@ export const ImagePlaneManager = {
     applyAndStoreHomeOrientation() {
         const S = this.app.vizSettings;
         this.state.homeQuaternion.identity(); 
-        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
+        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim' || S.gpgpuGeometryMode === 'hydrosim') {
         } else {
             const tempObject = new this.app.THREE.Object3D();
             if (S.planeOrientation === 'xz') { tempObject.rotateX(-Math.PI / 2); } 
@@ -479,7 +497,12 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
         
-        if (S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
+        if (S.gpgpuGeometryMode === 'hydrosim') {
+            const H_M = this.app.HydroSimManager;
+            if (this.hydroSimMaterial && H_M && H_M.getOutputTexture()) {
+                this.hydroSimMaterial.uniforms.u_densityTexture.value = H_M.getOutputTexture();
+            }
+        } else if (S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
             if (!CM || !CM.gpuCompute) return;
             
             const material = S.gpgpuGeometryMode === 'particles' ? this.particlePBRMaterial : this.fluidMaterial;
@@ -511,7 +534,6 @@ export const ImagePlaneManager = {
             U.u_time.value = this.app.currentTime;
             U.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
             
-            // ** THE FIX IS HERE **
             U.u_fire_progress.value = S.fire_visual_progress;
             U.u_fire_ashColor.value.set(S.fire_ashColor);
             U.u_ash_twinkleIntensity.value = S.ash_twinkleIntensity;
@@ -545,6 +567,7 @@ export const ImagePlaneManager = {
         const mesh = this.app.vizSettings.gpgpuGeometryMode === 'geocube' ? this.instancedMesh : 
                      this.app.vizSettings.gpgpuGeometryMode === 'particles' ? this.particleSystem : 
                      this.app.vizSettings.gpgpuGeometryMode === 'fluidsim' ? this.fluidSystem :
+                     this.app.vizSettings.gpgpuGeometryMode === 'hydrosim' ? this.hydroSimPlane :
                      this.landscape;
         if (!mesh) return;
         this.landscapeContainer.updateWorldMatrix(true, false);

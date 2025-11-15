@@ -87,6 +87,8 @@ export const ComputeManager = {
         this.app.THREE.ShaderChunk['gpgpu_peel'] = peelShader;
 
         this._setupUnifiedParticleSimulation();
+        // NOTE: We do not init HydroSimManager here. It's initialized in main.js
+        // and ComputeManager will just act as a router to it.
     },
 
     switchMode(newMode, isInitial = false) {
@@ -108,6 +110,7 @@ export const ComputeManager = {
 
         const isParticleOrFluid = (newMode === 'particles' || newMode === 'fluidsim');
         const isLandscape = (newMode === 'faceted' || newMode === 'geocube');
+        const isHydroSim = (newMode === 'hydrosim');
 
         if (isParticleOrFluid) {
             const velShader = (newMode === 'fluidsim') ? this._fluidVelocityShader : this._particleVelocityShader;
@@ -120,6 +123,8 @@ export const ComputeManager = {
         if (isLandscape) {
             this.initLandscapeSystem();
         }
+        
+        // No specific setup needed for hydrosim here yet, as it's self-contained.
 
         if (!isInitial) {
             this.app.ImagePlaneManager.createDefaultLandscape();
@@ -477,6 +482,12 @@ export const ComputeManager = {
         
         const isParticleOrFluid = (this._currentMode === 'particles' || this._currentMode === 'fluidsim');
         const isLandscape = (this._currentMode === 'faceted' || this._currentMode === 'geocube');
+        const isHydroSim = (this._currentMode === 'hydrosim');
+
+        if (isHydroSim) {
+            this.app.HydroSimManager.update(delta);
+            return; // Exit early, as HydroSim is self-contained.
+        }
 
         if (isLandscape && this.landscapeGpuCompute) {
             const uniforms = this.landscapePositionVariable.material.uniforms;

@@ -17,6 +17,7 @@ import { DirectorManager } from './modules/DirectorManager.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ParticleTransitions } from './modules/ParticleTransitions.js';
 import { FluidDirector } from './compute/FluidDirector.js';
+import { HydroSimManager } from './compute/HydroSimManager.js';
 
 
 const App = {
@@ -28,7 +29,9 @@ const App = {
     mouseInteraction: {
         isDragging: false,
         isRotating: false,
+        isSplatting: false,
         startMouse: new THREE.Vector2(),
+        lastMouse: new THREE.Vector2(),
         rotationSpeed: 0.005,
         panSpeed: 0.15,
         zoomSpeed: 0.5,
@@ -78,6 +81,7 @@ const App = {
     DirectorManager: DirectorManager,
     ParticleTransitions: ParticleTransitions,
     FluidDirector: FluidDirector,
+    HydroSimManager: HydroSimManager,
 
     defaultVisualizerSettings: {
         activeControl: 'landscape',
@@ -350,6 +354,15 @@ const App = {
 
     onPointerDown(event) {
         const MI = this.mouseInteraction;
+        const S = this.vizSettings;
+        
+        // ** THE FIX IS HERE: The logic is now non-exclusive **
+        if (S.gpgpuGeometryMode === 'hydrosim') {
+            MI.isSplatting = true;
+            MI.lastMouse.set(event.clientX, event.clientY);
+            // We DO NOT return here, allowing the event to be processed further.
+        }
+
         const activeManager = this._getActiveManager();
         if (!activeManager || !activeManager.state) return;
         if (activeManager.state.manualControlTimeoutId) {
@@ -364,6 +377,25 @@ const App = {
     
     onPointerMove(event) {
         const MI = this.mouseInteraction;
+        const S = this.vizSettings;
+
+        if (MI.isSplatting && S.gpgpuGeometryMode === 'hydrosim') {
+            const currentPos = new THREE.Vector2(event.clientX, event.clientY);
+            const delta = new THREE.Vector2().subVectors(currentPos, MI.lastMouse);
+            MI.lastMouse.copy(currentPos);
+            
+            if (delta.length() > 0) {
+                const uvPos = new THREE.Vector2(event.clientX / window.innerWidth, 1.0 - (event.clientY / window.innerHeight));
+                const splatRadius = document.getElementById('hydro_splatRadius')?.value || 0.01;
+                const forceStrength = 60;
+    
+                this.HydroSimManager.applyForceSplat(uvPos, new THREE.Vector3(delta.x * forceStrength, delta.y * -forceStrength, 0.0), splatRadius);
+                
+                const color = new THREE.Color().setHSL(this.currentTime * 0.1 % 1.0, 1.0, 0.5);
+                this.HydroSimManager.applySplat(uvPos, new THREE.Vector3(color.r, color.g, color.b), splatRadius);
+            }
+        }
+
         const activeManager = this._getActiveManager();
         if (!activeManager || !activeManager.state || (!MI.isDragging && !MI.isRotating)) return; 
 
@@ -388,6 +420,9 @@ const App = {
 
     onPointerUp(event) {
         const MI = this.mouseInteraction;
+        
+        MI.isSplatting = false; // Always turn off splatting
+        
         const activeManager = this._getActiveManager();
         if (activeManager && activeManager.state.isUnderManualControl) {
             this._startManualControlTimeout(activeManager);
@@ -427,6 +462,7 @@ const App = {
         this.DirectorManager.init(this);
         this.ParticleTransitions.init(this);
         this.FluidDirector.init(this);
+        this.HydroSimManager.init(this);
         this.ImagePlaneManager.init(this); 
         this.ComputeManager.init(this);
         this.GPGPUDebugger.init(this);
