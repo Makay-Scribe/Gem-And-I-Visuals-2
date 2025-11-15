@@ -60,13 +60,14 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) { float NdotV = max
 
 void main() {
     vec3 albedo;
-    vec3 N; // Declare normal vector
+    vec3 N; 
+
+    // The normal N is now consistently taken from the vWorldNormal varying,
+    // which is calculated and passed in by the vertex shader.
+    N = normalize(vWorldNormal);
 
     if (u_gpgpu_enableCubeWall) {
         // --- CUBEWALL / GEOCUBE LOGIC ---
-        // This mode still relies on the normal passed from the vertex shader.
-        N = normalize(vWorldNormal);
-        
         vec2 faceUV = fract(vUv * u_gpgpu_cubeWallGridSize);
         N = getBeveledNormal(N, faceUV, u_gpgpu_cubeWallBevelWidth, u_gpgpu_cubeWallBevelIntensity);
 
@@ -81,10 +82,7 @@ void main() {
         }
     } else {
         // --- FACETED / CONTINUOUS LOGIC ---
-        // ** THE FIX IS HERE: Calculate the normal directly in the fragment shader. **
-        // This is more accurate and efficient as it avoids extra texture reads in the vertex shader.
-        N = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
-        
+        // N is already correctly set from the varying.
         albedo = texture2D(u_map, vUv).rgb;
     }
     

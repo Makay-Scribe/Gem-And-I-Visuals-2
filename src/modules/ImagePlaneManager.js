@@ -11,11 +11,15 @@ export const ImagePlaneManager = {
     instancedMesh: null,
     particleSystem: null,
     fluidSystem: null, 
-    hydroSimPlane: null, // New plane for our Hydro Sim engine
-    landscapeMaterial: null,
+    hydroSimPlane: null,
+    
+    // ** THE FIX IS HERE: Create separate materials for each mode **
+    facetedMaterial: null,
+    geocubeMaterial: null,
+    
     particlePBRMaterial: null,
     fluidMaterial: null,
-    hydroSimMaterial: null, // New material for the Hydro Sim plane
+    hydroSimMaterial: null,
     landscapeContainer: null, 
     boundingBox: null, 
     planeDimensions: null, 
@@ -162,17 +166,12 @@ export const ImagePlaneManager = {
         
         if (!S.enableLandscape) return;
         
-        const isFluidMode = S.gpgpuGeometryMode === 'fluidsim';
-        const isCubeMode = S.gpgpuGeometryMode === 'geocube';
-        const isParticleMode = S.gpgpuGeometryMode === 'particles';
-        const isDeformationMode = S.gpgpuGeometryMode === 'faceted';
-        const isHydroMode = S.gpgpuGeometryMode === 'hydrosim';
-
-        if (this.landscape) this.landscape.visible = isDeformationMode;
-        if (this.instancedMesh) this.instancedMesh.visible = isCubeMode;
-        if (this.particleSystem) this.particleSystem.visible = isParticleMode;
-        if (this.fluidSystem) this.fluidSystem.visible = isFluidMode;
-        if (this.hydroSimPlane) this.hydroSimPlane.visible = isHydroMode;
+        const mode = S.gpgpuGeometryMode;
+        if (this.landscape) this.landscape.visible = (mode === 'faceted');
+        if (this.instancedMesh) this.instancedMesh.visible = (mode === 'geocube');
+        if (this.particleSystem) this.particleSystem.visible = (mode === 'particles');
+        if (this.fluidSystem) this.fluidSystem.visible = (mode === 'fluidsim');
+        if (this.hydroSimPlane) this.hydroSimPlane.visible = (mode === 'hydrosim');
         
         const state = this.state;
         const ap = this.autopilot;
@@ -235,10 +234,8 @@ export const ImagePlaneManager = {
     createDefaultLandscape() {
         this.updatePlaneDimensions();
         
-        const S = this.app.vizSettings;
         this._cleanupMeshes(); 
 
-        // Always create all possible meshes, but their visibility will be controlled in the update loop.
         this._createPlaneMesh();
         this._createInstancedCubeMesh();
         this._createParticleSystem();
@@ -261,7 +258,8 @@ export const ImagePlaneManager = {
         if (this.fluidSystem) { this.fluidSystem.geometry.dispose(); this.landscapeContainer.remove(this.fluidSystem); this.fluidSystem = null; }
         if (this.hydroSimPlane) { this.hydroSimPlane.geometry.dispose(); this.landscapeContainer.remove(this.hydroSimPlane); this.hydroSimPlane = null; }
         
-        if (this.landscapeMaterial) { this.landscapeMaterial.dispose(); this.landscapeMaterial = null; }
+        if (this.facetedMaterial) { this.facetedMaterial.dispose(); this.facetedMaterial = null; }
+        if (this.geocubeMaterial) { this.geocubeMaterial.dispose(); this.geocubeMaterial = null; }
         if (this.particlePBRMaterial) { this.particlePBRMaterial.dispose(); this.particlePBRMaterial = null; }
         if (this.fluidMaterial) { this.fluidMaterial.dispose(); this.fluidMaterial = null; }
         if (this.hydroSimMaterial) { this.hydroSimMaterial.dispose(); this.hydroSimMaterial = null; }
@@ -275,21 +273,36 @@ export const ImagePlaneManager = {
             gpgpuUvs[i * 2 + 1] = geometry.attributes.uv.getY(i);
         }
         geometry.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
-        this.createGPGPUMaterial();
-        this.landscape = new this.app.THREE.Mesh(geometry, this.landscapeMaterial);
+
+        this._createFacetedMaterial(); // Create the specific material
+
+        this.landscape = new this.app.THREE.Mesh(geometry, this.facetedMaterial);
         this.landscape.frustumCulled = false;
         this.landscapeContainer.add(this.landscape);
     },
 
     _createHydroSimPlane() {
         const geometry = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y);
-        this.hydroSimMaterial = new this.app.THREE.ShaderMaterial({
+        
+        this.hydroSimMaterial = new THREE.ShaderMaterial({
             uniforms: { u_densityTexture: { value: null } },
             vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-            fragmentShader: `uniform sampler2D u_densityTexture; varying vec2 vUv; void main() { if (texture2D(u_densityTexture, vUv).a == 0.0) discard; gl_FragColor = texture2D(u_densityTexture, vUv); }`,
+            fragmentShader: `
+                uniform sampler2D u_densityTexture;
+                varying vec2 vUv;
+                void main() {
+                    vec4 color = texture2D(u_densityTexture, vUv);
+                    if (color.a < 0.1) {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    } else {
+                        gl_FragColor = color;
+                    }
+                }
+            `,
             transparent: true,
-            blending: THREE.AdditiveBlending, // Good for glowing fluid effects
+            blending: THREE.AdditiveBlending,
         });
+
         this.hydroSimPlane = new this.app.THREE.Mesh(geometry, this.hydroSimMaterial);
         this.hydroSimPlane.frustumCulled = false;
         this.landscapeContainer.add(this.hydroSimPlane);
@@ -343,8 +356,10 @@ export const ImagePlaneManager = {
         const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
         const COUNT = GRID_SIZE * GRID_SIZE;
         const cubeGeom = new this.app.THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
-        this.createGPGPUMaterial();
-        this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.landscapeMaterial, COUNT);
+        
+        this._createGeocubeMaterial(); // Create the specific material
+
+        this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.geocubeMaterial, COUNT);
         this.instancedMesh.frustumCulled = false;
         const instanceIds = new Float32Array(COUNT);
         for (let i = 0; i < COUNT; i++) { instanceIds[i] = i; }
@@ -422,14 +437,21 @@ export const ImagePlaneManager = {
         this.particlePBRMaterial = this._createUnifiedPBRMaterial();
     },
 
-    createGPGPUMaterial() {
+    // ** THE FIX IS HERE: This function is now split into two dedicated functions. **
+    _createFacetedMaterial() {
+        this.facetedMaterial = this._createBaseGPGPUMaterial(landscapeRenderVertexShader);
+    },
+
+    _createGeocubeMaterial() {
+        this.geocubeMaterial = this._createBaseGPGPUMaterial(cubewallRenderVertexShader);
+    },
+
+    _createBaseGPGPUMaterial(vertexShader) {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
         if(!this.currentTexture) textureToUse.needsUpdate = true;
         
-        const vertexShader = S.gpgpuGeometryMode === 'geocube' ? cubewallRenderVertexShader : landscapeRenderVertexShader;
-
         const uniforms = {
             u_map: { value: textureToUse },
             u_positionTexture: { value: null },
@@ -445,7 +467,7 @@ export const ImagePlaneManager = {
             u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
             u_cameraPosition: { value: this.app.camera.position },
             t_envMap: { value: this.app.hdrTexture },
-            u_gpgpu_enableCubeWall: { value: S.gpgpuGeometryMode === 'geocube' },
+            u_gpgpu_enableCubeWall: { value: (vertexShader === cubewallRenderVertexShader) },
             u_gpgpu_cubeWallGridSize: { value: new this.app.THREE.Vector2(S.gpgpu_cubeWallGridSize, S.gpgpu_cubeWallGridSize) },
             u_gpgpu_cubeWallMorph: { value: S.gpgpu_cubeWallMorph },
             u_gpgpu_cubeWallSideColor: { value: new this.app.THREE.Color(S.gpgpu_cubeWallSideColor) },
@@ -454,7 +476,7 @@ export const ImagePlaneManager = {
             u_gpgpu_cubeWallBevelIntensity: { value: S.gpgpu_cubeWallBevelIntensity },
         };
 
-        this.landscapeMaterial = new this.app.THREE.ShaderMaterial({
+        return new this.app.THREE.ShaderMaterial({
             uniforms: uniforms,
             vertexShader: vertexShader,
             fragmentShader: landscapeRenderFragmentShader,
@@ -472,7 +494,9 @@ export const ImagePlaneManager = {
             texture.flipY = false;
             texture.needsUpdate = true;
             
-            if (this.landscapeMaterial) this.landscapeMaterial.uniforms.u_map.value = texture;
+            // Update all relevant materials
+            if (this.facetedMaterial) this.facetedMaterial.uniforms.u_map.value = texture;
+            if (this.geocubeMaterial) this.geocubeMaterial.uniforms.u_map.value = texture;
             if (this.particlePBRMaterial) this.particlePBRMaterial.uniforms.u_map.value = texture;
             if (this.fluidMaterial) this.fluidMaterial.uniforms.u_map.value = texture;
             
@@ -498,9 +522,8 @@ export const ImagePlaneManager = {
         const CM = this.app.ComputeManager;
         
         if (S.gpgpuGeometryMode === 'hydrosim') {
-            const H_M = this.app.HydroSimManager;
-            if (this.hydroSimMaterial && H_M && H_M.getOutputTexture()) {
-                this.hydroSimMaterial.uniforms.u_densityTexture.value = H_M.getOutputTexture();
+            if (this.hydroSimMaterial && this.app.HydroSimManager) {
+                this.hydroSimMaterial.uniforms.u_densityTexture.value = this.app.HydroSimManager.getOutputTexture();
             }
         } else if (S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
             if (!CM || !CM.gpuCompute) return;
@@ -540,38 +563,52 @@ export const ImagePlaneManager = {
             U.u_ash_twinkleSpeed.value = S.ash_twinkleSpeed;
 
         } else { 
-            if (!this.landscapeMaterial || !CM.landscapeGpuCompute) return;
-            const U = this.landscapeMaterial.uniforms;
-            const positionTarget = CM.landscapeGpuCompute.getCurrentRenderTarget(CM.landscapePositionVariable);
-            U.u_positionTexture.value = positionTarget.texture;
+            // ** THE FIX IS HERE: Update both materials every frame **
+            const material = S.gpgpuGeometryMode === 'geocube' ? this.geocubeMaterial : this.facetedMaterial;
+            if (!material || !CM.landscapeGpuCompute) return;
             
-            U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph; 
-            U.u_time.value = this.app.currentTime;
-            U.u_metalness.value = S.metalness;
-            U.u_roughness.value = S.roughness;
-            U.u_envMapIntensity.value = S.reflectionStrength;
-            U.t_envMap.value = this.app.hdrTexture; 
-            U.u_cameraPosition.value = this.app.camera.position;
-            U.u_lightColor.value.set(S.lightColor);
-            U.u_ambientLightColor.value.set(S.ambientLightColor);
-            U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-            U.u_gpgpu_enableCubeWall.value = S.gpgpuGeometryMode === 'geocube';
-            U.u_gpgpu_cubeWallSideColor.value.set(S.gpgpu_cubeWallSideColor);
-            U.gpgpu_cubeWallUseImageTexture.value = S.gpgpu_cubeWallUseImageTexture;
-            U.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
-            U.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;
+            const allMaterials = [this.facetedMaterial, this.geocubeMaterial];
+            
+            allMaterials.forEach(mat => {
+                if (!mat) return;
+                const U = mat.uniforms;
+                const positionTarget = CM.landscapeGpuCompute.getCurrentRenderTarget(CM.landscapePositionVariable);
+                U.u_positionTexture.value = positionTarget.texture;
+                
+                U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph; 
+                U.u_time.value = this.app.currentTime;
+                U.u_metalness.value = S.metalness;
+                U.u_roughness.value = S.roughness;
+                U.u_envMapIntensity.value = S.reflectionStrength;
+                U.t_envMap.value = this.app.hdrTexture; 
+                U.u_cameraPosition.value = this.app.camera.position;
+                U.u_lightColor.value.set(S.lightColor);
+                U.u_ambientLightColor.value.set(S.ambientLightColor);
+                U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
+                U.u_gpgpu_cubeWallSideColor.value.set(S.gpgpu_cubeWallSideColor);
+                U.gpgpu_cubeWallUseImageTexture.value = S.gpgpu_cubeWallUseImageTexture;
+                U.u_gpgpu_cubeWallBevelWidth.value = S.gpgpu_cubeWallBevelWidth;
+                U.u_gpgpu_cubeWallBevelIntensity.value = S.gpgpu_cubeWallBevelIntensity;
+            });
         }
     },
 
     updateBoundingBox() {
-        const mesh = this.app.vizSettings.gpgpuGeometryMode === 'geocube' ? this.instancedMesh : 
-                     this.app.vizSettings.gpgpuGeometryMode === 'particles' ? this.particleSystem : 
-                     this.app.vizSettings.gpgpuGeometryMode === 'fluidsim' ? this.fluidSystem :
-                     this.app.vizSettings.gpgpuGeometryMode === 'hydrosim' ? this.hydroSimPlane :
-                     this.landscape;
-        if (!mesh) return;
+        const S = this.app.vizSettings;
+        const mode = S.gpgpuGeometryMode;
+        
+        let activeMesh = null;
+        if (mode === 'faceted') activeMesh = this.landscape;
+        else if (mode === 'geocube') activeMesh = this.instancedMesh;
+        else if (mode === 'particles') activeMesh = this.particleSystem;
+        else if (mode === 'fluidsim') activeMesh = this.fluidSystem;
+        else if (mode === 'hydrosim') activeMesh = this.hydroSimPlane;
+
+        if (!activeMesh) return;
+
         this.landscapeContainer.updateWorldMatrix(true, false);
-        this.boundingBox.setFromObject(this.landscapeContainer, true);
+        activeMesh.geometry.computeBoundingBox();
+        this.boundingBox.copy(activeMesh.geometry.boundingBox).applyMatrix4(activeMesh.matrixWorld);
     },
 
     getCubeLocalPosition(gridX, gridY) {
