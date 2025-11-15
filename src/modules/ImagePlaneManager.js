@@ -13,7 +13,6 @@ export const ImagePlaneManager = {
     fluidSystem: null, 
     hydroSimPlane: null,
     
-    // ** THE FIX IS HERE: Create separate materials for each mode **
     facetedMaterial: null,
     geocubeMaterial: null,
     
@@ -274,7 +273,7 @@ export const ImagePlaneManager = {
         }
         geometry.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
 
-        this._createFacetedMaterial(); // Create the specific material
+        this._createFacetedMaterial();
 
         this.landscape = new this.app.THREE.Mesh(geometry, this.facetedMaterial);
         this.landscape.frustumCulled = false;
@@ -284,23 +283,11 @@ export const ImagePlaneManager = {
     _createHydroSimPlane() {
         const geometry = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y);
         
-        this.hydroSimMaterial = new THREE.ShaderMaterial({
-            uniforms: { u_densityTexture: { value: null } },
-            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-            fragmentShader: `
-                uniform sampler2D u_densityTexture;
-                varying vec2 vUv;
-                void main() {
-                    vec4 color = texture2D(u_densityTexture, vUv);
-                    if (color.a < 0.1) {
-                        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-                    } else {
-                        gl_FragColor = color;
-                    }
-                }
-            `,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
+        // ** THE FIX IS HERE: Reverting to a simple MeshBasicMaterial. **
+        this.hydroSimMaterial = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            transparent: false,
+            map: null // We will set the map in the update loop
         });
 
         this.hydroSimPlane = new this.app.THREE.Mesh(geometry, this.hydroSimMaterial);
@@ -357,7 +344,7 @@ export const ImagePlaneManager = {
         const COUNT = GRID_SIZE * GRID_SIZE;
         const cubeGeom = new this.app.THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
         
-        this._createGeocubeMaterial(); // Create the specific material
+        this._createGeocubeMaterial();
 
         this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.geocubeMaterial, COUNT);
         this.instancedMesh.frustumCulled = false;
@@ -437,7 +424,6 @@ export const ImagePlaneManager = {
         this.particlePBRMaterial = this._createUnifiedPBRMaterial();
     },
 
-    // ** THE FIX IS HERE: This function is now split into two dedicated functions. **
     _createFacetedMaterial() {
         this.facetedMaterial = this._createBaseGPGPUMaterial(landscapeRenderVertexShader);
     },
@@ -494,7 +480,6 @@ export const ImagePlaneManager = {
             texture.flipY = false;
             texture.needsUpdate = true;
             
-            // Update all relevant materials
             if (this.facetedMaterial) this.facetedMaterial.uniforms.u_map.value = texture;
             if (this.geocubeMaterial) this.geocubeMaterial.uniforms.u_map.value = texture;
             if (this.particlePBRMaterial) this.particlePBRMaterial.uniforms.u_map.value = texture;
@@ -523,7 +508,9 @@ export const ImagePlaneManager = {
         
         if (S.gpgpuGeometryMode === 'hydrosim') {
             if (this.hydroSimMaterial && this.app.HydroSimManager) {
-                this.hydroSimMaterial.uniforms.u_densityTexture.value = this.app.HydroSimManager.getOutputTexture();
+                // ** THE FIX IS HERE: Connect the simulation output to the material's map property. **
+                this.hydroSimMaterial.map = this.app.HydroSimManager.getOutputTexture();
+                this.hydroSimMaterial.needsUpdate = true;
             }
         } else if (S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
             if (!CM || !CM.gpuCompute) return;
@@ -563,14 +550,10 @@ export const ImagePlaneManager = {
             U.u_ash_twinkleSpeed.value = S.ash_twinkleSpeed;
 
         } else { 
-            // ** THE FIX IS HERE: Update both materials every frame **
-            const material = S.gpgpuGeometryMode === 'geocube' ? this.geocubeMaterial : this.facetedMaterial;
-            if (!material || !CM.landscapeGpuCompute) return;
-            
             const allMaterials = [this.facetedMaterial, this.geocubeMaterial];
             
             allMaterials.forEach(mat => {
-                if (!mat) return;
+                if (!mat || !CM.landscapeGpuCompute) return;
                 const U = mat.uniforms;
                 const positionTarget = CM.landscapeGpuCompute.getCurrentRenderTarget(CM.landscapePositionVariable);
                 U.u_positionTexture.value = positionTarget.texture;
