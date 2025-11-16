@@ -283,7 +283,7 @@ export const ImagePlaneManager = {
     _createHydroSimPlane() {
         const geometry = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y);
         
-        // ** THE FIX IS HERE: Reverting to the ShaderMaterial that works. **
+        // ** THE FIX IS HERE: Simplified the fragment shader for direct debugging. **
         this.hydroSimMaterial = new THREE.ShaderMaterial({
             uniforms: { u_densityTexture: { value: null } },
             vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -292,13 +292,9 @@ export const ImagePlaneManager = {
                 varying vec2 vUv;
                 void main() {
                     vec4 color = texture2D(u_densityTexture, vUv);
-                    // If the source is transparent black (alpha < 0.1), output opaque black.
-                    // Otherwise, show the color from the simulation.
-                    if (color.a < 0.1) {
-                        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-                    } else {
-                        gl_FragColor = vec4(color.rgb, 1.0);
-                    }
+                    // Directly render the RGB color, ignoring alpha for now.
+                    // This will show us if *any* color is being written to the texture.
+                    gl_FragColor = vec4(color.rgb, 1.0);
                 }
             `,
             transparent: false,
