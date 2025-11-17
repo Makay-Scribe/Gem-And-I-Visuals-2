@@ -1,3 +1,6 @@
+*** OUTDATED - To Be Updated ***
+
+
 # Contributing to Gem-And-I-Visuals
 
 First off, thank you for considering contributing. This project is a labor of love, and every contribution helps make it better.

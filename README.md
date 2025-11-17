@@ -1,4 +1,6 @@
-# Gem-And-I-Visuals
+- ***OUTDATED - To Be Updated ***
+
+# Gem-And-I-Visuals -
 
 ## Operation Clean Slate: The GPGPU Engine Rebuild
 
