@@ -26,7 +26,7 @@
 
 ## ✅ Milestone 1: Sandbox & Hello World (DONE)
 
-**Goal:** Establish HydroSim as a new, isolated engine with UI integration.
+**Goal:** Establish HydroSim as a new, isolated engine with UI integration. The ultimate goal is not just an interactive fluid toy, but a powerful transitional effects engine. The HydroSim will act as a "texture generator" that creates the elemental appearance (fire, water, smoke) which will then be mapped onto the particles as they perform the physical motion of transitioning from the 2D plane to the 3D model.
 
 - **Files touched:**  
   - `index.html` → Added Hydro Sim button + `hydroSimControlsContainer`.  
@@ -143,7 +143,9 @@ Since you’re an amateur coder working with Cascade, here are extra components 
 
 ✅ This roadmap is now **file‑level, milestone‑based, AI‑friendly, and beginner‑friendly**. It includes tracking, debugging, and creative prompts so Cascade/Gemini can act as both fixer and collaborator.  
 
-Here’s a **separate section** you can drop directly at the bottom of your `ROADMAP.md`. It’s structured for AI reviewers to track bugs, expected outputs, and debugging notes clearly.
+------------------------------->
+
+Here’s a **separate section**. It’s structured for AI reviewers to track bugs, expected outputs, and debugging notes clearly.
 
 ---
 
@@ -217,4 +219,42 @@ For each milestone, confirm the following outputs:
 - **Debugging Notes** → AI sees past attempts and avoids repeating mistakes.  
 - **Creative Prompts** → AI knows where to brainstorm once HydroSim is stable.  
 
+------------------------>
+
+Here’s a **separate “Success Criteria” section**.It complements the Known Issues + Testing Checklist by giving you clear, milestone‑by‑milestone definitions of what “done” looks like. This way AI can mark progress confidently.
+
 ---
+
+## 🎯 Success Criteria
+
+### Milestone 1: Sandbox & Hello World
+- Hydro Sim tab visible in UI.  
+- HydroSim panel toggles correctly.  
+- HydroSimManager renders a solid black square without errors.  
+- No crashes in `main.js`, `ComputeManager.js`, or `ImagePlaneManager.js`.  
+
+### Milestone 2: Core Fluid Physics
+- Mouse splatting adds visible color to HydroSim canvas.  
+- Advect shader moves colors smoothly across canvas.  
+- Divergence shader shows expansion/compression effects.  
+- Jacobi solver stabilizes simulation (no infinite blow‑ups).  
+- Gradient shader corrects velocity field → fluid flows naturally.  
+- Debug tools (`GPGPUDebugger.js`) confirm non‑black textures.  
+
+### Milestone 3: Director Integration
+- HydroSimManager exposes clean API functions (`applyGlobalForce`, `triggerSplat`).  
+- FluidDirector can run HydroSim scripts (`runHydroScript()`).  
+- UI buttons trigger HydroSim presets correctly.  
+- Example script (“Fire & Ash”) runs end‑to‑end with visible eruption effect.  
+
+### Mid‑Term Milestones
+- Effect presets (fire → ash, paintbrush morph, cloud morphs) run reliably.  
+- ComputeManager wiring refactored for modularity.  
+- HydroSim remains self‑contained and toggleable.  
+- Cube map reflections integrated consistently across HydroSim visuals.  
+
+### Long‑Term Milestones
+- Seamless wall → effect → wall transitions across all engines.  
+- DirectorManager orchestrates autopilot, demo mode, effect launching, chatbot integration.  
+- HydroSim benchmarks stable across browsers/hardware for long DJ sessions.  
+- AI proposes new self‑contained engines/effects; presets library expanded.  

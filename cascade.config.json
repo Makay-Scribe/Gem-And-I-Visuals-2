@@ -1,0 +1,18 @@
+{
+  "model": "gemini-2.5-flash",
+  "entry": "src/main.js",
+  "contextFiles": [
+    "PROJECT_OVERVIEW.md",
+    "ROADMAP.md"
+  ],
+  "watch": [
+    "src/",
+    "compute/",
+    "managers/",
+    "shaders/"
+  ],
+  "ui": {
+    "enabled": true,
+    "port": 5174
+  }
+}

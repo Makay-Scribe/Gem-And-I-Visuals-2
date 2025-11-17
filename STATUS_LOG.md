@@ -36,4 +36,52 @@ Whenever you update, include a note like:
 - **No drift:** Success Criteria + Progress Table stay aligned with actual repo state.  
 - **Creative continuity:** Debugging notes + prompts keep AI aware of both technical and artistic goals.
 
+------------------------->
+
+EXAMPLE:
+
+## 🔄 Update Log (Template)
+
+**Date:** [YYYY‑MM‑DD]  
+**Milestone:** [Sandbox / Hello World / Core Fluid Physics / Director Integration / Mid‑Term / Long‑Term]  
+**Files touched:**  
+- [FileName.js] – [Created/Modified/Pending]  
+- [Shader.glsl] – [Created/Modified/Pending]  
+
+**Actions Taken:**  
+- [Short description of what you did]  
+- [Any debugging attempts]  
+
+**Result:**  
+- [Success / Partial Success / Failure]  
+- [Observed output, e.g., “Black canvas renders, but splat still invisible”]  
+
+**Next Steps:**  
+- [What you plan to try next]  
+
+**AI Review Prompt:**  
+> AI: Review roadmap vs repo vs current status. Suggest fixes if mismatched.
+
 ---
+
+### Example Entry
+
+```
+Date: 2025-11-17
+Milestone: Core Fluid Physics
+Files touched:
+- main.js – Modified
+- HydroSimManager.js – Modified
+- splat.glsl – Created
+Actions Taken:
+- Added mouse input handling for splat.
+- Tried exclusive return; in main.js.
+Result:
+- Failure: Black canvas renders, but splat not visible.
+Next Steps:
+- Separate event channels for camera vs HydroSimManager.
+AI Review Prompt:
+> AI: Review roadmap vs repo vs current status. Suggest fixes if mismatched.
+
+
+--------------------------->
