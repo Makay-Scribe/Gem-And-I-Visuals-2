@@ -61,8 +61,6 @@ export const UIManager = {
         this.app.ParticleTransitions.setActivePreset('default');
     },
     
-    // ** THE FIX IS HERE: This function now ONLY updates sliders from vizSettings **
-    // It is called every frame to keep the UI in sync with running animations.
     syncSlidersFromState() {
         if (!this.app) return;
         const S = this.app.vizSettings;
@@ -150,7 +148,6 @@ export const UIManager = {
     },
 
     syncManualSlidersFromState() {
-        // This function remains as-is, it's for a different system (camera controls).
         this._isProgrammaticUpdate = true;
 
         const S = this.app.vizSettings;
@@ -319,7 +316,7 @@ export const UIManager = {
             UIElements.masterSpinCheckbox.disabled = false;
             UIElements.masterSpinSpeedInput.disabled = false;
 
-        } else { // 3D Model
+        } else { 
             isAutopilotOn = S.modelAutopilotOn;
             scaleProp = 'modelScale';
             speedProp = 'modelAutopilotSpeed';
@@ -699,6 +696,14 @@ export const UIManager = {
 
         S.gpgpuGeometryMode = newSystemMode;
         this.app.ComputeManager.switchMode(newSystemMode);
+
+        if (newSystemMode === 'hydrosim') {
+            // Seed the fluid sim with the current image texture
+            const currentTex = this.app.ImagePlaneManager.currentTexture;
+            if (currentTex && this.app.HydroSimManager && typeof this.app.HydroSimManager.seedSimulation === 'function') {
+                this.app.HydroSimManager.seedSimulation(currentTex);
+            }
+        }
         
         this._updateGpgpuModeVisibility();
     },
@@ -790,30 +795,37 @@ export const UIManager = {
             });
         });
         
-        document.getElementById('fluidFireAndAsh').addEventListener('click', () => this.app.FluidDirector.run('fireAndAsh'));
+        // *** ROLLBACK: Legacy Fire Button Logic ***
+        document.getElementById('fluidFireAndAsh').addEventListener('click', () => {
+            // If we are in HydroSim mode, run the Hydro effect (Isolated)
+            if (this.app.vizSettings.gpgpuGeometryMode === 'hydrosim') {
+                this.app.HydroSimManager.startBurn();
+            } else {
+                // Otherwise, run the Particles effect
+                this.app.FluidDirector.run('fireAndAsh');
+            }
+        });
+
         document.getElementById('fluidMeltAndReform').addEventListener('click', () => this.app.FluidDirector.run('meltAndReform'));
         document.getElementById('fluidExplosion').addEventListener('click', () => this.app.FluidDirector.run('explosion'));
         document.getElementById('fluidVortex').addEventListener('click', () => this.app.FluidDirector.run('vortex'));
         document.getElementById('fluidCosmicGeode').addEventListener('click', () => this.app.FluidDirector.run('cosmicGeode'));
         document.getElementById('fluidStopAndReset').addEventListener('click', () => this.app.FluidDirector.run('reset'));
         
-        // ** THE FIX IS HERE: The event listener that interrupts the director is now separated **
         document.querySelectorAll('#particleControlsContainer input[type="range"], #fluidSimControlsContainer input[type="range"], #fluidSimControlsContainer input[type="color"]').forEach(control => {
             control.addEventListener('input', (e) => {
                 const S = this.app.vizSettings; 
                 const CM = this.app.ComputeManager; 
                 const id = e.target.id;
                 
-                // Always update vizSettings from manual input
                 if (S[id] !== undefined) {
                     S[id] = (e.target.type === 'color') ? e.target.value : parseFloat(e.target.value);
                 }
                 if(e.target.type === 'range') {
                     this.updateRangeDisplay(id, S[id]);
-                    this._sliderCache.set(id, S[id]); // Keep cache in sync with manual changes
+                    this._sliderCache.set(id, S[id]); 
                 }
 
-                // If it's a fluid sim control, interrupt the director and apply the change directly
                 if (CM?.gpuCompute && S.gpgpuGeometryMode === 'fluidsim') {
                     this.app.FluidDirector.interruptAndStop();
                     const uniformsV = CM.velocityVariable.material.uniforms;
@@ -856,7 +868,7 @@ export const UIManager = {
         document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(control => {
             if (control.closest('#fluidSimControlsContainer') || control.closest('#particleControlsContainer') || control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list')) return;
             control.addEventListener('input', (e) => {
-                this._isProgrammaticUpdate = true; // Use flag for these simple listeners
+                this._isProgrammaticUpdate = true; 
                 const id = e.target.id;
                 if (!id || this.app.vizSettings[id] === undefined) return;
                 
@@ -1082,6 +1094,7 @@ export const UIManager = {
         }
     },
     
+    // *** UPDATED: Force Texture Swap Logic (ROBUST) ***
     handleMorphSlider(progress) {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
@@ -1089,21 +1102,31 @@ export const UIManager = {
         
         const targetState = (progress > 0.5) ? 'model' : 'flat';
         
-        if (S.particle_target !== targetState) {
+        if (S.particle_target !== targetState || true) { // Force update every time to ensure sync
             S.particle_target = targetState;
             
             if (targetState === 'model') {
                 if (!this.particleModelMesh) {
-                    this.logError("No model baked. Cannot morph to 3D Model.");
-                    S.particle_morphProgress = 0.0;
+                    if (progress > 0.1) { 
+                        this.logError("No model baked. Please load & bake a model first.");
+                    }
+                    // Visual reset if no model
                     const slider = document.getElementById('particle_morphProgress');
-                    if(slider) slider.value = 0.0;
+                    if (slider) slider.value = 0.0;
+                    S.particle_morphProgress = 0.0;
                     this.updateRangeDisplay('particle_morphProgress', 0.0);
                     return;
                 }
+                
+                // Manually force the texture swap
                 CM.velocityVariable.material.uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
+                // Ensure the uniform update is flagged
+                CM.velocityVariable.material.needsUpdate = true;
+                
             } else {
+                // Manually force the texture swap back to flat
                 CM.velocityVariable.material.uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
+                CM.velocityVariable.material.needsUpdate = true;
             }
         }
     },

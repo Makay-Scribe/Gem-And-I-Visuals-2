@@ -1,37 +1,40 @@
 /*
-    advect.glsl
-
-    This shader moves a quantity (like density or velocity) through a velocity field.
-    It works by performing a backward lookup: for each grid cell (pixel), it looks at the
-    velocity at that point, traces that velocity backward in time for one time step,
-and then samples the quantity from that previous location. This effectively "pulls"
-    the quantity forward along the flow field.
+    advect.glsl (Density Version)
+    Advects DENSITY through the VELOCITY FINAL field.
 */
 
-// ** THE FIX IS HERE: We must explicitly declare uniforms used by a standalone ShaderMaterial. **
-uniform vec2 resolution;
+// Uniforms automatically injected by GPUComputationRenderer:
+// uniform sampler2D textureDensity;
+// uniform sampler2D textureVelocityFinal;
 
-uniform sampler2D u_velocity;   // The velocity field texture
-uniform sampler2D u_source;     // The texture of the quantity to be advected (e.g., density)
-uniform vec2 u_texelSize;       // The size of a single texel (1.0 / resolution)
-uniform float u_deltaTime;      // The time step for the simulation
-uniform float u_dissipation;    // A factor to make the quantity slowly fade away (e.g., 0.999)
+uniform float u_deltaTime;
+uniform float u_dissipation;
+
+// Splat Uniforms
+uniform vec4 u_splatColor;
+uniform vec2 u_point;
+uniform float u_radius;
+uniform float u_aspectRatio;
 
 void main() {
-    // We use gl_FragCoord because this shader is run on a simple plane, not a complex geometry.
     vec2 uv = gl_FragCoord.xy / resolution.xy;
 
-    // 1. Get the velocity at the current grid cell.
-    vec2 vel = texture2D(u_velocity, uv).xy;
-
-    // 2. Trace backward in time.
-    vec2 prev_pos_uv = uv - u_deltaTime * vel * u_texelSize * resolution;
-
-    // 3. Sample the source quantity from the previous position.
-    vec4 advected_quantity = texture2D(u_source, prev_pos_uv);
-
-    // 4. Apply dissipation to make the fluid slowly fade over time.
-    advected_quantity *= u_dissipation;
+    // 1. Advection
+    vec2 flowVelocity = texture(textureVelocityFinal, uv).xy;
+    vec2 prev_pos_uv = uv - u_deltaTime * flowVelocity;
     
-    gl_FragColor = advected_quantity;
+    // Read from the Density texture provided by the library
+    vec4 quantity = texture(textureDensity, prev_pos_uv);
+    
+    quantity *= u_dissipation;
+
+    // 2. Embedded Splat
+    vec2 correctedUv = uv - u_point;
+    correctedUv.x *= u_aspectRatio;
+    float dist = length(correctedUv);
+    float splat = smoothstep(u_radius, 0.0, dist);
+    
+    quantity += u_splatColor * splat;
+
+    pc_fragColor = quantity;
 }

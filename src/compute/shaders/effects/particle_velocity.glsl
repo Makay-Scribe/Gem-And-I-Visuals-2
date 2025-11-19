@@ -8,6 +8,7 @@ uniform sampler2D u_initialPosition;
 uniform vec2 u_planeDimensions; 
 
 // --- GPGPU Internal Uniforms ---
+// RESTORED: Explicitly declare these so the shader compiles when swapped.
 uniform sampler2D texturePosition;
 uniform sampler2D textureVelocity;
 

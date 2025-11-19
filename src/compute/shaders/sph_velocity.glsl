@@ -1,10 +1,11 @@
-// Artistic Position/Velocity Solver - V8 (Refactored for Unified ComputeManager)
+// Artistic Position/Velocity Solver - V10
 #include <gpgpu_common>
 
 uniform float u_time;
 uniform float u_delta;
 
 // --- GPGPU Internal Uniforms ---
+// RESTORED: We declare these manually so the shader works when swapped.
 uniform sampler2D texturePosition;
 uniform sampler2D textureVelocity;
 
@@ -15,7 +16,7 @@ uniform int u_targetState;          // 0: Canvas, 1: 3D Model
 uniform sampler2D u_initialPosition; 
 uniform sampler2D u_modelPosition;
 
-// --- Artistic Uniforms (Renamed for Uniqueness) ---
+// --- Artistic Uniforms ---
 uniform float fluid_attractionStrength; 
 uniform float u_flowStrength;
 uniform float u_flowScale;
@@ -28,18 +29,18 @@ uniform float fluid_curlStrength;
 uniform float fluid_curlScale;    
 uniform float fluid_curlSpeed;    
 
-// ** NEW: Cohesion Uniforms **
+// --- Cohesion ---
 uniform float u_cohesionStrength;
 uniform sampler2D u_blurredPosition;
 
-// --- Physics Constants (Simplified) ---
+// --- Physics Constants ---
 const float PARTICLE_MASS = 1.0;
 const float DAMPING = 0.95;
 
 uniform float u_worldSize;
 
 
-// --- Curl Noise Function (Relies on snoise from gpgpu_common) ---
+// --- Curl Noise Function ---
 vec3 curlNoise( vec3 p, float scale, float speed ) {
     float t = u_time * speed;
     vec3 p_scaled = p * scale + t;
@@ -101,7 +102,6 @@ void main() {
             vortexForce = vec3(swirlDir, 0.0) * u_vortexStrength / (1.0 + dist * 0.1);
         }
         
-        // ** NEW: Calculate Cohesion Force **
         vec3 cohesionForce = vec3(0.0);
         if (u_cohesionStrength > 0.0) {
             vec3 blurredPos = texture(u_blurredPosition, uv).xyz;

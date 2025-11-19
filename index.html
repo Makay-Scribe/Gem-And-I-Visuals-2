@@ -5,14 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visualizer - Rebuilt Foundation</title>
     <link rel="icon" href="data:;base64,=">
-    <!-- Three.js and Addons -->
-
-    <!-- 
-      NOTE: All old butterchurn <script> tags for the v2 engine have been moved to the public folder.
-      They will be loaded dynamically by the ButterchurnManager when needed.
-    -->
-    
-</head><body>
+    <!-- Three.js and Addons are imported via modules in main.js -->
+</head>
+<body>
 
     <button id="controlsToggleButton">Show</button>
     <div id="controlsPanel" class="controls-panel">
@@ -145,6 +140,20 @@
                     <button class="segmented-control-button" data-mode="fluidsim">Fluid Sim</button>
                     <button class="segmented-control-button" data-mode="hydrosim">Hydro Sim</button>
                 </div>
+
+                <!-- GLOBAL TRANSITION BUTTONS (Visible in all GPGPU modes) -->
+                <p class="sub-group-title">TRANSITIONS</p>
+                <div class="button-row" id="fluid-preset-buttons-row1" style="margin-bottom: 3px;">
+                    <button id="fluidMeltAndReform">Melt</button>
+                    <button id="fluidExplosion">Explosion</button>
+                    <button id="fluidVortex">Vortex</button>
+                </div>
+                <div class="button-row" id="fluid-preset-buttons-row2">
+                    <button id="fluidFireAndAsh">Fire & Ash</button>
+                    <button id="fluidCosmicGeode" class="button-glow-effect">Geode</button>
+                    <button id="fluidStopAndReset">Stop & Reset</button>
+                </div>
+                <hr style="border-color: #333; margin: 6px 0;">
 
                 <div id="deformationControlsContainer" style="display: none;">
                     <div class="accordion-item">
@@ -480,18 +489,6 @@
                     </div>
                     <label>Attraction (Morph): <span id="fluidAttractionValue" class="range-value-display"></span></label>
                     <input type="range" id="fluidAttraction" min="0.0" max="3.0" step="0.05" value="0.0">
-                    
-                    <p class="sub-group-title">FLUID TRANSITIONS</p>
-                    <div class="button-row" id="fluid-preset-buttons-row1" style="margin-bottom: 3px;">
-                        <button id="fluidMeltAndReform">Melt</button>
-                        <button id="fluidExplosion">Explosion</button>
-                        <button id="fluidVortex">Vortex</button>
-                    </div>
-                    <div class="button-row" id="fluid-preset-buttons-row2">
-                        <button id="fluidFireAndAsh">Fire & Ash</button>
-                        <button id="fluidCosmicGeode" class="button-glow-effect">Geode</button>
-                        <button id="fluidStopAndReset">Stop & Reset</button>
-                    </div>
 
                     <div class="accordion-item">
                         <button class="accordion-header">Force & Effect Sliders</button>
@@ -529,7 +526,6 @@
                             </div>
                             <input type="range" id="particle_twinkleIntensity" min="0.0" max="1.0" step="0.01" value="0.0">
                             
-                            <!-- ** NEW DEBUG SLIDERS ** -->
                             <hr style="border-color: #333; margin: 6px 0;">
                             <p class="sub-group-title">DEBUG STATE</p>
                             <label>Fire Visuals: <span id="fire_visual_progressValue" class="range-value-display"></span></label>
@@ -851,9 +847,10 @@
                 
                 <label for="gpgpuDebugSystemSelect">System</label>
                 <select id="gpgpuDebugSystemSelect">
-                    <option value="landscape" selected>Landscape/Deformation</option>
+                    <option value="landscape">Landscape/Deformation</option>
                     <option value="particles">Particles</option>
                     <option value="fluidsim">Fluid Sim</option>
+                    <option value="hydrosim">Hydro Sim</option>
                 </select>
 
                 <label for="gpgpuDebugTextureSelect">Texture</label>

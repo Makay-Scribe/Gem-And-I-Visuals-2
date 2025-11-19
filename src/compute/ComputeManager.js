@@ -16,21 +16,18 @@ import sphPositionShader from './shaders/sph_position.glsl?raw';
 import particleVelocityShader from './shaders/effects/particle_velocity.glsl?raw';
 import fluidVelocityShader from './shaders/sph_velocity.glsl?raw';
 
-// ** NEW: A simple box blur shader for our cohesion effect **
 const _blurShader = `
     uniform sampler2D tInput;
     uniform vec2 u_texelSize;
     varying vec2 vUv;
 
     void main() {
-        // Sample the center pixel and its four direct neighbors
         vec4 center = texture2D(tInput, vUv);
         vec4 right  = texture2D(tInput, vUv + vec2(u_texelSize.x, 0.0));
         vec4 left   = texture2D(tInput, vUv - vec2(u_texelSize.x, 0.0));
         vec4 up     = texture2D(tInput, vUv + vec2(0.0, u_texelSize.y));
         vec4 down   = texture2D(tInput, vUv - vec2(0.0, u_texelSize.y));
 
-        // Average the positions to get the blurred result
         gl_FragColor = (center + right + left + up + down) / 5.0;
     }
 `;
@@ -52,9 +49,8 @@ export const ComputeManager = {
     HEIGHT: 0,
     AREA: 0,
     
-    // ** NEW: Cohesion Effect Infrastructure **
-    blurPass: null, // Holds scene, camera, material for the blur pass
-    blurredPositionTexture: null, // The output of the blur pass
+    blurPass: null,
+    blurredPositionTexture: null,
 
     // --- Landscape/Deformation System ---
     landscapeGpuCompute: null,
@@ -87,8 +83,14 @@ export const ComputeManager = {
         this.app.THREE.ShaderChunk['gpgpu_peel'] = peelShader;
 
         this._setupUnifiedParticleSimulation();
-        // NOTE: We do not init HydroSimManager here. It's initialized in main.js
-        // and ComputeManager will just act as a router to it.
+    },
+    
+    // Helper to remove uniforms that GPUComputationRenderer adds automatically
+    _stripUniforms(shaderCode) {
+        let code = shaderCode;
+        code = code.replace(/uniform\s+sampler2D\s+texturePosition\s*;/g, '');
+        code = code.replace(/uniform\s+sampler2D\s+textureVelocity\s*;/g, '');
+        return code;
     },
 
     switchMode(newMode, isInitial = false) {
@@ -110,13 +112,24 @@ export const ComputeManager = {
 
         const isParticleOrFluid = (newMode === 'particles' || newMode === 'fluidsim');
         const isLandscape = (newMode === 'faceted' || newMode === 'geocube');
-        const isHydroSim = (newMode === 'hydrosim');
-
+        
         if (isParticleOrFluid) {
-            const velShader = (newMode === 'fluidsim') ? this._fluidVelocityShader : this._particleVelocityShader;
+            let velShader = (newMode === 'fluidsim') ? this._fluidVelocityShader : this._particleVelocityShader;
+            
+            // Manually re-inject dependencies if missing (for manual swap)
+            const headerInjection = `
+                uniform sampler2D texturePosition;
+                uniform sampler2D textureVelocity;
+            `;
+            
+            if (!velShader.includes('uniform sampler2D texturePosition;')) {
+                velShader = headerInjection + "\n" + velShader;
+            }
+
             if (this.velocityVariable.material.fragmentShader !== velShader) {
                 this.velocityVariable.material.fragmentShader = velShader;
                 this.velocityVariable.material.needsUpdate = true;
+                this.gpuCompute.setVariableDependencies(this.velocityVariable, [this.positionVariable, this.velocityVariable]);
             }
         }
         
@@ -124,8 +137,6 @@ export const ComputeManager = {
             this.initLandscapeSystem();
         }
         
-        // No specific setup needed for hydrosim here yet, as it's self-contained.
-
         if (!isInitial) {
             this.app.ImagePlaneManager.createDefaultLandscape();
         }
@@ -170,6 +181,7 @@ export const ComputeManager = {
         this.landscapeGpuCompute.setVariableDependencies(this.landscapePositionVariable, [this.landscapePositionVariable, this.landscapePreviousPositionVariable]);
         this.landscapeGpuCompute.setVariableDependencies(this.landscapePreviousPositionVariable, [this.landscapePositionVariable]);
 
+        // Initialize with defaults, updated in render loop
         const uniforms = {
             u_initialPosition: { value: this.landscapeInitialPositionTexture },
             u_time: { value: 0 },
@@ -259,7 +271,6 @@ export const ComputeManager = {
         const renderer = this.app.renderer;
         this.gpuCompute = new GPUComputationRenderer(this.WIDTH, this.HEIGHT, renderer);
 
-        // ** NEW: Setup for the blur pass **
         this.blurPass = {};
         this.blurPass.scene = new this.app.THREE.Scene();
         this.blurPass.camera = new this.app.THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -292,8 +303,12 @@ export const ComputeManager = {
         
         this._fillInitialParticleData(dtPosition.image.data, dtVelocity.image.data);
         this._fillInitialParticleData(this.particleFlatPositionTexture.image.data, []);
+        this.particleFlatPositionTexture.needsUpdate = true; 
 
-        this.velocityVariable = this.gpuCompute.addVariable("textureVelocity", this._particleVelocityShader, dtVelocity);
+        // Use stripped shader for init to avoid "Redefinition" error
+        const velShaderStripped = this._stripUniforms(this._particleVelocityShader);
+        
+        this.velocityVariable = this.gpuCompute.addVariable("textureVelocity", velShaderStripped, dtVelocity);
         this.positionVariable = this.gpuCompute.addVariable("texturePosition", sphPositionShader, dtPosition);
 
         this.gpuCompute.setVariableDependencies(this.velocityVariable, [this.positionVariable, this.velocityVariable]);
@@ -327,7 +342,6 @@ export const ComputeManager = {
         vUniforms['fluid_curlScale'] = { value: D.fluid_curlScale };
         vUniforms['fluid_curlSpeed'] = { value: D.fluid_curlSpeed };
         vUniforms['fluid_attractionStrength'] = { value: 0.0 };
-        // ** NEW: Cohesion uniforms added to the main velocity shader **
         vUniforms['u_cohesionStrength'] = { value: 0.0 };
         vUniforms['u_blurredPosition'] = { value: this.blurredPositionTexture };
 
@@ -354,7 +368,7 @@ export const ComputeManager = {
         u.particle_morphProgress.value = D.particle_morphProgress;
         u.u_gravityWellStrength.value = 0.0;
         u.u_orbitalStrength.value = 0.0;
-        u.u_cohesionStrength.value = D.particle_cohesionStrength; // Reset cohesion
+        u.u_cohesionStrength.value = D.particle_cohesionStrength;
     },
 
     _resetFluidUniforms() {
@@ -369,7 +383,7 @@ export const ComputeManager = {
         u.fluid_curlScale.value = D.fluid_curlScale;
         u.fluid_curlSpeed.value = D.fluid_curlSpeed;
         u.u_physicsState.value = 0;
-        u.u_cohesionStrength.value = D.fluid_cohesionStrength; // Reset cohesion
+        u.u_cohesionStrength.value = D.fluid_cohesionStrength;
     },
 
     _fillInitialParticleData(positionData, velocityData) {
@@ -462,16 +476,16 @@ export const ComputeManager = {
             if (this.particleFlatPositionTexture) this.particleFlatPositionTexture.dispose();
             if (this.particleModelPositionTexture) this.particleModelPositionTexture.dispose();
             if (this.particleModelUVTexture) this.particleModelUVTexture.dispose();
-            if (this.blurPass && this.blurPass.renderTarget) this.blurPass.renderTarget.dispose(); // ** NEW **
-            if (this.blurPass && this.blurPass.material) this.blurPass.material.dispose(); // ** NEW **
+            if (this.blurPass && this.blurPass.renderTarget) this.blurPass.renderTarget.dispose();
+            if (this.blurPass && this.blurPass.material) this.blurPass.material.dispose();
             this.gpuCompute = null;
             this.positionVariable = null;
             this.velocityVariable = null;
             this.particleFlatPositionTexture = null;
             this.particleModelPositionTexture = null;
             this.particleModelUVTexture = null;
-            this.blurPass = null; // ** NEW **
-            this.blurredPositionTexture = null; // ** NEW **
+            this.blurPass = null;
+            this.blurredPositionTexture = null;
             console.log("Unified Particle GPGPU system disposed.");
         }
     },
@@ -480,18 +494,20 @@ export const ComputeManager = {
         const S = this.app.vizSettings;
         const A = this.app.AudioProcessor;
         
-        const isParticleOrFluid = (this._currentMode === 'particles' || this._currentMode === 'fluidsim');
-        const isLandscape = (this._currentMode === 'faceted' || this._currentMode === 'geocube');
-        const isHydroSim = (this._currentMode === 'hydrosim');
+        const mode = this._currentMode;
 
-        if (isHydroSim) {
+        if (mode === 'hydrosim') {
             this.app.HydroSimManager.update(delta);
-            return; // Exit early, as HydroSim is self-contained.
+            return; // Exclusively run Hydro
         }
+
+        const isParticleOrFluid = (mode === 'particles' || mode === 'fluidsim');
+        const isLandscape = (mode === 'faceted' || mode === 'geocube');
 
         if (isLandscape && this.landscapeGpuCompute) {
             const uniforms = this.landscapePositionVariable.material.uniforms;
             
+            // RESTORED: Landscape Uniform Updates
             if (S.gpgpu_enableCloth && this.clothEnableTime < 0) this.clothEnableTime = this.app.currentTime;
             else if (!S.gpgpu_enableCloth) this.clothEnableTime = -1;
     
@@ -580,14 +596,14 @@ export const ComputeManager = {
             pUniforms.u_delta.value = delta;
             
             let cohesion = 0;
-            if (this._currentMode === 'particles') {
+            if (mode === 'particles') { // Only run for 'particles', not 'hydrosim'
                 cohesion = S.particle_cohesionStrength;
                 vUniforms.particle_flowScale.value = S.particle_flowScale;
                 vUniforms.particle_flowSpeed.value = S.particle_flowSpeed;
                 vUniforms.particle_flowStrength.value = S.particle_flowStrength;
                 vUniforms.particle_morphProgress.value = S.particle_morphProgress;
                 vUniforms.particle_attractionStrength.value = S.particle_attractionStrength;
-            } else if (this._currentMode === 'fluidsim') {
+            } else if (mode === 'fluidsim') {
                 cohesion = S.fluid_cohesionStrength;
                 const isDirectorActive = this.app.FluidDirector.activeScript;
                 
@@ -605,19 +621,13 @@ export const ComputeManager = {
 
             this.gpuCompute.compute();
 
-            // ** NEW: Run the blur pass if cohesion is active **
             if (cohesion > 0 && this.blurPass) {
                 const renderer = this.app.renderer;
-                const currentRenderTarget = renderer.getRenderTarget(); // Save current state
-
-                // Set the input for the blur shader to the output of the position pass
+                const currentRenderTarget = renderer.getRenderTarget();
                 this.blurPass.material.uniforms.tInput.value = this.gpuCompute.getCurrentRenderTarget(this.positionVariable).texture;
-
-                // Render the blur pass to our dedicated render target
                 renderer.setRenderTarget(this.blurPass.renderTarget);
                 renderer.render(this.blurPass.scene, this.blurPass.camera);
-                
-                renderer.setRenderTarget(currentRenderTarget); // Restore original state
+                renderer.setRenderTarget(currentRenderTarget);
             }
         }
     }

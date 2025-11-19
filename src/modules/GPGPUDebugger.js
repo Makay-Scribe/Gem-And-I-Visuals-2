@@ -53,9 +53,10 @@ export const GPGPUDebugger = {
     viewSelect: null,
     pixelValueDisplay: null,
 
-    debugSystem: 'particles',
-    debugTexture: 'position',
-    debugView: 'world',
+    // --- DEFAULT SETTINGS FOR OUR DEBUGGING SESSION ---
+    debugSystem: 'hydrosim',
+    debugTexture: 'density',
+    debugView: 'raw',
 
     isMouseOver: false,
     mouse: null, 
@@ -69,6 +70,11 @@ export const GPGPUDebugger = {
         this.textureSelect = document.getElementById('gpgpuDebugTextureSelect');
         this.viewSelect = document.getElementById('gpgpuDebugViewSelect');
         this.pixelValueDisplay = document.getElementById('gpgpuDebugPixelValue');
+
+        // --- APPLY DEFAULTS TO THE UI ON STARTUP ---
+        if (this.systemSelect) this.systemSelect.value = this.debugSystem;
+        if (this.viewSelect) this.viewSelect.value = this.debugView;
+
 
         this.scene = new this.app.THREE.Scene();
         const aspect = window.innerWidth / window.innerHeight;
@@ -111,12 +117,16 @@ export const GPGPUDebugger = {
         }
 
         this.updateTextureOptions();
+        // Set the texture dropdown AFTER it has been populated
+        if (this.textureSelect) this.textureSelect.value = this.debugTexture;
+
         console.log("Upgraded GPGPU Debugger initialized.");
     },
 
     updateTextureOptions() {
         if (!this.textureSelect) return;
 
+        const currentVal = this.textureSelect.value;
         this.textureSelect.innerHTML = '';
         const addOption = (value, text) => {
             const opt = document.createElement('option');
@@ -125,16 +135,24 @@ export const GPGPUDebugger = {
             this.textureSelect.appendChild(opt);
         };
 
-        addOption('position', 'Position');
-
         if (this.debugSystem === 'landscape') {
+            addOption('position', 'Position');
             addOption('previousPosition', 'Previous Position');
-        }
-        
-        if (this.debugSystem === 'particles' || this.debugSystem === 'fluidsim') {
+        } else if (this.debugSystem === 'particles' || this.debugSystem === 'fluidsim') {
+            addOption('position', 'Position');
             addOption('velocity', 'Velocity');
+        } else if (this.debugSystem === 'hydrosim') {
+            addOption('density', 'Density (Color)');
+            addOption('velocity', 'Velocity');
+            addOption('pressure', 'Pressure');
+            addOption('divergence', 'Divergence');
         }
         
+        // Try to restore previous selection, or default to the first option
+        const matchingOption = Array.from(this.textureSelect.options).some(opt => opt.value === currentVal);
+        if (matchingOption) {
+            this.textureSelect.value = currentVal;
+        }
         this.debugTexture = this.textureSelect.value;
     },
 
@@ -178,34 +196,48 @@ export const GPGPUDebugger = {
         if (!this.mesh || !this.app.vizSettings.enableGPGPUDebugger) return;
 
         const CM = this.app.ComputeManager;
+        const HM = this.app.HydroSimManager; // Get a reference to the HydroSimManager
         let computeInstance = null;
         let variable = null;
         let worldSize = 40.0;
         let resolution = { x: 0, y: 0 };
 
-        // --- BUG FIX: POINT TO THE CORRECT GPGPU INSTANCES AND VARIABLES ---
         switch (this.debugSystem) {
             case 'landscape':
-                computeInstance = CM.landscapeGpuCompute; // Correct instance
+                computeInstance = CM.landscapeGpuCompute;
                 if (computeInstance) {
-                    variable = this.debugTexture === 'position' ? CM.landscapePositionVariable : CM.landscapePreviousPositionVariable; // Correct variables
+                    variable = this.debugTexture === 'position' ? CM.landscapePositionVariable : CM.landscapePreviousPositionVariable;
                     worldSize = this.app.ImagePlaneManager.planeDimensions.x;
                     resolution.x = this.app.ImagePlaneManager.planeResolution.x;
                     resolution.y = this.app.ImagePlaneManager.planeResolution.y;
                 }
                 break;
             case 'particles':
-            case 'fluidsim': // Particles and Fluid sim share the same unified engine
-                computeInstance = CM.gpuCompute; // Correct instance
+            case 'fluidsim':
+                computeInstance = CM.gpuCompute;
                 if (computeInstance) {
-                    variable = this.debugTexture === 'position' ? CM.positionVariable : CM.velocityVariable; // Correct variables
+                    variable = this.debugTexture === 'position' ? CM.positionVariable : CM.velocityVariable;
                     worldSize = this.app.ImagePlaneManager.planeDimensions.x;
                     resolution.x = this.app.vizSettings.particle_resolution;
                     resolution.y = this.app.vizSettings.particle_resolution;
                 }
                 break;
+            case 'hydrosim': // --- NEW LOGIC ---
+                computeInstance = HM.gpuCompute; // Point to the correct GPGPU instance
+                if (computeInstance) {
+                    // Map the dropdown value to the correct variable in HydroSimManager
+                    switch (this.debugTexture) {
+                        case 'density':    variable = HM.densityVariable; break;
+                        case 'velocity':   variable = HM.velocityVariable; break;
+                        case 'pressure':   variable = HM.pressureVariable; break;
+                        case 'divergence': variable = HM.divergenceVariable; break;
+                    }
+                    worldSize = 1.0; // For hydro sim, world size is not relevant, we look at raw data
+                    resolution.x = HM.SIM_RESOLUTION;
+                    resolution.y = HM.SIM_RESOLUTION;
+                }
+                break;
         }
-        // --- END BUG FIX ---
 
         if (!computeInstance || !variable) {
             this.mesh.visible = false;

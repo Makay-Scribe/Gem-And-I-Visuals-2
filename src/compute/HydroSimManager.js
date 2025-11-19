@@ -1,203 +1,192 @@
 import THREE from '../three-singleton.js';
 import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
 
-// Import all our shaders
-import splatShader from './shaders/hydro/splat.glsl?raw';
-import advectShader from './shaders/hydro/advect.glsl?raw';
+import advectDensityShader from './shaders/hydro/advect.glsl?raw';
+import advectVelocityShader from './shaders/hydro/advect_velocity.glsl?raw';
 import divergenceShader from './shaders/hydro/divergence.glsl?raw';
 import jacobiShader from './shaders/hydro/jacobi.glsl?raw';
 import gradientShader from './shaders/hydro/gradient.glsl?raw';
+import splatFromTextureShader from './shaders/hydro/splat_from_texture.glsl?raw';
 
 export const HydroSimManager = {
     app: null,
     gpuCompute: null,
     
-    // --- GPGPU Variables (Data Containers ONLY) ---
     densityVariable: null,
     velocityVariable: null,
     pressureVariable: null,
     divergenceVariable: null,
-
-    // --- Shader Materials (Our Hand Tools) ---
-    splatMaterial: null,
-    advectMaterial: null,
-    divergenceMaterial: null,
-    jacobiMaterial: null,
-    gradientMaterial: null,
+    velocityFinalVariable: null,
     
-    // --- Simulation Constants ---
-    SIM_RESOLUTION: 256,
+    seedMaterial: null, 
     
-    // --- Interaction State ---
-    _splatQueue: [],
-    _splatColorVec4: new THREE.Vector4(), // Reusable vector to avoid creating new objects in the loop
+    // Updated Resolution for better quality
+    SIM_RESOLUTION: 1024, 
 
+    // State
+    isBurning: false,
+    
     init(appInstance) {
         this.app = appInstance;
         const renderer = this.app.renderer;
-
-        console.log("Initializing Hydro Sim Manager (Grass Roots Architecture)...");
+        console.log("Initializing Hydro Sim Manager (Fire Ready)...");
 
         this.gpuCompute = new GPUComputationRenderer(this.SIM_RESOLUTION, this.SIM_RESOLUTION, renderer);
 
-        // --- Create Textures ---
+        // Create Textures
         const densityTexture = this.gpuCompute.createTexture();
         const velocityTexture = this.gpuCompute.createTexture();
-        const pressureTexture = this.gpuCompute.createTexture();
         const divergenceTexture = this.gpuCompute.createTexture();
+        const pressureTexture = this.gpuCompute.createTexture();
+        const velocityFinalTexture = this.gpuCompute.createTexture();
         
-        // --- Create GPGPU Variables (as "Dumb" Texture Holders) ---
-        const placeholderShader = `void main() { gl_FragColor = vec4(0.0); }`;
-        this.densityVariable = this.gpuCompute.addVariable('textureDensity', placeholderShader, densityTexture);
-        this.velocityVariable = this.gpuCompute.addVariable('textureVelocity', placeholderShader, velocityTexture);
-        this.pressureVariable = this.gpuCompute.addVariable('texturePressure', placeholderShader, pressureTexture);
-        this.divergenceVariable = this.gpuCompute.addVariable('textureDivergence', placeholderShader, divergenceTexture);
+        // Create Variables
+        this.densityVariable = this.gpuCompute.addVariable('textureDensity', advectDensityShader, densityTexture);
+        this.velocityVariable = this.gpuCompute.addVariable('textureVelocity', advectVelocityShader, velocityTexture);
+        this.divergenceVariable = this.gpuCompute.addVariable('textureDivergence', divergenceShader, divergenceTexture);
+        this.pressureVariable = this.gpuCompute.addVariable('texturePressure', jacobiShader, pressureTexture);
+        this.velocityFinalVariable = this.gpuCompute.addVariable('textureVelocityFinal', gradientShader, velocityFinalTexture);
 
-        this.gpuCompute.setVariableDependencies(this.densityVariable, []);
-        this.gpuCompute.setVariableDependencies(this.velocityVariable, []);
-        this.gpuCompute.setVariableDependencies(this.pressureVariable, []);
-        this.gpuCompute.setVariableDependencies(this.divergenceVariable, []);
+        // Dependencies
+        this.gpuCompute.setVariableDependencies(this.densityVariable, [this.densityVariable, this.velocityFinalVariable]);
+        this.gpuCompute.setVariableDependencies(this.velocityVariable, [this.velocityVariable, this.velocityFinalVariable]);
+        this.gpuCompute.setVariableDependencies(this.divergenceVariable, [this.velocityVariable]);
+        this.gpuCompute.setVariableDependencies(this.pressureVariable, [this.pressureVariable, this.divergenceVariable]);
+        this.gpuCompute.setVariableDependencies(this.velocityFinalVariable, [this.velocityVariable, this.pressureVariable]);
         
-        // --- Manually Create EVERY Material We Will Use ---
-        // ** THE FIX IS HERE: u_color is now a vec4 for better data integrity **
-        this.splatMaterial = this._createShaderMaterial(splatShader, { u_target: { value: null }, u_aspectRatio: { value: 1.0 }, u_color: { value: new THREE.Vector4() }, u_point: { value: new THREE.Vector2() }, u_radius: { value: 0.0 } });
-        this.advectMaterial = this._createShaderMaterial(advectShader, { u_velocity: { value: null }, u_source: { value: null }, u_dissipation: { value: 0.0 } });
-        this.divergenceMaterial = this._createShaderMaterial(divergenceShader, { u_velocity: { value: null } });
-        this.gradientMaterial = this._createShaderMaterial(gradientShader, { u_pressure: { value: null }, u_velocity: { value: null } });
-        this.jacobiMaterial = this._createShaderMaterial(jacobiShader, { u_pressure: { value: null }, u_divergence: { value: null }, u_alpha: { value: -1.0 }, u_rbeta: { value: 0.25 } });
-        
+        // Common Uniforms
+        const allVars = [this.densityVariable, this.velocityVariable, this.divergenceVariable, this.pressureVariable, this.velocityFinalVariable];
+        allVars.forEach(v => {
+            v.material.uniforms.u_time = { value: 0.0 };
+            v.material.uniforms.u_deltaTime = { value: 0.0 };
+            v.material.uniforms.u_texelSize = { value: new THREE.Vector2(1.0/this.SIM_RESOLUTION, 1.0/this.SIM_RESOLUTION) };
+        });
+
+        // Advection Uniforms
+        [this.densityVariable, this.velocityVariable].forEach(v => {
+            // Default Density Dissipation = 1.0 (Static Image / No Fade)
+            // Default Velocity Dissipation = 0.98 (Dampen motion)
+            v.material.uniforms.u_dissipation = { value: (v === this.densityVariable) ? 1.0 : 0.98 };
+            v.material.uniforms.u_splatColor = { value: new THREE.Vector4(0,0,0,0) };
+            v.material.uniforms.u_point = { value: new THREE.Vector2() };
+            v.material.uniforms.u_radius = { value: 0.0 };
+            v.material.uniforms.u_aspectRatio = { value: 1.0 };
+            
+            // Fire / Time Uniforms
+            v.material.uniforms.u_fireActive = { value: false };
+            v.material.uniforms.u_time = { value: 0.0 };
+        });
+
+        this.pressureVariable.material.uniforms.u_alpha = { value: -1.0 };
+        this.pressureVariable.material.uniforms.u_rbeta = { value: 0.25 };
+
         const error = this.gpuCompute.init();
-        if (error !== null) {
-            console.error("HydroSimManager GPGPU Init Error:", error);
-        } else {
-            console.log("HydroSimManager GPGPU Initialized Successfully.");
-        }
-    },
+        if (error !== null) { console.error("HydroSimManager Init Error:", error); }
 
-    _createShaderMaterial(fragmentShader, uniforms = {}) {
-        return new THREE.ShaderMaterial({
+        // --- Setup Seeding Material ---
+        this.seedMaterial = new THREE.ShaderMaterial({
             uniforms: {
-                resolution: { value: new THREE.Vector2(this.SIM_RESOLUTION, this.SIM_RESOLUTION) },
-                u_texelSize: { value: new THREE.Vector2(1.0 / this.SIM_RESOLUTION, 1.0 / this.SIM_RESOLUTION) },
-                u_deltaTime: { value: 0.0 },
-                ...uniforms
+                u_splatTexture: { value: null },
+                u_target: { value: null },
+                resolution: { value: new THREE.Vector2(this.SIM_RESOLUTION, this.SIM_RESOLUTION) }
             },
-            vertexShader: `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-            fragmentShader: fragmentShader,
-        });
-    },
-    
-    applySplat(point, color, radius) {
-        // console.log(`Applying splat: UV(${point.x.toFixed(2)}, ${point.y.toFixed(2)}), Color(${color.x.toFixed(2)}, ${color.y.toFixed(2)}, ${color.z.toFixed(2)}), Radius(${radius})`);
-        this._splatQueue.push({
-            point: point.clone(),
-            color: color.clone(),
-            radius: radius,
-            isForce: false
+            vertexShader: `void main() { gl_Position = vec4( position, 1.0 ); }`,
+            fragmentShader: splatFromTextureShader
         });
     },
 
-    applyForceSplat(point, force, radius) {
-        // console.log(`Applying force: UV(${point.x.toFixed(2)}, ${point.y.toFixed(2)}), Force(${force.x.toFixed(2)}, ${force.y.toFixed(2)}), Radius(${radius})`);
-        this._splatQueue.push({
-            point: point.clone(),
-            color: force.clone(), // color uniform is used for force vector
-            radius: radius,
-            isForce: true
-        });
+    // Seeds the simulation with an image texture (Resetting state)
+    seedSimulation(sourceTexture) {
+        if (!this.gpuCompute || !sourceTexture) return;
+        
+        console.log("Seeding HydroSim...");
+        
+        // Reset State
+        this.isBurning = false;
+        this.densityVariable.material.uniforms.u_dissipation.value = 1.0; // Stop fading
+        this.velocityVariable.material.uniforms.u_dissipation.value = 0.98; 
+        this.velocityVariable.material.uniforms.u_fireActive.value = false;
+
+        const currentRenderTarget = this.gpuCompute.getCurrentRenderTarget(this.densityVariable);
+        const alternateRenderTarget = this.gpuCompute.getAlternateRenderTarget(this.densityVariable);
+
+        // Render Image -> Density
+        this.seedMaterial.uniforms.u_splatTexture.value = sourceTexture;
+        this.seedMaterial.uniforms.u_target.value = currentRenderTarget.texture;
+        
+        this.gpuCompute.doRenderTarget(this.seedMaterial, alternateRenderTarget);
+        this.densityVariable.renderTargets.reverse();
+        
+        // Optional: Clear velocity on seed to stop old movement
+        // (Requires a separate clear shader, skipping for now as it's usually fine)
+    },
+
+    // Triggers the fire effect
+    startBurn() {
+        if (this.isBurning) return;
+        console.log("IGNITION: Starting fire simulation.");
+        
+        this.isBurning = true;
+        
+        // Enable dissipation so the smoke eventually fades away
+        this.densityVariable.material.uniforms.u_dissipation.value = 0.995; 
     },
     
+    _currentSplat: null,
+    applySplat(point, color, radius) { this._currentSplat = { point, color: new THREE.Vector4(color.r, color.g, color.b, 1.0), radius, isForce: false }; },
+    applyForceSplat(point, force, radius) { this._currentSplat = { point, color: new THREE.Vector4(force.x, force.y, force.z, 0.0), radius, isForce: true }; },
+
     update(delta) {
         if (!this.gpuCompute) return;
-        
-        const renderer = this.app.renderer;
-        const currentRenderTarget = renderer.getRenderTarget();
-    
-        // 1. Advection Pass (move existing velocity and density through the velocity field)
-        let velSource = this.gpuCompute.getCurrentRenderTarget(this.velocityVariable);
-        let velDest = this.gpuCompute.getAlternateRenderTarget(this.velocityVariable);
-        this.advectMaterial.uniforms.u_velocity.value = velSource.texture;
-        this.advectMaterial.uniforms.u_source.value = velSource.texture;
-        this.advectMaterial.uniforms.u_dissipation.value = 0.99; // Velocity dissipates slowly
-        this.advectMaterial.uniforms.u_deltaTime.value = delta;
-        this.gpuCompute.doRenderTarget(this.advectMaterial, velDest);
 
-        let densitySource = this.gpuCompute.getCurrentRenderTarget(this.densityVariable);
-        let densityDest = this.gpuCompute.getAlternateRenderTarget(this.densityVariable);
-        this.advectMaterial.uniforms.u_velocity.value = velDest.texture; // Use the newly advected velocity
-        this.advectMaterial.uniforms.u_source.value = densitySource.texture;
-        this.advectMaterial.uniforms.u_dissipation.value = 0.998; // Density dissipates very slowly
-        this.gpuCompute.doRenderTarget(this.advectMaterial, densityDest);
-    
-        // Swap buffers so the results of advection are now the "source" for the next steps
-        this.gpuCompute.swapBuffers(this.velocityVariable);
-        this.gpuCompute.swapBuffers(this.densityVariable);
-        
-
-        // 2. Splatting Pass (add new forces and density from the queue)
-        // ** THE FIX IS HERE: Refactored splatting to be correct and more efficient. **
-        const splatUniforms = this.splatMaterial.uniforms;
-        
-        // Process force splats on the velocity texture
-        this._splatQueue.forEach(splat => {
-            if (!splat.isForce) return;
-
-            splatUniforms.u_point.value.copy(splat.point);
-            splatUniforms.u_radius.value = splat.radius;
-            this._splatColorVec4.set(splat.color.x, splat.color.y, splat.color.z, 0.0); // Set w to 0 for forces
-            splatUniforms.u_color.value.copy(this._splatColorVec4);
+        this.gpuCompute.variables.forEach(v => {
+            v.material.uniforms.u_deltaTime.value = delta;
+            v.material.uniforms.u_time.value = this.app.currentTime;
             
-            let source = this.gpuCompute.getCurrentRenderTarget(this.velocityVariable);
-            let dest = this.gpuCompute.getAlternateRenderTarget(this.velocityVariable);
-            splatUniforms.u_target.value = source.texture;
-            this.gpuCompute.doRenderTarget(this.splatMaterial, dest);
-            this.gpuCompute.swapBuffers(this.velocityVariable);
+            // Sync Fire State
+            if (v.material.uniforms.u_fireActive) {
+                v.material.uniforms.u_fireActive.value = this.isBurning;
+            }
         });
 
-        // Process color splats on the density texture
-        this._splatQueue.forEach(splat => {
-            if (splat.isForce) return;
-            
-            splatUniforms.u_point.value.copy(splat.point);
-            splatUniforms.u_radius.value = splat.radius;
-            this._splatColorVec4.set(splat.color.x, splat.color.y, splat.color.z, 1.0); // Set w to 1 for colors
-            splatUniforms.u_color.value.copy(this._splatColorVec4);
+        // 1. Handle Manual Splats
+        const zeroVec = new THREE.Vector4(0,0,0,0);
+        this.densityVariable.material.uniforms.u_splatColor.value.copy(zeroVec);
+        this.velocityVariable.material.uniforms.u_splatColor.value.copy(zeroVec);
 
-            let source = this.gpuCompute.getCurrentRenderTarget(this.densityVariable);
-            let dest = this.gpuCompute.getAlternateRenderTarget(this.densityVariable);
-            splatUniforms.u_target.value = source.texture;
-            this.gpuCompute.doRenderTarget(this.splatMaterial, dest);
-            this.gpuCompute.swapBuffers(this.densityVariable);
-        });
-
-        this._splatQueue = []; // Clear the queue after processing
-
-        // After splatting, get the final source textures for the next steps
-        let finalVelSource = this.gpuCompute.getCurrentRenderTarget(this.velocityVariable);
-        
-        // 4. Divergence Pass (calculate how much velocity is expanding/converging)
-        this.divergenceMaterial.uniforms.u_velocity.value = finalVelSource.texture;
-        this.gpuCompute.doRenderTarget(this.divergenceMaterial, this.gpuCompute.getCurrentRenderTarget(this.divergenceVariable));
-    
-        // 5. Pressure Solver (Jacobi iterations to find pressure from divergence)
-        const pressureIterations = parseInt(document.getElementById('hydro_pressureIterations')?.value) || 20;
-        let pSource = this.gpuCompute.getCurrentRenderTarget(this.pressureVariable);
-        let pDest = this.gpuCompute.getAlternateRenderTarget(this.pressureVariable);
-        this.jacobiMaterial.uniforms.u_divergence.value = this.gpuCompute.getCurrentRenderTarget(this.divergenceVariable).texture;
-        for (let i = 0; i < pressureIterations; i++) {
-            this.jacobiMaterial.uniforms.u_pressure.value = pSource.texture;
-            this.gpuCompute.doRenderTarget(this.jacobiMaterial, pDest);
-            [pSource, pDest] = [pDest, pSource]; // Efficiently swap pointers
+        if (this._currentSplat) {
+            const targetVar = this._currentSplat.isForce ? this.velocityVariable : this.densityVariable;
+            targetVar.material.uniforms.u_splatColor.value.copy(this._currentSplat.color);
+            targetVar.material.uniforms.u_point.value.copy(this._currentSplat.point);
+            targetVar.material.uniforms.u_radius.value = this._currentSplat.radius;
+            this._currentSplat = null;
         }
-    
-        // 6. Gradient Subtraction (use pressure to make velocity field incompressible)
-        let finalVelDest = this.gpuCompute.getAlternateRenderTarget(this.velocityVariable);
-        this.gradientMaterial.uniforms.u_pressure.value = pSource.texture;
-        this.gradientMaterial.uniforms.u_velocity.value = finalVelSource.texture;
-        this.gpuCompute.doRenderTarget(this.gradientMaterial, finalVelDest);
-        this.gpuCompute.swapBuffers(this.velocityVariable);
+
+        // 2. Compute Steps (Auto-runs Advection, Divergence, etc.)
+        this.gpuCompute.compute(); 
         
-        renderer.setRenderTarget(currentRenderTarget);
+        // 3. Pressure Iterations (Jacobi)
+        const pressureIterations = parseInt(document.getElementById('hydro_pressureIterations')?.value) || 20;
+        const pressureMat = this.pressureVariable.material;
+        
+        for (let i = 0; i < pressureIterations; i++) {
+            const source = this.gpuCompute.getCurrentRenderTarget(this.pressureVariable);
+            const dest = this.gpuCompute.getAlternateRenderTarget(this.pressureVariable);
+            pressureMat.uniforms.texturePressure.value = source.texture; 
+            this.gpuCompute.doRenderTarget(pressureMat, dest);
+            this.pressureVariable.renderTargets.reverse();
+        }
+        
+        // 4. Gradient Subtraction (Final Velocity)
+        const gradientMat = this.velocityFinalVariable.material;
+        const pressureResult = this.gpuCompute.getCurrentRenderTarget(this.pressureVariable);
+        const velAdvectedResult = this.gpuCompute.getCurrentRenderTarget(this.velocityVariable);
+        const velFinalDest = this.gpuCompute.getCurrentRenderTarget(this.velocityFinalVariable);
+        
+        gradientMat.uniforms.texturePressure.value = pressureResult.texture;
+        gradientMat.uniforms.textureVelocity.value = velAdvectedResult.texture;
+        
+        this.gpuCompute.doRenderTarget(gradientMat, velFinalDest);
     },
 
     getOutputTexture() {
@@ -205,19 +194,5 @@ export const HydroSimManager = {
         return this.gpuCompute.getCurrentRenderTarget(this.densityVariable).texture;
     },
 
-    dispose() {
-        if (this.gpuCompute) {
-            this.gpuCompute.dispose();
-            this.gpuCompute = null;
-            console.log("HydroSimManager disposed.");
-        }
-    }
-};
-
-GPUComputationRenderer.prototype.swapBuffers = function(variable) {
-    [variable.renderTargets[0], variable.renderTargets[1]] = [variable.renderTargets[1], variable.renderTargets[0]];
-    variable.wrapS = this.wrapS;
-    variable.wrapT = this.wrapT;
-    variable.minFilter = this.minFilter;
-    variable.magFilter = this.magFilter;
+    dispose() { if (this.gpuCompute) { this.gpuCompute.dispose(); this.gpuCompute = null; } }
 };

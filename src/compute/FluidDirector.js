@@ -2,11 +2,10 @@ import THREE from '../three-singleton.js';
 
 /*
 ================================================================================================
-FLUID SIMULATION DIRECTOR (REFACTORED)
+FLUID SIMULATION DIRECTOR
 ================================================================================================
 This module is the "Conductor" for all fluid-based artistic transitions.
-It now directs the unified ComputeManager, telling it which forces to apply and when
-by modifying the uniforms on its GPGPU variables.
+It directs the unified ComputeManager (Particles/FluidSim).
 */
 
 export const FluidDirector = {
@@ -47,7 +46,6 @@ export const FluidDirector = {
                     
                     S.fire_visual_progress = phaseProgress * 0.8;
                     S.particle_size_mix = 0.0;
-                    // ** THE FIX IS HERE: Fade out the original canvas color smoothly **
                     S.particle_morphProgress = phaseProgress; 
                 }
                 else if (progress < 0.5) { // ACT II: CHURN
@@ -63,7 +61,7 @@ export const FluidDirector = {
                     uniforms.fluid_curlScale.value = S.fluid_curlScale;
 
                     S.fire_visual_progress = 0.8;
-                    S.particle_morphProgress = 1.0; // Fully faded to model color (even though it's not visible yet)
+                    S.particle_morphProgress = 1.0; 
                 }
                 else { // ACT III: GROWTH
                     const phaseProgress = (progress - 0.5) / 0.5;
@@ -80,7 +78,7 @@ export const FluidDirector = {
                     uniforms.u_explosionStrength.value = 5.0 * bloomCurve;
 
                     S.fire_visual_progress = THREE.MathUtils.lerp(0.8, 0.0, phaseProgress);
-                    S.particle_morphProgress = 1.0; // Keep it on the model color
+                    S.particle_morphProgress = 1.0; 
                     S.particle_twinkleIntensity = phaseProgress;
                     S.particle_size_mix = THREE.MathUtils.lerp(0.0, 1.0, phaseProgress);
                 }
@@ -110,6 +108,7 @@ export const FluidDirector = {
                 if(CM.velocityVariable) CM.velocityVariable.material.uniforms.u_cohesionStrength.value = 0.0;
             }
         },
+
         'fireAndAsh': {
             duration: 20000,
             onStart(CM) {

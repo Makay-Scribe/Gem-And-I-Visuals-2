@@ -378,7 +378,6 @@ const App = {
         const MI = this.mouseInteraction;
         const S = this.vizSettings;
 
-        // ** THE FIX IS HERE: The logic is now non-exclusive, as it was before. **
         if (MI.isSplatting && S.gpgpuGeometryMode === 'hydrosim') {
             const currentPos = new THREE.Vector2(event.clientX, event.clientY);
             const delta = new THREE.Vector2().subVectors(currentPos, MI.lastMouse);
@@ -459,12 +458,20 @@ const App = {
         this.ModelManager.init(this);
         this.Debugger.init(this);
         this.CubeWallManager.init(this);
+        
         this.DirectorManager.init(this);
         this.ParticleTransitions.init(this);
         this.FluidDirector.init(this);
-        this.HydroSimManager.init(this);
+        
+        // --- ORDER CHANGE START ---
+        // 1. ImagePlaneManager sets up dimensions first
         this.ImagePlaneManager.init(this); 
-        this.ComputeManager.init(this);
+        // 2. ComputeManager defines shaders and reads dimensions
+        this.ComputeManager.init(this); 
+        // 3. HydroSimManager uses the shaders
+        this.HydroSimManager.init(this); 
+        // --- ORDER CHANGE END ---
+        
         this.GPGPUDebugger.init(this);
         this.UIManager.init(this); 
         
@@ -597,6 +604,9 @@ const App = {
         this.GPGPUDebugger.render();
     }
 };
+
+// Expose App globally for debugging
+window.App = App;
 
 const attemptToStartApp = () => {
     if (document.getElementById('controlsPanel')) {

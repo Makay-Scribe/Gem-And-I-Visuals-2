@@ -166,6 +166,8 @@ export const ImagePlaneManager = {
         if (!S.enableLandscape) return;
         
         const mode = S.gpgpuGeometryMode;
+        
+        // REVERTED: Exclusive Visibility Logic
         if (this.landscape) this.landscape.visible = (mode === 'faceted');
         if (this.instancedMesh) this.instancedMesh.visible = (mode === 'geocube');
         if (this.particleSystem) this.particleSystem.visible = (mode === 'particles');
@@ -283,7 +285,8 @@ export const ImagePlaneManager = {
     _createHydroSimPlane() {
         const geometry = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y);
         
-        // ** THE FIX IS HERE: Simplified the fragment shader for direct debugging. **
+        // Keeping the Transparent material fix because it's visually better for Hydro,
+        // but this mode is now exclusive, so it won't overlay particles.
         this.hydroSimMaterial = new THREE.ShaderMaterial({
             uniforms: { u_densityTexture: { value: null } },
             vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -292,12 +295,13 @@ export const ImagePlaneManager = {
                 varying vec2 vUv;
                 void main() {
                     vec4 color = texture2D(u_densityTexture, vUv);
-                    // Directly render the RGB color, ignoring alpha for now.
-                    // This will show us if *any* color is being written to the texture.
-                    gl_FragColor = vec4(color.rgb, 1.0);
+                    float brightness = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+                    float alpha = smoothstep(0.01, 0.2, brightness); 
+                    gl_FragColor = vec4(color.rgb, alpha);
                 }
             `,
-            transparent: false,
+            transparent: true,
+            depthWrite: false,
             blending: THREE.NormalBlending,
         });
 
