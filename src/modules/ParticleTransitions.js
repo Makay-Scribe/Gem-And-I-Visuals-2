@@ -16,76 +16,87 @@ export const ParticleTransitions = {
     // --- Presets ---
     transitionPresets: {
         'default': {
-            particle_flowStrength: 0.0,
-            particle_flowSpeed: 0.0,
+            duration: 4000, // Quick check
+            particle_flowStrength: 0.2,
+            particle_flowSpeed: 0.2,
             particle_flowScale: 0.1,
-            particle_attractionStrength: 0.1,
+            particle_attractionStrength: 5.0,
             particle_size_mix: 0.0,
             particle_twinkleIntensity: 0.0,
         },
         'pour': {
+            duration: 8000,
             particle_flowStrength: 2.0,
             particle_flowSpeed: 0.5,
             particle_flowScale: 0.2,
-            particle_attractionStrength: 0.05,
+            particle_attractionStrength: 3.0,
         },
         'liquid': {
+            duration: 8000,
             particle_flowStrength: 1.0,
             particle_flowSpeed: 0.2,
             particle_flowScale: 0.05,
-            particle_attractionStrength: 0.2,
+            particle_attractionStrength: 8.0,
         },
         'explode': {
-            particle_flowStrength: 5.0,
+            duration: 15000, // 15 Seconds
+            particle_flowStrength: 8.0,
             particle_flowSpeed: 2.0,
             particle_flowScale: 0.5,
-            particle_attractionStrength: 0.01,
+            particle_attractionStrength: 0.1,
         },
         'nebula': {
+            duration: 20000, // 20 Seconds (Slow drift)
             particle_flowStrength: 0.5,
             particle_flowSpeed: 0.1,
             particle_flowScale: 0.02,
-            particle_attractionStrength: 0.05,
+            particle_attractionStrength: 2.0,
             particle_twinkleIntensity: 1.0,
         },
         'melt': {
-            particle_flowStrength: 0.2,
+            duration: 10000,
+            particle_flowStrength: 0.5,
             particle_flowSpeed: 0.1,
-            particle_attractionStrength: 0.0, // Let them drift
+            particle_attractionStrength: 1.0,
         },
         'supernova': {
-            particle_flowStrength: 8.0,
-            particle_flowSpeed: 3.0,
+            duration: 15000, // 15 Seconds
+            particle_flowStrength: 20.0, // Massive force
+            particle_flowSpeed: 4.0,
             particle_attractionStrength: 0.0,
             particle_twinkleIntensity: 1.0,
         },
         'gravity_well': {
-            // Placeholder for orbital logic
+            duration: 15000,
             particle_flowStrength: 0.2,
-            particle_attractionStrength: 0.5,
+            particle_attractionStrength: 10.0,
         },
         'cosmic_dust': {
+            duration: 12000,
             particle_flowStrength: 0.5,
             particle_flowScale: 0.8,
-            particle_attractionStrength: 0.01,
+            particle_attractionStrength: 0.5,
             particle_size_mix: 1.0,
         },
         'dissolve': {
+            duration: 8000,
             particle_flowStrength: 1.5,
             particle_flowSpeed: 1.0,
             particle_attractionStrength: 0.0,
         },
         'swarm': {
-            particle_flowStrength: 3.0,
+            duration: 12000,
+            particle_flowStrength: 5.0,
             particle_flowSpeed: 4.0,
             particle_flowScale: 0.1,
-            particle_attractionStrength: 0.1,
+            particle_attractionStrength: 5.0,
         },
         'flow': {
-            particle_flowStrength: 1.0,
+            duration: 10000,
+            particle_flowStrength: 2.0,
             particle_flowSpeed: 0.5,
             particle_flowScale: 0.01,
-            particle_attractionStrength: 0.05,
+            particle_attractionStrength: 2.0,
         }
     },
 
@@ -115,10 +126,7 @@ export const ParticleTransitions = {
             endValue = 0.0;
         }
 
-        const duration = (this.activeTransitionPreset === 'pour' || this.activeTransitionPreset === 'melt') ? 7000 : 4000;
-
-        // If returning to canvas (0.0), force 'default' preset behavior at the end
-        // If going to model (1.0), use the active creative preset
+        // Select Preset
         const targetPresetId = (endValue > 0.5) ? this.activeTransitionPreset : 'default';
 
         if (!this.transitionPresets[targetPresetId]) {
@@ -129,23 +137,27 @@ export const ParticleTransitions = {
         const targetPreset = this.transitionPresets[targetPresetId];
         const defaultPreset = this.transitionPresets['default'];
 
+        // USE PRESET DURATION OR DEFAULT TO 4s
+        const duration = targetPreset.duration || 4000;
+
         this.transitionAnimation = {
             startTime: performance.now(),
             startValue,
             endValue,
             duration,
-            presetId: this.activeTransitionPreset,
+            presetId: targetPresetId, // Store the actual ID being used
             startParams: {},
             targetParams: {}
         };
 
         // Capture current state and determine target state
         Object.keys(defaultPreset).forEach(key => {
-            this.transitionAnimation.startParams[key] = S[key];
-            this.transitionAnimation.targetParams[key] = (targetPreset[key] !== undefined) ? targetPreset[key] : defaultPreset[key];
+            if (key !== 'duration') { // Don't lerp the duration key
+                this.transitionAnimation.startParams[key] = S[key];
+                this.transitionAnimation.targetParams[key] = (targetPreset[key] !== undefined) ? targetPreset[key] : defaultPreset[key];
+            }
         });
 
-        // Directional overrides
         this.transitionAnimation.targetParams.particle_size_mix = (endValue > 0.5) ? 0.75 : 0.0;
         this.transitionAnimation.targetParams.particle_twinkleIntensity = (endValue > 0.5) ? 0.5 : 0.0;
 
@@ -189,50 +201,49 @@ export const ParticleTransitions = {
             const pUniformsV = CM.velocityVariable.material.uniforms;
 
             if (anim.presetId === 'explode' || anim.presetId === 'supernova') {
-                // Bell curve for flow strength (Explode in middle, settle at end)
                 const bellCurve = Math.sin(progress * Math.PI);
-                const peakFlow = (anim.presetId === 'supernova') ? 10.0 : 5.0;
+                // Force massive chaos
+                const peakFlow = (anim.presetId === 'supernova') ? 30.0 : 15.0;
 
-                // Override the linear lerp for flowStrength
                 S.particle_flowStrength = this.app.THREE.MathUtils.lerp(anim.startParams.particle_flowStrength, peakFlow, bellCurve);
 
-                // Delay attraction until the explosion dissipates
-                const attractionDelay = 0.6;
+                // DELAY THE SNAP:
+                // Wait until 70% of the long animation is done before pulling them in
+                const attractionDelay = 0.7;
                 const attractionProgress = Math.max(0.0, (progress - attractionDelay) / (1.0 - attractionDelay));
-                S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.01, anim.targetParams.particle_attractionStrength, attractionProgress);
+
+                // If attractionProgress is 0, force attraction to 0 so they drift freely
+                if (attractionProgress <= 0.0) {
+                    S.particle_attractionStrength = 0.0;
+                } else {
+                    // Once triggered, ramp up to 50.0 strength to snap them in
+                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, 50.0, attractionProgress * attractionProgress);
+                }
             }
 
             else if (anim.presetId === 'gravity_well') {
-                // Since we stripped the old SPH gravity well logic, we simulate it 
-                // by manipulating the flow/attraction balance.
-
-                // Phase 1: High Turbulence (Chaos)
                 const turbulencePhase = Math.min(1.0, progress / 0.5);
                 S.particle_flowStrength = this.app.THREE.MathUtils.lerp(0.2, 4.0, Math.sin(turbulencePhase * Math.PI));
 
-                // Phase 2: Hard Snap (Orbit collapse)
-                const snapDelay = 0.7;
+                const snapDelay = 0.75;
                 if (progress > snapDelay) {
                     const snapProgress = (progress - snapDelay) / (1.0 - snapDelay);
-                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, 1.5, snapProgress * snapProgress); // Exponential snap
+                    S.particle_attractionStrength = this.app.THREE.MathUtils.lerp(0.0, 60.0, snapProgress * snapProgress);
                 } else {
                     S.particle_attractionStrength = 0.0;
                 }
             }
         }
 
-        // Update UI Sliders visually
         if (this.app.UIManager) this.app.UIManager.syncSlidersToSettings();
 
         // 4. Cleanup
         if (progress >= 1) {
-            // Snap to final values
             Object.keys(anim.targetParams).forEach(key => {
                 S[key] = anim.targetParams[key];
             });
             S.particle_morphProgress = anim.endValue;
 
-            // Reset specific shader overrides
             if (CM.velocityVariable) {
                 const pUniformsV = CM.velocityVariable.material.uniforms;
                 pUniformsV.u_gravityWellStrength.value = 0.0;

@@ -185,13 +185,12 @@ const App = {
         particle_twinkleIntensity: 0.0,
         particle_flowScale: 0.1,
         particle_flowSpeed: 0.0,
-        particle_flowStrength: 0.0,
-        particle_attractionStrength: 0.1,
+        particle_flowStrength: 0.2,
+        particle_attractionStrength: 5.0, // INCREASED for faster default transition
         particle_morphProgress: 0.0,
         particle_target: 'flat',
         particle_cohesionStrength: 0.0,
 
-        // Fluid & Hydro settings (kept for structure, but unused in loop)
         fluid_curlStrength: 0.0,
         fluid_curlScale: 0.05,
         fluid_curlSpeed: 0.3,
@@ -448,8 +447,7 @@ const App = {
 
         this.ImagePlaneManager.createDefaultLandscape();
 
-        // ** THE FIX: Explicitly start the ComputeManager with the default mode **
-        // This ensures the loop isn't stuck in null state.
+        // Explicitly start the ComputeManager with the default mode
         this.ComputeManager.switchMode(this.vizSettings.gpgpuGeometryMode, true);
 
         this.BackgroundManager.render();
