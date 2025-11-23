@@ -2,61 +2,53 @@ import THREE from '../three-singleton.js';
 import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import cubewallRenderVertexShader from '../shaders/cubewall_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
-import particleRenderVertexShader from '../shaders/particle_render.vert?raw';
-import particleRenderFragmentShader from '../shaders/particle_render.frag?raw';
+import { ParticleSystem } from '../features/particles/ParticleSystem.js';
 
 export const ImagePlaneManager = {
     app: null,
-    landscape: null, 
+    landscape: null,
     instancedMesh: null,
-    particleSystem: null,
-    fluidSystem: null, 
-    hydroSimPlane: null,
-    
+
+    // Materials
     facetedMaterial: null,
     geocubeMaterial: null,
-    
-    particlePBRMaterial: null,
-    fluidMaterial: null,
-    hydroSimMaterial: null,
-    landscapeContainer: null, 
-    boundingBox: null, 
-    planeDimensions: null, 
-    planeResolution: null, 
-    currentTexture: null, 
-    spinAccumulator: null, 
-    calculatedParticleBaseSize: 1.0,
-    fireColorRampTexture: null,
+
+    landscapeContainer: null,
+    boundingBox: null,
+    planeDimensions: null,
+    planeResolution: null,
+    currentTexture: null,
+    spinAccumulator: null,
 
     state: {
         isUnderManualControl: false,
-        manualControlReleaseTime: -1, 
-        manualControlTimeoutId: null, 
+        manualControlReleaseTime: -1,
+        manualControlTimeoutId: null,
         returnEaseFactor: 0.0,
-        targetPosition: null, 
-        targetQuaternion: null, 
-        homePosition: null, 
-        homeQuaternion: null 
+        targetPosition: null,
+        targetQuaternion: null,
+        homePosition: null,
+        homeQuaternion: null
     },
 
     autopilot: {
         active: false,
         preset: null,
-        waypointProgress: 1.0, 
-        waypointTransitionDuration: 20.0, 
-        startPos: null, 
-        endPos: null, 
-        startQuat: null, 
-        endQuat: null,  
+        waypointProgress: 1.0,
+        waypointTransitionDuration: 20.0,
+        startPos: null,
+        endPos: null,
+        startQuat: null,
+        endQuat: null,
     },
-    
-    _getWeightedRandom(distribution) { 
+
+    _getWeightedRandom(distribution) {
         const rand = Math.random();
         let cumulativeWeight = 0;
         for (const item of distribution) {
             cumulativeWeight += item.weight;
             if (rand < cumulativeWeight) {
-                return this.app.THREE.MathUtils.randFloat(item.range[0], item.range[1]); 
+                return this.app.THREE.MathUtils.randFloat(item.range[0], item.range[1]);
             }
         }
         const lastItem = distribution[distribution.length - 1];
@@ -82,37 +74,13 @@ export const ImagePlaneManager = {
 
         this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionLandscape);
         this.state.targetPosition.copy(this.state.homePosition);
-        
+
         this.landscapeContainer = new this.app.THREE.Group();
         this.landscapeContainer.frustumCulled = false;
         this.app.scene.add(this.landscapeContainer);
 
-        this._createFireColorRamp();
-    },
-
-    _createFireColorRamp() {
-        const width = 256;
-        const data = new Uint8Array(width * 4);
-        const color = new THREE.Color();
-
-        for (let i = 0; i < width; i++) {
-            const t = i / (width - 1);
-            if (t < 0.25) {
-                color.setRGB(t / 0.25, 0, 0);
-            } else if (t < 0.5) {
-                color.setRGB(1.0, (t - 0.25) / 0.25, 0);
-            } else {
-                color.setRGB(1.0, 1.0, (t - 0.5) / 0.5);
-            }
-            
-            data[i * 4 + 0] = Math.floor(color.r * 255);
-            data[i * 4 + 1] = Math.floor(color.g * 255);
-            data[i * 4 + 2] = Math.floor(color.b * 255);
-            data[i * 4 + 3] = 255;
-        }
-
-        this.fireColorRampTexture = new THREE.DataTexture(data, width, 1, THREE.RGBAFormat);
-        this.fireColorRampTexture.needsUpdate = true;
+        // Initialize Sub-Systems
+        ParticleSystem.init(this.app);
     },
 
     startAutopilot(presetId) {
@@ -121,7 +89,7 @@ export const ImagePlaneManager = {
         ap.active = true;
         ap.preset = presetId;
         if (this.app.UIManager) this.app.UIManager.updateMasterControls();
-        ap.waypointProgress = 1.0; 
+        ap.waypointProgress = 1.0;
     },
 
     stopAutopilot() {
@@ -129,71 +97,78 @@ export const ImagePlaneManager = {
         ap.active = false;
         ap.preset = null;
     },
-    
+
     generateNewRandomWaypoint() {
         const ap = this.autopilot;
         ap.startPos.copy(this.state.targetPosition);
         ap.startQuat.copy(this.state.targetQuaternion).multiply(this.spinAccumulator.clone().invert());
 
         let endPosX, endPosY, endPosZ;
-        let eulerX, eulerY; 
-        
-        const orbitalTiltDistribution = [ { range: [-5, 5], weight: 0.50 }, { range: [5, 15], weight: 0.20 }, { range: [-15, -5], weight: 0.20 }, { range: [15, 30], weight: 0.05 }, { range: [-30, -15], weight: 0.05 }];
+        let eulerX, eulerY;
 
-        if (ap.preset === 'autopilotPreset1') { endPosX = this.app.THREE.MathUtils.randFloat(-15, 15); endPosY = this.app.THREE.MathUtils.randFloat(-10, 10); endPosZ = this.app.THREE.MathUtils.randFloat(-5, 5); eulerX = this.app.THREE.MathUtils.randFloat(-2, 2); eulerY = this.app.THREE.MathUtils.randFloat(-5, 5);
-        } else if (ap.preset === 'autopilotPreset2') { endPosX = this.app.THREE.MathUtils.randFloat(-5, 5); endPosY = this.app.THREE.MathUtils.randFloat(-5, 5); endPosZ = this.app.THREE.MathUtils.randFloat(-30, 10); eulerX = this.app.THREE.MathUtils.randFloat(-4, 4); eulerY = this.app.THREE.MathUtils.randFloat(-8, 8);
-        } else if (ap.preset === 'autopilotPreset3') { endPosX = this.app.THREE.MathUtils.randFloat(-30, 30); endPosY = this.app.THREE.MathUtils.randFloat(-20, 20); endPosZ = this.app.THREE.MathUtils.randFloat(-40, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([ { range: [-15, 15], weight: 0.8 }, { range: [-30, 30], weight: 0.2 } ]);
-        } else if (ap.preset === 'autopilotPreset4') { endPosX = this.app.THREE.MathUtils.randFloat(-50, 50); endPosY = this.app.THREE.MathUtils.randFloat(-35, 35); endPosZ = this.app.THREE.MathUtils.randFloat(-45, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([ { range: [-20, 20], weight: 0.4 }, { range: [20, 30], weight: 0.25 }, { range: [-30, -20], weight: 0.25 }, { range: [35, 45], weight: 0.05 }, { range: [-45, -35], weight: 0.05 } ]);
-        } else { endPosX = this.app.THREE.MathUtils.randFloat(-70, 70); endPosY = this.app.THREE.MathUtils.randFloat(-50, 50); endPosZ = this.app.THREE.MathUtils.randFloat(-50, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([ { range: [-15, 15], weight: 0.35 }, { range: [-35, 35], weight: 0.4 }, { range: [35, 50], weight: 0.125 }, { range: [-50, -35], weight: 0.125 } ]);
+        const orbitalTiltDistribution = [{ range: [-5, 5], weight: 0.50 }, { range: [5, 15], weight: 0.20 }, { range: [-15, -5], weight: 0.20 }, { range: [15, 30], weight: 0.05 }, { range: [-30, -15], weight: 0.05 }];
+
+        if (ap.preset === 'autopilotPreset1') {
+            endPosX = this.app.THREE.MathUtils.randFloat(-15, 15); endPosY = this.app.THREE.MathUtils.randFloat(-10, 10); endPosZ = this.app.THREE.MathUtils.randFloat(-5, 5); eulerX = this.app.THREE.MathUtils.randFloat(-2, 2); eulerY = this.app.THREE.MathUtils.randFloat(-5, 5);
+        } else if (ap.preset === 'autopilotPreset2') {
+            endPosX = this.app.THREE.MathUtils.randFloat(-5, 5); endPosY = this.app.THREE.MathUtils.randFloat(-5, 5); endPosZ = this.app.THREE.MathUtils.randFloat(-30, 10); eulerX = this.app.THREE.MathUtils.randFloat(-4, 4); eulerY = this.app.THREE.MathUtils.randFloat(-8, 8);
+        } else if (ap.preset === 'autopilotPreset3') {
+            endPosX = this.app.THREE.MathUtils.randFloat(-30, 30); endPosY = this.app.THREE.MathUtils.randFloat(-20, 20); endPosZ = this.app.THREE.MathUtils.randFloat(-40, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([{ range: [-15, 15], weight: 0.8 }, { range: [-30, 30], weight: 0.2 }]);
+        } else if (ap.preset === 'autopilotPreset4') {
+            endPosX = this.app.THREE.MathUtils.randFloat(-50, 50); endPosY = this.app.THREE.MathUtils.randFloat(-35, 35); endPosZ = this.app.THREE.MathUtils.randFloat(-45, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([{ range: [-20, 20], weight: 0.4 }, { range: [20, 30], weight: 0.25 }, { range: [-30, -20], weight: 0.25 }, { range: [35, 45], weight: 0.05 }, { range: [-45, -35], weight: 0.05 }]);
+        } else {
+            endPosX = this.app.THREE.MathUtils.randFloat(-70, 70); endPosY = this.app.THREE.MathUtils.randFloat(-50, 50); endPosZ = this.app.THREE.MathUtils.randFloat(-50, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([{ range: [-15, 15], weight: 0.35 }, { range: [-35, 35], weight: 0.4 }, { range: [35, 50], weight: 0.125 }, { range: [-50, -35], weight: 0.125 }]);
         }
 
         ap.endPos.set(endPosX, endPosY, endPosZ);
-        const randomRotationEuler = new this.app.THREE.Euler(this.app.THREE.MathUtils.degToRad(eulerX), this.app.THREE.MathUtils.degToRad(eulerY), 0, 'YXZ' );
+        const randomRotationEuler = new this.app.THREE.Euler(this.app.THREE.MathUtils.degToRad(eulerX), this.app.THREE.MathUtils.degToRad(eulerY), 0, 'YXZ');
         const randomRotationQuat = new this.app.THREE.Quaternion().setFromEuler(randomRotationEuler);
         ap.endQuat.copy(this.state.homeQuaternion).multiply(randomRotationQuat);
-        
+
         ap.waypointTransitionDuration = this.app.THREE.MathUtils.randFloat(18.0, 30.0);
-        
+
         ap.waypointProgress = 0;
     },
-    
+
     update(cappedDelta) {
         if (!this.landscapeContainer) return;
         const S = this.app.vizSettings;
 
         this.landscapeContainer.visible = S.enableLandscape;
-        
+
         if (!S.enableLandscape) return;
-        
+
         const mode = S.gpgpuGeometryMode;
-        
-        // REVERTED: Exclusive Visibility Logic
+
+        // Update Visibility based on mode
         if (this.landscape) this.landscape.visible = (mode === 'faceted');
         if (this.instancedMesh) this.instancedMesh.visible = (mode === 'geocube');
-        if (this.particleSystem) this.particleSystem.visible = (mode === 'particles');
-        if (this.fluidSystem) this.fluidSystem.visible = (mode === 'fluidsim');
-        if (this.hydroSimPlane) this.hydroSimPlane.visible = (mode === 'hydrosim');
-        
+
+        // Particles are managed by ParticleSystem, but we toggle visibility here for cohesion
+        if (ParticleSystem.mesh) {
+            ParticleSystem.mesh.visible = (mode === 'particles');
+        }
+
         const state = this.state;
         const ap = this.autopilot;
         const now = this.app.currentTime;
-        
+
         if (ap.active && ap.waypointProgress >= 1.0) {
             this.generateNewRandomWaypoint();
         }
         if (ap.active) {
             ap.waypointProgress = Math.min(1.0, ap.waypointProgress + cappedDelta / ap.waypointTransitionDuration);
         }
-        
+
         let baseRotationTarget = new this.app.THREE.Quaternion();
         const manualHoldTime = 0.5;
         const inGracePeriod = state.manualControlReleaseTime > 0 && (now - state.manualControlReleaseTime < manualHoldTime);
 
         if (state.isUnderManualControl || inGracePeriod) {
-            state.returnEaseFactor = 0; 
+            state.returnEaseFactor = 0;
             baseRotationTarget.copy(state.targetQuaternion);
-        } else if (ap.active) { 
-            state.returnEaseFactor = 0; 
+        } else if (ap.active) {
+            state.returnEaseFactor = 0;
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
             baseRotationTarget.copy(ap.startQuat).slerp(ap.endQuat, ease);
@@ -202,12 +177,12 @@ export const ImagePlaneManager = {
             const maxEase = 0.02;
             const easeIncrement = 0.0005;
             state.returnEaseFactor = Math.min(state.returnEaseFactor + easeIncrement, maxEase);
-            
+
             state.targetPosition.lerp(state.homePosition, state.returnEaseFactor);
             state.targetQuaternion.slerp(this.state.homeQuaternion, state.returnEaseFactor);
             baseRotationTarget.copy(state.targetQuaternion);
         }
-        
+
         if (S.enableLandscapeSpin) {
             const incrementalSpin = new this.app.THREE.Quaternion();
             const spinAxis = new this.app.THREE.Vector3(0, 0, 1);
@@ -216,7 +191,7 @@ export const ImagePlaneManager = {
         } else {
             this.spinAccumulator.slerp(new this.app.THREE.Quaternion(), 0.05);
         }
-        
+
         if (state.isUnderManualControl || inGracePeriod) {
             baseRotationTarget.copy(state.targetQuaternion);
         }
@@ -226,25 +201,26 @@ export const ImagePlaneManager = {
         this.landscapeContainer.position.lerp(state.targetPosition, 0.05);
         this.landscapeContainer.quaternion.slerp(finalTargetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
-        
+
         this.updateDeformationUniforms();
-        
+
         this.updateBoundingBox();
     },
 
     createDefaultLandscape() {
         this.updatePlaneDimensions();
-        
-        this._cleanupMeshes(); 
+
+        this._cleanupMeshes();
 
         this._createPlaneMesh();
         this._createInstancedCubeMesh();
-        this._createParticleSystem();
-        this._createFluidSystem();
-        this._createHydroSimPlane();
+
+        // Create Particles via the new System
+        const particleMesh = ParticleSystem.createMesh();
+        this.landscapeContainer.add(particleMesh);
 
         this.applyAndStoreHomeOrientation();
-        
+
         this.landscapeContainer.position.copy(this.state.homePosition);
         this.landscapeContainer.quaternion.copy(this.state.homeQuaternion);
         this.state.targetPosition.copy(this.state.homePosition);
@@ -255,19 +231,16 @@ export const ImagePlaneManager = {
     _cleanupMeshes() {
         if (this.landscape) { this.landscape.geometry.dispose(); this.landscapeContainer.remove(this.landscape); this.landscape = null; }
         if (this.instancedMesh) { this.instancedMesh.geometry.dispose(); this.landscapeContainer.remove(this.instancedMesh); this.instancedMesh = null; }
-        if (this.particleSystem) { this.particleSystem.geometry.dispose(); this.landscapeContainer.remove(this.particleSystem); this.particleSystem = null; }
-        if (this.fluidSystem) { this.fluidSystem.geometry.dispose(); this.landscapeContainer.remove(this.fluidSystem); this.fluidSystem = null; }
-        if (this.hydroSimPlane) { this.hydroSimPlane.geometry.dispose(); this.landscapeContainer.remove(this.hydroSimPlane); this.hydroSimPlane = null; }
-        
+
         if (this.facetedMaterial) { this.facetedMaterial.dispose(); this.facetedMaterial = null; }
         if (this.geocubeMaterial) { this.geocubeMaterial.dispose(); this.geocubeMaterial = null; }
-        if (this.particlePBRMaterial) { this.particlePBRMaterial.dispose(); this.particlePBRMaterial = null; }
-        if (this.fluidMaterial) { this.fluidMaterial.dispose(); this.fluidMaterial = null; }
-        if (this.hydroSimMaterial) { this.hydroSimMaterial.dispose(); this.hydroSimMaterial = null; }
+
+        // Clean up Particles via System
+        ParticleSystem.dispose();
     },
 
     _createPlaneMesh() {
-        const geometry = new this.app.THREE.PlaneGeometry( this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y );
+        const geometry = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
         const gpgpuUvs = new Float32Array(geometry.attributes.position.count * 2);
         for (let i = 0; i < geometry.attributes.uv.count; i++) {
             gpgpuUvs[i * 2] = geometry.attributes.uv.getX(i);
@@ -282,83 +255,12 @@ export const ImagePlaneManager = {
         this.landscapeContainer.add(this.landscape);
     },
 
-    _createHydroSimPlane() {
-        const geometry = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y);
-        
-        // Keeping the Transparent material fix because it's visually better for Hydro,
-        // but this mode is now exclusive, so it won't overlay particles.
-        this.hydroSimMaterial = new THREE.ShaderMaterial({
-            uniforms: { u_densityTexture: { value: null } },
-            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-            fragmentShader: `
-                uniform sampler2D u_densityTexture;
-                varying vec2 vUv;
-                void main() {
-                    vec4 color = texture2D(u_densityTexture, vUv);
-                    float brightness = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-                    float alpha = smoothstep(0.01, 0.2, brightness); 
-                    gl_FragColor = vec4(color.rgb, alpha);
-                }
-            `,
-            transparent: true,
-            depthWrite: false,
-            blending: THREE.NormalBlending,
-        });
-
-        this.hydroSimPlane = new this.app.THREE.Mesh(geometry, this.hydroSimMaterial);
-        this.hydroSimPlane.frustumCulled = false;
-        this.landscapeContainer.add(this.hydroSimPlane);
-    },
-
-    _createFluidSystem() {
-        const CM = this.app.ComputeManager;
-        const count = CM.AREA;
-        const resolution = CM.WIDTH;
-        const geometry = new this.app.THREE.BufferGeometry();
-        geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
-        const gpgpuUvs = new Float32Array(count * 2);
-        for (let y = 0; y < resolution; y++) {
-            for (let x = 0; x < resolution; x++) {
-                const i = (y * resolution + x);
-                gpgpuUvs[i * 2 + 0] = x / (resolution - 1);
-                gpgpuUvs[i * 2 + 1] = y / (resolution - 1);
-            }
-        }
-        geometry.setAttribute('gpgpu_uv', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
-        this._createFluidPBRMaterial();
-        this.fluidSystem = new this.app.THREE.Points(geometry, this.fluidMaterial);
-        this.fluidSystem.frustumCulled = false;
-        this.landscapeContainer.add(this.fluidSystem);
-    },
-
-    _createParticleSystem() {
-        const S = this.app.vizSettings;
-        const resolution = S.particle_resolution;
-        const count = resolution * resolution;
-        this.calculatedParticleBaseSize = this.planeDimensions.x / (resolution - 1) * Math.sqrt(2);
-        const geometry = new this.app.THREE.BufferGeometry();
-        geometry.setAttribute('position', new this.app.THREE.BufferAttribute(new Float32Array(count * 3), 3));
-        const uvs = new Float32Array(count * 2);
-        for (let y = 0; y < resolution; y++) {
-            for (let x = 0; x < resolution; x++) {
-                const i = (y * resolution + x) * 2;
-                uvs[i + 0] = x / (resolution - 1);
-                uvs[i + 1] = y / (resolution - 1);
-            }
-        }
-        geometry.setAttribute('gpgpu_uv', new this.app.THREE.BufferAttribute(uvs, 2));
-        this._createParticlePBRMaterial();
-        this.particleSystem = new this.app.THREE.Points(geometry, this.particlePBRMaterial);
-        this.particleSystem.frustumCulled = false;
-        this.landscapeContainer.add(this.particleSystem);
-    },
-    
     _createInstancedCubeMesh() {
         const GRID_SIZE = this.app.vizSettings.gpgpu_cubeWallGridSize;
         const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
         const COUNT = GRID_SIZE * GRID_SIZE;
         const cubeGeom = new this.app.THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
-        
+
         this._createGeocubeMaterial();
 
         this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.geocubeMaterial, COUNT);
@@ -368,7 +270,7 @@ export const ImagePlaneManager = {
         this.instancedMesh.geometry.setAttribute('instanceId', new this.app.THREE.InstancedBufferAttribute(instanceIds, 1));
         this.landscapeContainer.add(this.instancedMesh);
     },
-    
+
     updatePlaneDimensions() {
         const baseSize = 40;
         const aspectRatio = parseFloat(this.app.vizSettings.planeAspectRatio) || 1.0;
@@ -377,66 +279,15 @@ export const ImagePlaneManager = {
 
     applyAndStoreHomeOrientation() {
         const S = this.app.vizSettings;
-        this.state.homeQuaternion.identity(); 
-        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim' || S.gpgpuGeometryMode === 'hydrosim') {
+        this.state.homeQuaternion.identity();
+        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles') {
+            // Default upright orientation
         } else {
             const tempObject = new this.app.THREE.Object3D();
-            if (S.planeOrientation === 'xz') { tempObject.rotateX(-Math.PI / 2); } 
+            if (S.planeOrientation === 'xz') { tempObject.rotateX(-Math.PI / 2); }
             else if (S.planeOrientation === 'yz') { tempObject.rotateY(Math.PI / 2); }
             this.state.homeQuaternion.copy(tempObject.quaternion);
         }
-    },
-    
-    _createUnifiedPBRMaterial() {
-        const S = this.app.vizSettings;
-        const CM = this.app.ComputeManager;
-        const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
-        if (!this.currentTexture) textureToUse.needsUpdate = true;
-
-        this.calculatedParticleBaseSize = this.planeDimensions.x / (CM.WIDTH - 1) * Math.sqrt(2);
-
-        return new this.app.THREE.ShaderMaterial({
-            defines: { 'USE_ENVMAP': '' },
-            uniforms: {
-                u_map: { value: textureToUse },
-                u_positionTexture: { value: null },
-                u_particleModelUVTexture: { value: CM.particleModelUVTexture },
-                u_particleModelTexture: { value: this.app.UIManager?.particleModelTexture || null },
-                u_particleColorMix: { value: S.particle_morphProgress },
-                particle_base_size: { value: S.particle_base_size },
-                particle_min_size: { value: S.particle_min_size },
-                u_particle_size_mix: { value: S.particle_size_mix },
-                u_metalness: { value: S.metalness },
-                u_roughness: { value: S.roughness },
-                u_envMapIntensity: { value: S.reflectionStrength },
-                u_lightColor: { value: new this.app.THREE.Color(S.lightColor) },
-                u_ambientLightColor: { value: new this.app.THREE.Color(S.ambientLightColor) },
-                u_lightDirection: { value: new this.app.THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
-                u_cameraPosition: { value: this.app.camera.position },
-                t_envMap: { value: this.app.hdrTexture },
-                u_time: { value: 0.0 },
-                u_pixelRatio: { value: window.devicePixelRatio },
-                u_particle_twinkleIntensity: { value: S.particle_twinkleIntensity },
-                u_fire_progress: { value: S.fire_visual_progress },
-                u_fire_colorRamp: { value: this.fireColorRampTexture },
-                u_fire_ashColor: { value: new THREE.Color(S.fire_ashColor) },
-                u_ash_twinkleIntensity: { value: S.ash_twinkleIntensity },
-                u_ash_twinkleSpeed: { value: S.ash_twinkleSpeed },
-            },
-            vertexShader: particleRenderVertexShader,
-            fragmentShader: particleRenderFragmentShader,
-            transparent: true,
-            depthWrite: false,
-            blending: THREE.NormalBlending,
-        });
-    },
-
-    _createFluidPBRMaterial() {
-        this.fluidMaterial = this._createUnifiedPBRMaterial();
-    },
-    
-    _createParticlePBRMaterial() {
-        this.particlePBRMaterial = this._createUnifiedPBRMaterial();
     },
 
     _createFacetedMaterial() {
@@ -451,8 +302,8 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
-        if(!this.currentTexture) textureToUse.needsUpdate = true;
-        
+        if (!this.currentTexture) textureToUse.needsUpdate = true;
+
         const uniforms = {
             u_map: { value: textureToUse },
             u_positionTexture: { value: null },
@@ -491,15 +342,18 @@ export const ImagePlaneManager = {
             texture.wrapS = texture.wrapT = this.app.THREE.ClampToEdgeWrapping;
             texture.colorSpace = this.app.vizSettings.enablePBRColor ? this.app.THREE.SRGBColorSpace : this.app.THREE.NoColorSpace;
             texture.anisotropy = this.app.renderer.capabilities.getMaxAnisotropy();
-            
+
             texture.flipY = false;
             texture.needsUpdate = true;
-            
+
             if (this.facetedMaterial) this.facetedMaterial.uniforms.u_map.value = texture;
             if (this.geocubeMaterial) this.geocubeMaterial.uniforms.u_map.value = texture;
-            if (this.particlePBRMaterial) this.particlePBRMaterial.uniforms.u_map.value = texture;
-            if (this.fluidMaterial) this.fluidMaterial.uniforms.u_map.value = texture;
-            
+
+            // Update Particle System Material
+            if (ParticleSystem.material) {
+                ParticleSystem.material.uniforms.u_map.value = texture;
+            }
+
             this.currentTexture = texture;
         };
 
@@ -520,63 +374,24 @@ export const ImagePlaneManager = {
     updateDeformationUniforms() {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
-        
-        if (S.gpgpuGeometryMode === 'hydrosim') {
-            if (this.hydroSimMaterial && this.app.HydroSimManager) {
-                this.hydroSimMaterial.uniforms.u_densityTexture.value = this.app.HydroSimManager.getOutputTexture();
-            }
-        } else if (S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'fluidsim') {
-            if (!CM || !CM.gpuCompute) return;
-            
-            const material = S.gpgpuGeometryMode === 'particles' ? this.particlePBRMaterial : this.fluidMaterial;
-            if (!material) return;
 
-            const U = material.uniforms;
-
-            const posTarget = CM.gpuCompute.getCurrentRenderTarget(CM.positionVariable);
-            U.u_positionTexture.value = posTarget.texture;
-            
-            const coarseSize = this.calculatedParticleBaseSize * S.particle_base_size;
-            const fineSize = S.particle_min_size;
-            
-            U.particle_base_size.value = coarseSize;
-            U.particle_min_size.value = fineSize;
-            U.u_particle_size_mix.value = S.particle_size_mix;
-            
-            U.u_pixelRatio.value = window.devicePixelRatio;
-            U.u_particleColorMix.value = S.particle_morphProgress;
-            if (this.app.UIManager.particleModelTexture) { U.u_particleModelTexture.value = this.app.UIManager.particleModelTexture; }
-            U.u_metalness.value = S.metalness;
-            U.u_roughness.value = S.roughness;
-            U.u_envMapIntensity.value = S.reflectionStrength;
-            U.t_envMap.value = this.app.hdrTexture; 
-            U.u_cameraPosition.value = this.app.camera.position;
-            U.u_lightColor.value.set(S.lightColor);
-            U.u_ambientLightColor.value.set(S.ambientLightColor);
-            U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
-            U.u_time.value = this.app.currentTime;
-            U.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
-            
-            U.u_fire_progress.value = S.fire_visual_progress;
-            U.u_fire_ashColor.value.set(S.fire_ashColor);
-            U.u_ash_twinkleIntensity.value = S.ash_twinkleIntensity;
-            U.u_ash_twinkleSpeed.value = S.ash_twinkleSpeed;
-
-        } else { 
+        if (S.gpgpuGeometryMode === 'particles') {
+            ParticleSystem.updateUniforms();
+        } else {
             const allMaterials = [this.facetedMaterial, this.geocubeMaterial];
-            
+
             allMaterials.forEach(mat => {
                 if (!mat || !CM.landscapeGpuCompute) return;
                 const U = mat.uniforms;
                 const positionTarget = CM.landscapeGpuCompute.getCurrentRenderTarget(CM.landscapePositionVariable);
                 U.u_positionTexture.value = positionTarget.texture;
-                
-                U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph; 
+
+                U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;
                 U.u_time.value = this.app.currentTime;
                 U.u_metalness.value = S.metalness;
                 U.u_roughness.value = S.roughness;
                 U.u_envMapIntensity.value = S.reflectionStrength;
-                U.t_envMap.value = this.app.hdrTexture; 
+                U.t_envMap.value = this.app.hdrTexture;
                 U.u_cameraPosition.value = this.app.camera.position;
                 U.u_lightColor.value.set(S.lightColor);
                 U.u_ambientLightColor.value.set(S.ambientLightColor);
@@ -592,13 +407,11 @@ export const ImagePlaneManager = {
     updateBoundingBox() {
         const S = this.app.vizSettings;
         const mode = S.gpgpuGeometryMode;
-        
+
         let activeMesh = null;
         if (mode === 'faceted') activeMesh = this.landscape;
         else if (mode === 'geocube') activeMesh = this.instancedMesh;
-        else if (mode === 'particles') activeMesh = this.particleSystem;
-        else if (mode === 'fluidsim') activeMesh = this.fluidSystem;
-        else if (mode === 'hydrosim') activeMesh = this.hydroSimPlane;
+        else if (mode === 'particles') activeMesh = ParticleSystem.mesh;
 
         if (!activeMesh) return;
 
@@ -630,7 +443,7 @@ export const ImagePlaneManager = {
         const z = this.app.THREE.MathUtils.lerp(flatZ, steppedZ, S.gpgpu_cubeWallMorph);
         return new this.app.THREE.Vector3(x, y, z);
     },
-    
+
     getUvFromGridCoords(gridX, gridY) {
         const S = this.app.vizSettings;
         const GRID_SIZE = S.gpgpu_cubeWallGridSize;

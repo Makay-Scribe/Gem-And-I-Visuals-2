@@ -1,34 +1,28 @@
-// Uniforms from the main material
 uniform sampler2D u_map;
 uniform float u_metalness;
 uniform float u_roughness;
 uniform float u_envMapIntensity;
 uniform samplerCube t_envMap;
 
-// Lighting uniforms
 uniform vec3 u_lightColor;
 uniform vec3 u_ambientLightColor;
 uniform vec3 u_lightDirection;
 uniform vec3 u_cameraPosition;
 
-// Color Mode Uniforms
+// Color Mixing
 uniform sampler2D u_particleModelUVTexture;
 uniform sampler2D u_particleModelTexture;
 uniform float u_particleColorMix;
 
-// Twinkle effect uniforms
+// Effects
 uniform float u_time;
 uniform float u_particle_twinkleIntensity;
+uniform float u_fire_progress;
+uniform sampler2D u_fire_colorRamp;
+uniform vec3 u_fire_ashColor;
+uniform float u_ash_twinkleIntensity;
+uniform float u_ash_twinkleSpeed;
 
-// *** FIRE & ASH EFFECT UNIFORMS ***
-uniform float u_fire_progress;      // This now represents VISUAL progress (0.0 to 1.0)
-uniform sampler2D u_fire_colorRamp; // A 1D texture (gradient) for fire colors
-uniform vec3 u_fire_ashColor;       // The color for the "ash" phase
-uniform float u_ash_twinkleIntensity; // New uniform to control ash flicker
-uniform float u_ash_twinkleSpeed;     // New uniform to control ash flicker speed
-
-
-// Varyings from the vertex shader
 varying vec2 vUv;
 varying vec3 vWorldPosition;
 varying vec3 vNormal;
@@ -36,13 +30,13 @@ varying vec2 vGpgpuUV;
 
 #define PI 3.14159265359
 
-// PBR lighting functions (unchanged)
+// PBR Functions
 vec3 fresnelSchlick(float cosTheta, vec3 F0) { return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0); }
 float DistributionGGX(vec3 N, vec3 H, float roughness) { float a = roughness * roughness; float a2 = a * a; float NdotH = max(dot(N, H), 0.0); float NdotH2 = NdotH * NdotH; float nom = a2; float denom = (NdotH2 * (a2 - 1.0) + 1.0); denom = PI * denom * denom; return nom / max(denom, 0.001); }
 float GeometrySchlickGGX(float NdotV, float roughness) { float r = (roughness + 1.0); float k = (r * r) / 8.0; float nom = NdotV; float denom = NdotV * (1.0 - k) + k; return nom / denom; }
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) { float NdotV = max(dot(N, V), 0.0); float NdotL = max(dot(N, L), 0.0); float ggx2 = GeometrySchlickGGX(NdotV, roughness); float ggx1 = GeometrySchlickGGX(NdotL, roughness); return ggx1 * ggx2; }
 
-// Simplex Noise (snoise) function (unchanged)
+// Noise
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -54,12 +48,16 @@ void main() {
     if (dist > 0.5) { discard; }
     float alpha = 1.0 - smoothstep(0.45, 0.5, dist);
 
-    // --- PBR Color Calculation ---
     vec3 imageWrapColor = texture(u_map, vUv).rgb;
     vec2 modelUV = texture(u_particleModelUVTexture, vGpgpuUV).rg;
     vec3 modelColor = texture(u_particleModelTexture, modelUV).rgb;
+    
+    // Fallback if no model texture
+    if (length(modelColor) == 0.0) modelColor = vec3(1.0);
+
     vec3 albedo = mix(imageWrapColor, modelColor, u_particleColorMix);
     
+    // PBR Calculation
     vec3 N = normalize(vNormal);
     vec3 V = normalize(u_cameraPosition - vWorldPosition);
     vec3 L = normalize(u_lightDirection);
@@ -81,15 +79,10 @@ void main() {
     vec3 R = reflect(-V, N);
     vec3 envColor = textureCube(t_envMap, R).rgb * u_envMapIntensity;
     vec3 ambient = (kD * envColor * albedo) + (specular * envColor);
-    vec3 pbr_color = Lo + ambient + u_ambientLightColor * albedo;
+    vec3 final_color = Lo + ambient + u_ambientLightColor * albedo;
 
-    // --- Final Color Initialization ---
-    vec3 final_color = pbr_color;
-
-    // ** THE FIX IS HERE: Modified Blending Logic **
-    float ash_fade_progress = (1.0 - u_fire_progress);
+    // Fire / Ash Effect
     if (u_fire_progress > 0.0 || u_ash_twinkleIntensity > 0.0) {
-        
         float fire_noise = snoise(vec3(vGpgpuUV * 15.0, u_time * 5.0)) * 0.5 + 0.5;
         float ramp_coord = clamp(fire_noise, 0.0, 1.0);
         vec3 fire_color = texture(u_fire_colorRamp, vec2(ramp_coord, 0.5)).rgb;
@@ -102,38 +95,24 @@ void main() {
             ash_color *= twinkle_factor;
         }
         
-        // Blend between fire and ash based on the fire's visual progress
         vec3 effect_color = mix(ash_color, emissive_fire, u_fire_progress);
-        
-        // ** ADD the effect color to the PBR base color instead of replacing it. **
-        // This creates a smooth dissolve to white (additive blending) and back.
-        // The mix factor ensures the original color fades out as the effect takes over.
         float total_effect_mix = clamp(u_fire_progress + u_ash_twinkleIntensity, 0.0, 1.0);
-        final_color = mix(pbr_color, pbr_color + effect_color, total_effect_mix);
+        final_color = mix(final_color, final_color + effect_color, total_effect_mix);
     }
     
-    // Twinkle Effect (unchanged)
+    // Twinkle
     if (u_particle_twinkleIntensity > 0.0) {
         float noiseVal = snoise(vec3(vUv * 10.0, u_time * 0.3));
         noiseVal = (noiseVal + 1.0) * 0.5;
-        float activation_threshold = 0.95;
-        float adjusted_threshold = activation_threshold - (u_particle_twinkleIntensity * 0.2);
-        if (noiseVal > adjusted_threshold) {
-            vec2 coord = (gl_PointCoord - 0.5) * 2.0; 
-            float starburst = 0.0;
-            starburst = max(starburst, 1.0 - abs(coord.x)); starburst = max(starburst, 1.0 - abs(coord.y)); starburst = max(starburst, 1.0 - abs(coord.x - coord.y)); starburst = max(starburst, 1.0 - abs(coord.x + coord.y)); 
-            starburst = pow(starburst, 15.0); 
-            float core_flash = 1.0 - dist * 2.0; 
-            core_flash = pow(core_flash, 3.0);
-            float flash_strength = smoothstep(adjusted_threshold, 1.0, noiseVal);
-            float combined_flash = (core_flash * 2.0 + starburst) * flash_strength;
-            final_color += vec3(combined_flash * 50.0);
+        float activation_threshold = 0.95 - (u_particle_twinkleIntensity * 0.2);
+        if (noiseVal > activation_threshold) {
+            final_color += vec3(50.0) * smoothstep(activation_threshold, 1.0, noiseVal);
         }
     }
 
-    // --- Final Output ---
-    vec3 color = final_color / (final_color + vec3(1.0)); // Simple tone mapping
-    color = pow(color, vec3(1.0/2.2)); // Gamma correction
+    // Tone Mapping
+    vec3 color = final_color / (final_color + vec3(1.0));
+    color = pow(color, vec3(1.0/2.2));
 
     gl_FragColor = vec4(color, alpha);
 }

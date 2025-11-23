@@ -14,7 +14,7 @@ import gpgpuPositionShader from './shaders/gpgpu_position.glsl?raw';
 
 // Only importing Particle shaders now. Fluid/SPH shaders are removed.
 import sphPositionShader from './shaders/sph_position.glsl?raw';
-import particleVelocityShader from './shaders/effects/particle_velocity.glsl?raw';
+import particleVelocityShader from '../features/particles/particle_velocity.glsl?raw';
 
 const _blurShader = `
     uniform sampler2D tInput;
