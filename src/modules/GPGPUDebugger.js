@@ -30,6 +30,7 @@ const gpgpuDebugFragmentShader = `
             color.g = remap(data.g, -halfWorld, halfWorld, 0.0, 1.0);
             color.b = remap(data.b, -halfWorld, halfWorld, 0.0, 1.0);
         } else if (u_debugViewMode == 1) { // Velocity (Vector)
+            // Visualize vectors: 0.5 is "zero velocity", <0.5 is neg, >0.5 is pos
             color = data.rgb * 0.5 + 0.5;
         } else if (u_debugViewMode == 2) { // Raw Data
             color = data.rgb;
@@ -46,39 +47,52 @@ export const GPGPUDebugger = {
     scene: null,
     camera: null,
     mesh: null,
-
+    
     systemSelect: null,
     textureSelect: null,
     viewSelect: null,
     pixelValueDisplay: null,
 
-    // Default to Particles since Fluid/Hydro are gone
     debugSystem: 'particles',
     debugTexture: 'position',
     debugView: 'raw',
 
     isMouseOver: false,
-    mouse: null,
+    mouse: null, 
     pixelBuffer: new Float32Array(4),
-
+    
     init(appInstance) {
         this.app = appInstance;
-        this.mouse = new this.app.THREE.Vector2();
+        this.mouse = new this.app.THREE.Vector2(); 
 
         this.systemSelect = document.getElementById('gpgpuDebugSystemSelect');
         this.textureSelect = document.getElementById('gpgpuDebugTextureSelect');
         this.viewSelect = document.getElementById('gpgpuDebugViewSelect');
         this.pixelValueDisplay = document.getElementById('gpgpuDebugPixelValue');
 
-        if (this.systemSelect) this.systemSelect.value = this.debugSystem;
+        if (this.systemSelect) {
+            // Add Hydro Sim option if not present (it might have been cleared)
+            let hasHydro = false;
+            for (let i = 0; i < this.systemSelect.options.length; i++) {
+                if (this.systemSelect.options[i].value === 'hydrosim') hasHydro = true;
+            }
+            if (!hasHydro) {
+                const opt = document.createElement('option');
+                opt.value = 'hydrosim';
+                opt.textContent = 'Hydro Sim (Background)';
+                this.systemSelect.appendChild(opt);
+            }
+            this.systemSelect.value = this.debugSystem;
+        }
+        
         if (this.viewSelect) this.viewSelect.value = this.debugView;
 
         this.scene = new this.app.THREE.Scene();
         const aspect = window.innerWidth / window.innerHeight;
         this.camera = new this.app.THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0, 1);
 
-        const geometry = new this.app.THREE.PlaneGeometry(0.4, 0.4);
-
+        const geometry = new this.app.THREE.PlaneGeometry(0.4, 0.4); 
+        
         const material = new this.app.THREE.ShaderMaterial({
             vertexShader: gpgpuDebugVertexShader,
             fragmentShader: gpgpuDebugFragmentShader,
@@ -90,33 +104,33 @@ export const GPGPUDebugger = {
         });
 
         this.mesh = new this.app.THREE.Mesh(geometry, material);
-        this.mesh.position.set(aspect - 0.22, -1.0 + 0.22, 0);
+        this.mesh.position.set(aspect - 0.22, -1.0 + 0.22, 0); 
         this.scene.add(this.mesh);
 
         if (this.systemSelect) {
             this.systemSelect.addEventListener('change', (e) => {
                 this.debugSystem = e.target.value;
                 this.updateTextureOptions();
-                if (this.pixelValueDisplay) this.pixelValueDisplay.textContent = 'Hover over debug plane...';
+                if(this.pixelValueDisplay) this.pixelValueDisplay.textContent = 'Hover over debug plane...';
             });
         }
         if (this.textureSelect) {
             this.textureSelect.addEventListener('change', (e) => {
                 this.debugTexture = e.target.value;
-                if (this.pixelValueDisplay) this.pixelValueDisplay.textContent = 'Hover over debug plane...';
+                if(this.pixelValueDisplay) this.pixelValueDisplay.textContent = 'Hover over debug plane...';
             });
         }
         if (this.viewSelect) {
             this.viewSelect.addEventListener('change', (e) => {
                 this.debugView = e.target.value;
-                if (this.pixelValueDisplay) this.pixelValueDisplay.textContent = 'Hover over debug plane...';
+                if(this.pixelValueDisplay) this.pixelValueDisplay.textContent = 'Hover over debug plane...';
             });
         }
 
         this.updateTextureOptions();
         if (this.textureSelect) this.textureSelect.value = this.debugTexture;
 
-        console.log("GPGPU Debugger initialized (Cleaned).");
+        console.log("GPGPU Debugger initialized (Hydro Restored).");
     },
 
     updateTextureOptions() {
@@ -137,11 +151,19 @@ export const GPGPUDebugger = {
         } else if (this.debugSystem === 'particles') {
             addOption('position', 'Position');
             addOption('velocity', 'Velocity');
+        } else if (this.debugSystem === 'hydrosim') {
+            // Re-added Hydro options
+            addOption('velocity', 'Velocity');
+            addOption('density', 'Density (Color)');
+            addOption('pressure', 'Pressure');
+            addOption('divergence', 'Divergence');
         }
-
+        
         const matchingOption = Array.from(this.textureSelect.options).some(opt => opt.value === currentVal);
         if (matchingOption) {
             this.textureSelect.value = currentVal;
+        } else if (this.textureSelect.options.length > 0) {
+            this.textureSelect.selectedIndex = 0;
         }
         this.debugTexture = this.textureSelect.value;
     },
@@ -186,6 +208,7 @@ export const GPGPUDebugger = {
         if (!this.mesh || !this.app.vizSettings.enableGPGPUDebugger) return;
 
         const CM = this.app.ComputeManager;
+        const HM = this.app.HydroSimManager; // Need access to Hydro Manager
         let computeInstance = null;
         let variable = null;
         let worldSize = 40.0;
@@ -210,6 +233,19 @@ export const GPGPUDebugger = {
                     resolution.y = this.app.vizSettings.particle_resolution;
                 }
                 break;
+            case 'hydrosim':
+                computeInstance = HM.gpuCompute;
+                if (computeInstance) {
+                    if (this.debugTexture === 'velocity') variable = HM.velocityVariable;
+                    else if (this.debugTexture === 'density') variable = HM.densityVariable;
+                    else if (this.debugTexture === 'pressure') variable = HM.pressureVariable;
+                    else if (this.debugTexture === 'divergence') variable = HM.divergenceVariable;
+                    
+                    worldSize = 1.0; // Raw 0-1 coords
+                    resolution.x = HM.SIM_RESOLUTION;
+                    resolution.y = HM.SIM_RESOLUTION;
+                }
+                break;
         }
 
         if (!computeInstance || !variable) {
@@ -223,8 +259,18 @@ export const GPGPUDebugger = {
 
         this.mesh.material.uniforms.tDebug.value = targetTexture.texture;
         this.mesh.material.uniforms.u_worldSize.value = worldSize;
-        const viewModeMap = { 'world': 0, 'vector': 1, 'raw': 2, 'alpha': 3 };
-        this.mesh.material.uniforms.u_debugViewMode.value = viewModeMap[this.debugView] || 0;
+        
+        let viewModeInt = 0;
+        if (this.debugSystem === 'hydrosim') {
+            // Force specific view modes for Hydro to make sense of the data
+            if (this.debugTexture === 'velocity') viewModeInt = 1; // Vector
+            else viewModeInt = 2; // Raw
+        } else {
+            const viewModeMap = { 'world': 0, 'vector': 1, 'raw': 2, 'alpha': 3 };
+            viewModeInt = viewModeMap[this.debugView] || 0;
+        }
+        
+        this.mesh.material.uniforms.u_debugViewMode.value = viewModeInt;
 
         if (this.isMouseOver) {
             const texelX = Math.floor(this.mouse.x * resolution.x);
@@ -238,9 +284,9 @@ export const GPGPUDebugger = {
                 this.app.UIManager.updateGPGPUPixelValue(this.pixelBuffer);
             }
         } else {
-            if (this.app.UIManager.isDisplayingPixelValue) {
-                this.app.UIManager.resetGPGPUPixelValue();
-            }
+             if (this.app.UIManager.isDisplayingPixelValue) {
+                 this.app.UIManager.resetGPGPUPixelValue();
+             }
         }
     },
 

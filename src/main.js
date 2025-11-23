@@ -21,8 +21,8 @@ import { HydroSimManager } from './compute/HydroSimManager.js';
 
 
 const App = {
-    THREE: THREE,
-    renderer: null, camera: null, scene: null,
+    THREE: THREE, 
+    renderer: null, camera: null, scene: null, 
     gltfModel: null, animationMixer: null,
     raycaster: new THREE.Raycaster(),
 
@@ -58,12 +58,12 @@ const App = {
     guideLaser: null, directionalLight: null, ambientLight: null,
     clock: new THREE.Clock(), currentTime: 0, frame: 0,
     mouseState: new THREE.Vector4(0, 0, 0, 0),
-    jolt_currentOffset: 0.0,
+    jolt_currentOffset: 0.0, 
     jolt_targetOffset: 0.0,
     shaderPresets: shaderPresets,
     vizSettings: {},
     isDemoModeActive: false,
-
+    
     isDefaultSculptureBaked: false,
 
     UIManager: UIManager,
@@ -98,7 +98,7 @@ const App = {
         enableModel: true,
         enableModelSpin: false,
         modelSpinSpeed: 0.0,
-        enableCollisionAvoidance: true,
+        enableCollisionAvoidance: true, 
         enableLandscape: true,
         enableLandscapeSpin: false,
         landscapeSpinSpeed: 0.0,
@@ -114,7 +114,7 @@ const App = {
         imageEffect_joltStrength: 0.1,
         imageEffect_joltSpeed: 10.0,
         imageEffect_joltAudioInfluence: 1.0,
-
+        
         gpgpuGeometryMode: 'particles',
         gpgpu_enableWaterRipple: false,
         gpgpu_rippleSpeed: 0.5,
@@ -177,7 +177,7 @@ const App = {
         gpgpu_peelEnableAudio: true,
         gpgpu_peelDrift: 0.09,
         gpgpu_peelTextureAmount: 0.14,
-
+        
         particle_resolution: 512,
         particle_base_size: 3.0,
         particle_min_size: 0.1,
@@ -187,17 +187,18 @@ const App = {
         particle_flowSpeed: 0.0,
         particle_flowStrength: 0.2,
         particle_attractionStrength: 5.0, // INCREASED for faster default transition
-        particle_morphProgress: 0.0,
-        particle_target: 'flat',
+        particle_morphProgress: 0.0, 
+        particle_target: 'flat', 
         particle_cohesionStrength: 0.0,
-
+        
+        // Fluid & Hydro settings (kept for structure, but unused in loop)
         fluid_curlStrength: 0.0,
         fluid_curlScale: 0.05,
         fluid_curlSpeed: 0.3,
         fluid_cohesionStrength: 0.0,
         fluid_gravity: 0.0,
         hydro_splatRadius: 0.01,
-
+        
         gpgpu_cubeWallGridSize: 10,
         playerCube_enabled: true,
         gpgpu_cubeWallMorph: 0.0,
@@ -210,8 +211,8 @@ const App = {
         fire_ashColor: '#202020',
         ash_twinkleIntensity: 0.0,
         ash_twinkleSpeed: 1.0,
-
-        backgroundMode: 'shader',
+        
+        backgroundMode: 'shader', 
         shaderToyGLSL: "",
         enableShaderMouse: false,
         shaderAudioLink: false,
@@ -234,7 +235,7 @@ const App = {
         ambientLightColor: "#DBDBDB",
         lightDirectionX: 0.5, lightDirectionY: 0.8, lightDirectionZ: 0.5,
         enableLightOrbit: true, lightOrbitSpeed: 0.2, enableGuideLaser: false,
-        enableGPGPUDebugger: true,
+        enableGPGPUDebugger: true, 
         enableOnScreenDebugger: true,
     },
 
@@ -276,10 +277,10 @@ const App = {
                 } else {
                     this.UIManager.particleModelTexture = null;
                 }
-
+                
                 this.ComputeManager.bakeToTexture(bestMesh, this.ComputeManager.particleModelPositionTexture);
                 this.isDefaultSculptureBaked = true;
-
+                
                 this.UIManager.logSuccess("Default sculpture baked.");
                 this.UIManager.updateFileNameDisplay('particleModel', 'Devmodel.glb (Default)');
             } else {
@@ -299,15 +300,15 @@ const App = {
         const height = canvas.clientHeight;
         const targetWidth = Math.floor(width * pixelRatio);
         const targetHeight = Math.floor(height * pixelRatio);
-
+    
         if (this.renderer.domElement.width !== targetWidth || this.renderer.domElement.height !== targetHeight) {
             this.renderer.setSize(width, height, false);
         }
-
+    
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
-
-        this.BackgroundManager.onWindowResize();
+    
+        this.BackgroundManager.onWindowResize(); 
         if (this.GPGPUDebugger.onWindowResize) this.GPGPUDebugger.onWindowResize();
         if (this.UIManager.eqCanvas) this.UIManager.setupEQCanvas();
     },
@@ -315,7 +316,7 @@ const App = {
     _getActiveManager() {
         return this.vizSettings.activeControl === 'landscape' ? this.ImagePlaneManager : this.ModelManager;
     },
-
+    
     _startManualControlTimeout(activeManager) {
         if (activeManager.state.manualControlTimeoutId) {
             clearTimeout(activeManager.state.manualControlTimeoutId);
@@ -341,6 +342,13 @@ const App = {
 
     onPointerDown(event) {
         const MI = this.mouseInteraction;
+        const S = this.vizSettings;
+        
+        // Enable splatting if we are in particles mode
+        MI.isSplatting = (S.gpgpuGeometryMode === 'particles'); 
+        if (MI.isSplatting) {
+            MI.lastMouse.set(event.clientX, event.clientY);
+        }
 
         const activeManager = this._getActiveManager();
         if (!activeManager || !activeManager.state) return;
@@ -353,12 +361,36 @@ const App = {
         else if (event.button === 2) { event.preventDefault(); MI.isDragging = true; }
         MI.startMouse.set(event.clientX, event.clientY);
     },
-
+    
     onPointerMove(event) {
         const MI = this.mouseInteraction;
+        const S = this.vizSettings;
+
+        // --- UNIFIED INTERACTION: Splat the Hydro Sim ---
+        if (MI.isSplatting && S.gpgpuGeometryMode === 'particles') {
+            const currentPos = new THREE.Vector2(event.clientX, event.clientY);
+            const delta = new THREE.Vector2().subVectors(currentPos, MI.lastMouse);
+            MI.lastMouse.copy(currentPos);
+            
+            // Only splat if moving fast enough
+            if (delta.length() > 0.1) {
+                const uvPos = new THREE.Vector2(event.clientX / window.innerWidth, 1.0 - (event.clientY / window.innerHeight));
+                
+                // Settings
+                const splatRadius = S.hydro_splatRadius || 0.01;
+                const forceStrength = 60; // Adjustable strength
+    
+                // Apply VELOCITY splat (The "Push")
+                this.HydroSimManager.applyForceSplat(uvPos, new THREE.Vector3(delta.x * forceStrength, delta.y * -forceStrength, 0.0), splatRadius);
+                
+                // Apply DENSITY splat (The "Ink") - optional, for debugging visuals
+                // const color = new THREE.Color().setHSL(this.currentTime * 0.1 % 1.0, 1.0, 0.5);
+                // this.HydroSimManager.applySplat(uvPos, new THREE.Vector3(color.r, color.g, color.b), splatRadius);
+            }
+        }
 
         const activeManager = this._getActiveManager();
-        if (!activeManager || !activeManager.state || (!MI.isDragging && !MI.isRotating)) return;
+        if (!activeManager || !activeManager.state || (!MI.isDragging && !MI.isRotating)) return; 
 
         if (MI.isDragging) {
             const deltaX = event.clientX - MI.startMouse.x;
@@ -381,7 +413,9 @@ const App = {
 
     onPointerUp(event) {
         const MI = this.mouseInteraction;
-
+        
+        MI.isSplatting = false;
+        
         const activeManager = this._getActiveManager();
         if (activeManager && activeManager.state.isUnderManualControl) {
             this._startManualControlTimeout(activeManager);
@@ -392,16 +426,16 @@ const App = {
 
     async init() {
         this.vizSettings = JSON.parse(JSON.stringify(this.defaultVisualizerSettings));
-
+        
         window.onerror = (message, source, lineno, colno, error) => {
             console.error("Uncaught Error:", message, source, lineno, colno, error);
             if (this.UIManager) this.UIManager.logError(`Runtime Error: ${message.toString().substring(0, 150)}...`);
-            return true;
+            return true; 
         };
         window.onunhandledrejection = (event) => {
             console.error("Unhandled Promise Rejection:", event.reason);
             if (this.UIManager) this.UIManager.logError(`Promise Error: ${event.reason.message || event.reason.toString().substring(0, 150)}...`);
-            event.preventDefault();
+            event.preventDefault(); 
         };
 
         this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('glCanvas'), antialias: true, powerPreference: "high-performance" });
@@ -418,18 +452,18 @@ const App = {
         this.ModelManager.init(this);
         this.Debugger.init(this);
         this.CubeWallManager.init(this);
-
+        
         this.DirectorManager.init(this);
         this.ParticleTransitions.init(this);
         this.FluidDirector.init(this); // Kept initialized, but dormant
-
-        this.ImagePlaneManager.init(this);
-        this.ComputeManager.init(this);
-        this.HydroSimManager.init(this); // Kept initialized, but dormant
-
+        
+        this.ImagePlaneManager.init(this); 
+        this.ComputeManager.init(this); 
+        this.HydroSimManager.init(this); 
+        
         this.GPGPUDebugger.init(this);
-        this.UIManager.init(this);
-
+        this.UIManager.init(this); 
+        
         this.ambientLight = new THREE.AmbientLight(this.vizSettings.ambientLightColor, 1.0);
         this.scene.add(this.ambientLight);
         this.directionalLight = new THREE.DirectionalLight(this.vizSettings.lightColor, 1.0);
@@ -442,17 +476,17 @@ const App = {
         this.guideLaser.frustumCulled = false;
         this.guideLaser.visible = this.vizSettings.enableGuideLaser;
         this.scene.add(this.guideLaser);
-
+        
         await Promise.all([this.preloadDevAssets(), this.preloadDefaultSculpture()]);
 
-        this.ImagePlaneManager.createDefaultLandscape();
-
+        this.ImagePlaneManager.createDefaultLandscape(); 
+        
         // Explicitly start the ComputeManager with the default mode
         this.ComputeManager.switchMode(this.vizSettings.gpgpuGeometryMode, true);
 
-        this.BackgroundManager.render();
-        this.GPGPUDebugger.update();
-
+        this.BackgroundManager.render(); 
+        this.GPGPUDebugger.update(); 
+        
         const defaultShaderId = 'presetBg6';
         const defaultShaderCode = this.shaderPresets[defaultShaderId];
         if (this.vizSettings.backgroundMode === 'shader' && defaultShaderCode) {
@@ -471,8 +505,8 @@ const App = {
         }
 
         window.addEventListener('resize', this.onWindowResize.bind(this));
-        this.onWindowResize();
-
+        this.onWindowResize(); 
+        
         const canvas = this.renderer.domElement;
         canvas.addEventListener('mousemove', (event) => {
             if (this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') {
@@ -481,7 +515,7 @@ const App = {
             }
             if (this.GPGPUDebugger) { this.GPGPUDebugger.handleMouseMove(event); }
         });
-        canvas.addEventListener('mousedown', (event) => { if (event.target === canvas && this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') { this.mouseState.z = 1; } });
+        canvas.addEventListener('mousedown', (event) => { if (event.target === canvas && this.vizSettings.enableShaderMouse && this.vizSettings.backgroundMode === 'shader') { this.mouseState.z = 1; }});
         canvas.addEventListener('mouseup', () => { this.mouseState.z = 0; });
         canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
         canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
@@ -509,8 +543,8 @@ const App = {
     animate() {
         requestAnimationFrame(this.animate.bind(this));
         const delta = this.clock.getDelta();
-        const cappedDelta = Math.min(delta, 1 / 30);
-        this.currentTime = this.clock.getElapsedTime();
+        const cappedDelta = Math.min(delta, 1 / 30); 
+        this.currentTime = this.clock.getElapsedTime(); 
         this.frame++;
 
         const S = this.vizSettings;
@@ -525,33 +559,35 @@ const App = {
             if (document.getElementById('lightDirectionX')) this.UIManager.setSliderValue('lightDirectionX', newX);
             if (document.getElementById('lightDirectionZ')) this.UIManager.setSliderValue('lightDirectionZ', newZ);
         }
-
+        
         this.guideLaser.visible = S.enableGuideLaser;
         if (S.enableGuideLaser) {
             const laserStart = new THREE.Vector3().copy(this.directionalLight.position).multiplyScalar(100);
-            const laserEnd = new THREE.Vector3(0, 0, 0);
+            const laserEnd = new THREE.Vector3(0,0,0);
             const positions = this.guideLaser.geometry.attributes.position.array;
             positions[0] = laserStart.x; positions[1] = laserStart.y; positions[2] = laserStart.z;
             positions[3] = laserEnd.x; positions[4] = laserEnd.y; positions[5] = laserEnd.z;
             this.guideLaser.geometry.attributes.position.needsUpdate = true;
         }
-
+        
         this.AudioProcessor.updateAudioData();
-        if (this.animationMixer) this.animationMixer.update(cappedDelta);
+        if(this.animationMixer) this.animationMixer.update(cappedDelta);
+        
+        // IMPORTANT: Update HydroSim every frame
+        this.HydroSimManager.update(cappedDelta);
 
-        this.ComputeManager.update(cappedDelta);
-
-        // Only run Particle Transitions now. FluidDirector is mothballed.
-        if (S.gpgpuGeometryMode === 'particles') {
-            this.ParticleTransitions.update();
+        this.ComputeManager.update(cappedDelta); 
+        
+        if (S.gpgpuGeometryMode === 'particles') { 
+            this.ParticleTransitions.update(); 
         }
-
+        
         this.DirectorManager.update(cappedDelta);
         this.ImagePlaneManager.update(cappedDelta);
         this.ModelManager.update(cappedDelta);
         this.CubeWallManager.update();
-
-        this.CameraManager.update(cappedDelta);
+        
+        this.CameraManager.update(cappedDelta); 
         this.SceneManager.update(cappedDelta);
         this.BackgroundManager.update();
         this.GPGPUDebugger.update();

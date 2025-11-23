@@ -6,49 +6,48 @@ import { ParticleSystem } from '../features/particles/ParticleSystem.js';
 
 export const ImagePlaneManager = {
     app: null,
-    landscape: null,
+    landscape: null, 
     instancedMesh: null,
-
-    // Materials
+    
     facetedMaterial: null,
     geocubeMaterial: null,
-
-    landscapeContainer: null,
-    boundingBox: null,
-    planeDimensions: null,
-    planeResolution: null,
-    currentTexture: null,
-    spinAccumulator: null,
+    
+    landscapeContainer: null, 
+    boundingBox: null, 
+    planeDimensions: null, 
+    planeResolution: null, 
+    currentTexture: null, 
+    spinAccumulator: null, 
 
     state: {
         isUnderManualControl: false,
-        manualControlReleaseTime: -1,
-        manualControlTimeoutId: null,
+        manualControlReleaseTime: -1, 
+        manualControlTimeoutId: null, 
         returnEaseFactor: 0.0,
-        targetPosition: null,
-        targetQuaternion: null,
-        homePosition: null,
-        homeQuaternion: null
+        targetPosition: null, 
+        targetQuaternion: null, 
+        homePosition: null, 
+        homeQuaternion: null 
     },
 
     autopilot: {
         active: false,
         preset: null,
-        waypointProgress: 1.0,
-        waypointTransitionDuration: 20.0,
-        startPos: null,
-        endPos: null,
-        startQuat: null,
-        endQuat: null,
+        waypointProgress: 1.0, 
+        waypointTransitionDuration: 20.0, 
+        startPos: null, 
+        endPos: null, 
+        startQuat: null, 
+        endQuat: null,  
     },
-
-    _getWeightedRandom(distribution) {
+    
+    _getWeightedRandom(distribution) { 
         const rand = Math.random();
         let cumulativeWeight = 0;
         for (const item of distribution) {
             cumulativeWeight += item.weight;
             if (rand < cumulativeWeight) {
-                return this.app.THREE.MathUtils.randFloat(item.range[0], item.range[1]);
+                return this.app.THREE.MathUtils.randFloat(item.range[0], item.range[1]); 
             }
         }
         const lastItem = distribution[distribution.length - 1];
@@ -74,12 +73,11 @@ export const ImagePlaneManager = {
 
         this.state.homePosition.copy(this.app.defaultVisualizerSettings.homePositionLandscape);
         this.state.targetPosition.copy(this.state.homePosition);
-
+        
         this.landscapeContainer = new this.app.THREE.Group();
         this.landscapeContainer.frustumCulled = false;
         this.app.scene.add(this.landscapeContainer);
 
-        // Initialize Sub-Systems
         ParticleSystem.init(this.app);
     },
 
@@ -89,7 +87,7 @@ export const ImagePlaneManager = {
         ap.active = true;
         ap.preset = presetId;
         if (this.app.UIManager) this.app.UIManager.updateMasterControls();
-        ap.waypointProgress = 1.0;
+        ap.waypointProgress = 1.0; 
     },
 
     stopAutopilot() {
@@ -97,78 +95,71 @@ export const ImagePlaneManager = {
         ap.active = false;
         ap.preset = null;
     },
-
+    
     generateNewRandomWaypoint() {
         const ap = this.autopilot;
         ap.startPos.copy(this.state.targetPosition);
         ap.startQuat.copy(this.state.targetQuaternion).multiply(this.spinAccumulator.clone().invert());
 
         let endPosX, endPosY, endPosZ;
-        let eulerX, eulerY;
+        let eulerX, eulerY; 
+        
+        const orbitalTiltDistribution = [ { range: [-5, 5], weight: 0.50 }, { range: [5, 15], weight: 0.20 }, { range: [-15, -5], weight: 0.20 }, { range: [15, 30], weight: 0.05 }, { range: [-30, -15], weight: 0.05 }];
 
-        const orbitalTiltDistribution = [{ range: [-5, 5], weight: 0.50 }, { range: [5, 15], weight: 0.20 }, { range: [-15, -5], weight: 0.20 }, { range: [15, 30], weight: 0.05 }, { range: [-30, -15], weight: 0.05 }];
-
-        if (ap.preset === 'autopilotPreset1') {
-            endPosX = this.app.THREE.MathUtils.randFloat(-15, 15); endPosY = this.app.THREE.MathUtils.randFloat(-10, 10); endPosZ = this.app.THREE.MathUtils.randFloat(-5, 5); eulerX = this.app.THREE.MathUtils.randFloat(-2, 2); eulerY = this.app.THREE.MathUtils.randFloat(-5, 5);
-        } else if (ap.preset === 'autopilotPreset2') {
-            endPosX = this.app.THREE.MathUtils.randFloat(-5, 5); endPosY = this.app.THREE.MathUtils.randFloat(-5, 5); endPosZ = this.app.THREE.MathUtils.randFloat(-30, 10); eulerX = this.app.THREE.MathUtils.randFloat(-4, 4); eulerY = this.app.THREE.MathUtils.randFloat(-8, 8);
-        } else if (ap.preset === 'autopilotPreset3') {
-            endPosX = this.app.THREE.MathUtils.randFloat(-30, 30); endPosY = this.app.THREE.MathUtils.randFloat(-20, 20); endPosZ = this.app.THREE.MathUtils.randFloat(-40, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([{ range: [-15, 15], weight: 0.8 }, { range: [-30, 30], weight: 0.2 }]);
-        } else if (ap.preset === 'autopilotPreset4') {
-            endPosX = this.app.THREE.MathUtils.randFloat(-50, 50); endPosY = this.app.THREE.MathUtils.randFloat(-35, 35); endPosZ = this.app.THREE.MathUtils.randFloat(-45, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([{ range: [-20, 20], weight: 0.4 }, { range: [20, 30], weight: 0.25 }, { range: [-30, -20], weight: 0.25 }, { range: [35, 45], weight: 0.05 }, { range: [-45, -35], weight: 0.05 }]);
-        } else {
-            endPosX = this.app.THREE.MathUtils.randFloat(-70, 70); endPosY = this.app.THREE.MathUtils.randFloat(-50, 50); endPosZ = this.app.THREE.MathUtils.randFloat(-50, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([{ range: [-15, 15], weight: 0.35 }, { range: [-35, 35], weight: 0.4 }, { range: [35, 50], weight: 0.125 }, { range: [-50, -35], weight: 0.125 }]);
+        if (ap.preset === 'autopilotPreset1') { endPosX = this.app.THREE.MathUtils.randFloat(-15, 15); endPosY = this.app.THREE.MathUtils.randFloat(-10, 10); endPosZ = this.app.THREE.MathUtils.randFloat(-5, 5); eulerX = this.app.THREE.MathUtils.randFloat(-2, 2); eulerY = this.app.THREE.MathUtils.randFloat(-5, 5);
+        } else if (ap.preset === 'autopilotPreset2') { endPosX = this.app.THREE.MathUtils.randFloat(-5, 5); endPosY = this.app.THREE.MathUtils.randFloat(-5, 5); endPosZ = this.app.THREE.MathUtils.randFloat(-30, 10); eulerX = this.app.THREE.MathUtils.randFloat(-4, 4); eulerY = this.app.THREE.MathUtils.randFloat(-8, 8);
+        } else if (ap.preset === 'autopilotPreset3') { endPosX = this.app.THREE.MathUtils.randFloat(-30, 30); endPosY = this.app.THREE.MathUtils.randFloat(-20, 20); endPosZ = this.app.THREE.MathUtils.randFloat(-40, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([ { range: [-15, 15], weight: 0.8 }, { range: [-30, 30], weight: 0.2 } ]);
+        } else if (ap.preset === 'autopilotPreset4') { endPosX = this.app.THREE.MathUtils.randFloat(-50, 50); endPosY = this.app.THREE.MathUtils.randFloat(-35, 35); endPosZ = this.app.THREE.MathUtils.randFloat(-45, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([ { range: [-20, 20], weight: 0.4 }, { range: [20, 30], weight: 0.25 }, { range: [-30, -20], weight: 0.25 }, { range: [35, 45], weight: 0.05 }, { range: [-45, -35], weight: 0.05 } ]);
+        } else { endPosX = this.app.THREE.MathUtils.randFloat(-70, 70); endPosY = this.app.THREE.MathUtils.randFloat(-50, 50); endPosZ = this.app.THREE.MathUtils.randFloat(-50, 10); eulerX = this._getWeightedRandom(orbitalTiltDistribution); eulerY = this._getWeightedRandom([ { range: [-15, 15], weight: 0.35 }, { range: [-35, 35], weight: 0.4 }, { range: [35, 50], weight: 0.125 }, { range: [-50, -35], weight: 0.125 } ]);
         }
 
         ap.endPos.set(endPosX, endPosY, endPosZ);
-        const randomRotationEuler = new this.app.THREE.Euler(this.app.THREE.MathUtils.degToRad(eulerX), this.app.THREE.MathUtils.degToRad(eulerY), 0, 'YXZ');
+        const randomRotationEuler = new this.app.THREE.Euler(this.app.THREE.MathUtils.degToRad(eulerX), this.app.THREE.MathUtils.degToRad(eulerY), 0, 'YXZ' );
         const randomRotationQuat = new this.app.THREE.Quaternion().setFromEuler(randomRotationEuler);
         ap.endQuat.copy(this.state.homeQuaternion).multiply(randomRotationQuat);
-
+        
         ap.waypointTransitionDuration = this.app.THREE.MathUtils.randFloat(18.0, 30.0);
-
+        
         ap.waypointProgress = 0;
     },
-
+    
     update(cappedDelta) {
         if (!this.landscapeContainer) return;
         const S = this.app.vizSettings;
 
         this.landscapeContainer.visible = S.enableLandscape;
-
+        
         if (!S.enableLandscape) return;
-
+        
         const mode = S.gpgpuGeometryMode;
-
-        // Update Visibility based on mode
+        
         if (this.landscape) this.landscape.visible = (mode === 'faceted');
         if (this.instancedMesh) this.instancedMesh.visible = (mode === 'geocube');
-
-        // Particles are managed by ParticleSystem, but we toggle visibility here for cohesion
+        
         if (ParticleSystem.mesh) {
             ParticleSystem.mesh.visible = (mode === 'particles');
         }
-
+        
         const state = this.state;
         const ap = this.autopilot;
         const now = this.app.currentTime;
-
+        
         if (ap.active && ap.waypointProgress >= 1.0) {
             this.generateNewRandomWaypoint();
         }
         if (ap.active) {
             ap.waypointProgress = Math.min(1.0, ap.waypointProgress + cappedDelta / ap.waypointTransitionDuration);
         }
-
+        
         let baseRotationTarget = new this.app.THREE.Quaternion();
         const manualHoldTime = 0.5;
         const inGracePeriod = state.manualControlReleaseTime > 0 && (now - state.manualControlReleaseTime < manualHoldTime);
 
         if (state.isUnderManualControl || inGracePeriod) {
-            state.returnEaseFactor = 0;
+            state.returnEaseFactor = 0; 
             baseRotationTarget.copy(state.targetQuaternion);
-        } else if (ap.active) {
-            state.returnEaseFactor = 0;
+        } else if (ap.active) { 
+            state.returnEaseFactor = 0; 
             const ease = 0.5 - 0.5 * Math.cos(ap.waypointProgress * Math.PI);
             state.targetPosition.lerpVectors(ap.startPos, ap.endPos, ease);
             baseRotationTarget.copy(ap.startQuat).slerp(ap.endQuat, ease);
@@ -177,12 +168,12 @@ export const ImagePlaneManager = {
             const maxEase = 0.02;
             const easeIncrement = 0.0005;
             state.returnEaseFactor = Math.min(state.returnEaseFactor + easeIncrement, maxEase);
-
+            
             state.targetPosition.lerp(state.homePosition, state.returnEaseFactor);
             state.targetQuaternion.slerp(this.state.homeQuaternion, state.returnEaseFactor);
             baseRotationTarget.copy(state.targetQuaternion);
         }
-
+        
         if (S.enableLandscapeSpin) {
             const incrementalSpin = new this.app.THREE.Quaternion();
             const spinAxis = new this.app.THREE.Vector3(0, 0, 1);
@@ -191,7 +182,7 @@ export const ImagePlaneManager = {
         } else {
             this.spinAccumulator.slerp(new this.app.THREE.Quaternion(), 0.05);
         }
-
+        
         if (state.isUnderManualControl || inGracePeriod) {
             baseRotationTarget.copy(state.targetQuaternion);
         }
@@ -201,26 +192,20 @@ export const ImagePlaneManager = {
         this.landscapeContainer.position.lerp(state.targetPosition, 0.05);
         this.landscapeContainer.quaternion.slerp(finalTargetQuaternion, 0.1);
         this.landscapeContainer.scale.set(S.landscapeScale, S.landscapeScale, S.landscapeScale);
-
+        
         this.updateDeformationUniforms();
-
+        
         this.updateBoundingBox();
     },
 
     createDefaultLandscape() {
         this.updatePlaneDimensions();
-
-        this._cleanupMeshes();
-
+        this._cleanupMeshes(); 
         this._createPlaneMesh();
         this._createInstancedCubeMesh();
-
-        // Create Particles via the new System
         const particleMesh = ParticleSystem.createMesh();
         this.landscapeContainer.add(particleMesh);
-
         this.applyAndStoreHomeOrientation();
-
         this.landscapeContainer.position.copy(this.state.homePosition);
         this.landscapeContainer.quaternion.copy(this.state.homeQuaternion);
         this.state.targetPosition.copy(this.state.homePosition);
@@ -231,38 +216,31 @@ export const ImagePlaneManager = {
     _cleanupMeshes() {
         if (this.landscape) { this.landscape.geometry.dispose(); this.landscapeContainer.remove(this.landscape); this.landscape = null; }
         if (this.instancedMesh) { this.instancedMesh.geometry.dispose(); this.landscapeContainer.remove(this.instancedMesh); this.instancedMesh = null; }
-
         if (this.facetedMaterial) { this.facetedMaterial.dispose(); this.facetedMaterial = null; }
         if (this.geocubeMaterial) { this.geocubeMaterial.dispose(); this.geocubeMaterial = null; }
-
-        // Clean up Particles via System
         ParticleSystem.dispose();
     },
 
     _createPlaneMesh() {
-        const geometry = new this.app.THREE.PlaneGeometry(this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y);
+        const geometry = new this.app.THREE.PlaneGeometry( this.planeDimensions.x, this.planeDimensions.y, this.planeResolution.x, this.planeResolution.y );
         const gpgpuUvs = new Float32Array(geometry.attributes.position.count * 2);
         for (let i = 0; i < geometry.attributes.uv.count; i++) {
             gpgpuUvs[i * 2] = geometry.attributes.uv.getX(i);
             gpgpuUvs[i * 2 + 1] = geometry.attributes.uv.getY(i);
         }
         geometry.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
-
         this._createFacetedMaterial();
-
         this.landscape = new this.app.THREE.Mesh(geometry, this.facetedMaterial);
         this.landscape.frustumCulled = false;
         this.landscapeContainer.add(this.landscape);
     },
-
+    
     _createInstancedCubeMesh() {
         const GRID_SIZE = this.app.vizSettings.gpgpu_cubeWallGridSize;
         const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
         const COUNT = GRID_SIZE * GRID_SIZE;
         const cubeGeom = new this.app.THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
-
         this._createGeocubeMaterial();
-
         this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.geocubeMaterial, COUNT);
         this.instancedMesh.frustumCulled = false;
         const instanceIds = new Float32Array(COUNT);
@@ -270,7 +248,7 @@ export const ImagePlaneManager = {
         this.instancedMesh.geometry.setAttribute('instanceId', new this.app.THREE.InstancedBufferAttribute(instanceIds, 1));
         this.landscapeContainer.add(this.instancedMesh);
     },
-
+    
     updatePlaneDimensions() {
         const baseSize = 40;
         const aspectRatio = parseFloat(this.app.vizSettings.planeAspectRatio) || 1.0;
@@ -279,12 +257,12 @@ export const ImagePlaneManager = {
 
     applyAndStoreHomeOrientation() {
         const S = this.app.vizSettings;
-        this.state.homeQuaternion.identity();
+        this.state.homeQuaternion.identity(); 
         if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles') {
             // Default upright orientation
         } else {
             const tempObject = new this.app.THREE.Object3D();
-            if (S.planeOrientation === 'xz') { tempObject.rotateX(-Math.PI / 2); }
+            if (S.planeOrientation === 'xz') { tempObject.rotateX(-Math.PI / 2); } 
             else if (S.planeOrientation === 'yz') { tempObject.rotateY(Math.PI / 2); }
             this.state.homeQuaternion.copy(tempObject.quaternion);
         }
@@ -302,8 +280,8 @@ export const ImagePlaneManager = {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
         const textureToUse = this.currentTexture || new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
-        if (!this.currentTexture) textureToUse.needsUpdate = true;
-
+        if(!this.currentTexture) textureToUse.needsUpdate = true;
+        
         const uniforms = {
             u_map: { value: textureToUse },
             u_positionTexture: { value: null },
@@ -342,18 +320,16 @@ export const ImagePlaneManager = {
             texture.wrapS = texture.wrapT = this.app.THREE.ClampToEdgeWrapping;
             texture.colorSpace = this.app.vizSettings.enablePBRColor ? this.app.THREE.SRGBColorSpace : this.app.THREE.NoColorSpace;
             texture.anisotropy = this.app.renderer.capabilities.getMaxAnisotropy();
-
+            
             texture.flipY = false;
             texture.needsUpdate = true;
-
+            
             if (this.facetedMaterial) this.facetedMaterial.uniforms.u_map.value = texture;
             if (this.geocubeMaterial) this.geocubeMaterial.uniforms.u_map.value = texture;
-
-            // Update Particle System Material
             if (ParticleSystem.material) {
                 ParticleSystem.material.uniforms.u_map.value = texture;
             }
-
+            
             this.currentTexture = texture;
         };
 
@@ -374,24 +350,22 @@ export const ImagePlaneManager = {
     updateDeformationUniforms() {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
-
+        
         if (S.gpgpuGeometryMode === 'particles') {
             ParticleSystem.updateUniforms();
-        } else {
+        } else { 
             const allMaterials = [this.facetedMaterial, this.geocubeMaterial];
-
             allMaterials.forEach(mat => {
                 if (!mat || !CM.landscapeGpuCompute) return;
                 const U = mat.uniforms;
                 const positionTarget = CM.landscapeGpuCompute.getCurrentRenderTarget(CM.landscapePositionVariable);
                 U.u_positionTexture.value = positionTarget.texture;
-
-                U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph;
+                U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph; 
                 U.u_time.value = this.app.currentTime;
                 U.u_metalness.value = S.metalness;
                 U.u_roughness.value = S.roughness;
                 U.u_envMapIntensity.value = S.reflectionStrength;
-                U.t_envMap.value = this.app.hdrTexture;
+                U.t_envMap.value = this.app.hdrTexture; 
                 U.u_cameraPosition.value = this.app.camera.position;
                 U.u_lightColor.value.set(S.lightColor);
                 U.u_ambientLightColor.value.set(S.ambientLightColor);
@@ -407,7 +381,7 @@ export const ImagePlaneManager = {
     updateBoundingBox() {
         const S = this.app.vizSettings;
         const mode = S.gpgpuGeometryMode;
-
+        
         let activeMesh = null;
         if (mode === 'faceted') activeMesh = this.landscape;
         else if (mode === 'geocube') activeMesh = this.instancedMesh;
@@ -443,7 +417,7 @@ export const ImagePlaneManager = {
         const z = this.app.THREE.MathUtils.lerp(flatZ, steppedZ, S.gpgpu_cubeWallMorph);
         return new this.app.THREE.Vector3(x, y, z);
     },
-
+    
     getUvFromGridCoords(gridX, gridY) {
         const S = this.app.vizSettings;
         const GRID_SIZE = S.gpgpu_cubeWallGridSize;
