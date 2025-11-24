@@ -49,6 +49,9 @@ export const ComputeManager = {
     
     blurPass: null,
     blurredPositionTexture: null,
+    
+    // Dummy texture to prevent shader crashes
+    dummyTexture: null,
 
     // --- Landscape/Deformation System ---
     landscapeGpuCompute: null,
@@ -60,6 +63,10 @@ export const ComputeManager = {
     init(appInstance) {
         this.app = appInstance;
         const renderer = this.app.renderer;
+        
+        // Create a 1x1 black texture for safe initialization
+        this.dummyTexture = new this.app.THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, this.app.THREE.RGBAFormat);
+        this.dummyTexture.needsUpdate = true;
 
         if (!renderer.capabilities.isWebGL2) {
             this.app.UIManager.logError("GPGPU Compute requires WebGL2.");
@@ -255,8 +262,8 @@ export const ComputeManager = {
         vUniforms['u_cohesionStrength'] = { value: D.particle_cohesionStrength };
         vUniforms['u_blurredPosition'] = { value: this.blurredPositionTexture };
         
-        // --- NEW: Bridge to Hydro Sim ---
-        vUniforms['u_hydroVelocityTexture'] = { value: null };
+        // Initialize with dummy to prevent null texture crash
+        vUniforms['u_hydroVelocityTexture'] = { value: this.dummyTexture };
 
         const pUniforms = this.positionVariable.material.uniforms;
         pUniforms['u_delta'] = { value: 0.0 };
@@ -310,45 +317,57 @@ export const ComputeManager = {
     },
     
     bakeToTexture(mesh, targetPositionTexture) {
-        if (!mesh || !targetPositionTexture) return;
+        if (!mesh) {
+            console.warn("bakeToTexture called with null mesh");
+            return;
+        }
+        if (!targetPositionTexture) {
+            console.warn("bakeToTexture called with null targetTexture");
+            return;
+        }
         const targetUVTexture = this.particleModelUVTexture;
         if (!targetUVTexture) return;
     
-        const sampler = new MeshSurfaceSampler(mesh).build();
-        const posArray = targetPositionTexture.image.data;
-        const uvArray = targetUVTexture.image.data;
-        const particleCount = posArray.length / 4;
-        
-        mesh.geometry.computeBoundingBox();
-        const box = mesh.geometry.boundingBox;
-        const size = new this.app.THREE.Vector3();
-        box.getSize(size);
-        const center = new this.app.THREE.Vector3();
-        box.getCenter(center);
+        try {
+            const sampler = new MeshSurfaceSampler(mesh).build();
+            const posArray = targetPositionTexture.image.data;
+            const uvArray = targetUVTexture.image.data;
+            const particleCount = posArray.length / 4;
+            
+            mesh.geometry.computeBoundingBox();
+            const box = mesh.geometry.boundingBox;
+            const size = new this.app.THREE.Vector3();
+            box.getSize(size);
+            const center = new this.app.THREE.Vector3();
+            box.getCenter(center);
 
-        const planeDims = this.app.ImagePlaneManager.planeDimensions;
-        const scale = Math.min(planeDims.x / size.x, planeDims.y / size.y) * 0.9;
-    
-        const _position = new this.app.THREE.Vector3();
-        const _normal = new this.app.THREE.Vector3();
-        const _uv = new this.app.THREE.Vector2();
-    
-        const hasUVs = mesh.geometry.attributes.uv !== undefined;
-    
-        for (let i = 0; i < particleCount; i++) {
-            sampler.sample(_position, _normal, undefined, _uv);
-            _position.sub(center).multiplyScalar(scale);
-            const k = i * 4;
-            posArray[k + 0] = _position.x;
-            posArray[k + 1] = _position.y;
-            posArray[k + 2] = _position.z;
-            uvArray[k + 0] = hasUVs ? _uv.x : 0.0;
-            uvArray[k + 1] = hasUVs ? _uv.y : 0.0;
+            const planeDims = this.app.ImagePlaneManager.planeDimensions;
+            const scale = Math.min(planeDims.x / size.x, planeDims.y / size.y) * 0.9;
+        
+            const _position = new this.app.THREE.Vector3();
+            const _normal = new this.app.THREE.Vector3();
+            const _uv = new this.app.THREE.Vector2();
+        
+            const hasUVs = mesh.geometry.attributes.uv !== undefined;
+        
+            for (let i = 0; i < particleCount; i++) {
+                sampler.sample(_position, _normal, undefined, _uv);
+                _position.sub(center).multiplyScalar(scale);
+                const k = i * 4;
+                posArray[k + 0] = _position.x;
+                posArray[k + 1] = _position.y;
+                posArray[k + 2] = _position.z;
+                uvArray[k + 0] = hasUVs ? _uv.x : 0.0;
+                uvArray[k + 1] = hasUVs ? _uv.y : 0.0;
+            }
+        
+            targetPositionTexture.needsUpdate = true;
+            targetUVTexture.needsUpdate = true;
+            console.log(`Baked ${particleCount} points (position & UVs) to textures.`);
+        } catch (e) {
+            console.error("Error baking mesh to texture:", e);
+            if (this.app.UIManager) this.app.UIManager.logError("Failed to bake 3D Model. Morph disabled.");
         }
-    
-        targetPositionTexture.needsUpdate = true;
-        targetUVTexture.needsUpdate = true;
-        console.log(`Baked ${particleCount} points (position & UVs) to textures.`);
     },
 
     dispose() {
@@ -394,7 +413,8 @@ export const ComputeManager = {
         
         const mode = this._currentMode;
 
-        const isParticle = (mode === 'particles');
+        // ** CRITICAL FIX: 'liquid' mode also needs the particle engine **
+        const isParticleEngine = (mode === 'particles' || mode === 'liquid');
         const isLandscape = (mode === 'faceted' || mode === 'geocube');
 
         if (isLandscape && this.landscapeGpuCompute) {
@@ -480,7 +500,7 @@ export const ComputeManager = {
             this.landscapeGpuCompute.compute();
         }
 
-        if (isParticle && this.gpuCompute) {
+        if (isParticleEngine && this.gpuCompute) {
             const vUniforms = this.velocityVariable.material.uniforms;
             const pUniforms = this.positionVariable.material.uniforms;
             
@@ -498,14 +518,17 @@ export const ComputeManager = {
             vUniforms.u_cohesionStrength.value = cohesion;
 
             // --- NEW: Feed Hydro Sim Texture into Particle Physics ---
-            if (this.app.HydroSimManager && this.app.HydroSimManager.velocityVariable) {
+            // Added Safety check to prevent crash if HydroSimManager is not ready
+            if (this.app.HydroSimManager && this.app.HydroSimManager.velocityVariable && this.app.HydroSimManager.gpuCompute) {
                 const hydroGpu = this.app.HydroSimManager.gpuCompute;
                 const hydroVelVar = this.app.HydroSimManager.velocityVariable;
                 
-                if (hydroGpu && hydroVelVar) {
-                    // Grab the velocity texture computed by the Hydro engine
+                // Double check that the variable has render targets before accessing
+                if (hydroGpu && hydroVelVar && hydroVelVar.renderTargets && hydroVelVar.renderTargets.length > 0) {
                     const hydroTex = hydroGpu.getCurrentRenderTarget(hydroVelVar).texture;
-                    vUniforms.u_hydroVelocityTexture.value = hydroTex;
+                    if (hydroTex) {
+                        vUniforms.u_hydroVelocityTexture.value = hydroTex;
+                    }
                 }
             }
 

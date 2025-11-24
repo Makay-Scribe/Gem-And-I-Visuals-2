@@ -28,7 +28,7 @@ export const ParticleSystem = {
             } else {
                 color.setRGB(1.0, 1.0, (t - 0.5) / 0.5);
             }
-
+            
             data[i * 4 + 0] = Math.floor(color.r * 255);
             data[i * 4 + 1] = Math.floor(color.g * 255);
             data[i * 4 + 2] = Math.floor(color.b * 255);
@@ -40,7 +40,7 @@ export const ParticleSystem = {
     },
 
     createMesh() {
-        this.dispose(); // Clean up existing if rebuilding
+        this.dispose(); 
 
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
@@ -48,13 +48,12 @@ export const ParticleSystem = {
 
         const resolution = S.particle_resolution;
         const count = resolution * resolution;
-
-        // Calculate base size based on plane dimensions
+        
         this.calculatedBaseSize = IPM.planeDimensions.x / (resolution - 1) * Math.sqrt(2);
 
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-
+        
         const uvs = new Float32Array(count * 2);
         for (let y = 0; y < resolution; y++) {
             for (let x = 0; x < resolution; x++) {
@@ -84,7 +83,7 @@ export const ParticleSystem = {
             defines: { 'USE_ENVMAP': '' },
             uniforms: {
                 u_map: { value: textureToUse },
-                u_positionTexture: { value: null }, // Will be set in update()
+                u_positionTexture: { value: null }, 
                 u_particleModelUVTexture: { value: CM.particleModelUVTexture },
                 u_particleModelTexture: { value: this.app.UIManager?.particleModelTexture || null },
                 u_particleColorMix: { value: S.particle_morphProgress },
@@ -97,13 +96,11 @@ export const ParticleSystem = {
                 u_lightColor: { value: new THREE.Color(S.lightColor) },
                 u_ambientLightColor: { value: new THREE.Color(S.ambientLightColor) },
                 u_lightDirection: { value: new THREE.Vector3().set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize() },
-                u_cameraPosition: { value: this.app.camera.position },
+                u_cameraPosition: { value: new THREE.Vector3() }, // INITIALIZED AS OBJECT
                 t_envMap: { value: this.app.hdrTexture },
                 u_time: { value: 0.0 },
                 u_pixelRatio: { value: window.devicePixelRatio },
                 u_particle_twinkleIntensity: { value: S.particle_twinkleIntensity },
-
-                // Fire / Effect Uniforms
                 u_fire_progress: { value: S.fire_visual_progress },
                 u_fire_colorRamp: { value: this.fireColorRampTexture },
                 u_fire_ashColor: { value: new THREE.Color(S.fire_ashColor) },
@@ -130,7 +127,6 @@ export const ParticleSystem = {
             U.u_positionTexture.value = posTarget.texture;
         }
 
-        // Sync Texture (in case it changed via drag-drop)
         if (IPM.currentTexture) {
             U.u_map.value = IPM.currentTexture;
         }
@@ -139,25 +135,28 @@ export const ParticleSystem = {
         U.particle_base_size.value = coarseSize;
         U.particle_min_size.value = S.particle_min_size;
         U.u_particle_size_mix.value = S.particle_size_mix;
-
+        
         U.u_pixelRatio.value = window.devicePixelRatio;
         U.u_particleColorMix.value = S.particle_morphProgress;
-
-        if (this.app.UIManager.particleModelTexture) {
-            U.u_particleModelTexture.value = this.app.UIManager.particleModelTexture;
+        
+        if (this.app.UIManager.particleModelTexture) { 
+            U.u_particleModelTexture.value = this.app.UIManager.particleModelTexture; 
         }
-
+        
         U.u_metalness.value = S.metalness;
         U.u_roughness.value = S.roughness;
         U.u_envMapIntensity.value = S.reflectionStrength;
-        U.t_envMap.value = this.app.hdrTexture;
-        U.u_cameraPosition.value = this.app.camera.position;
+        U.t_envMap.value = this.app.hdrTexture; 
+        
+        // SAFE UPDATE: using .copy() on the initialized Vector3
+        U.u_cameraPosition.value.copy(this.app.camera.position);
+        
         U.u_lightColor.value.set(S.lightColor);
         U.u_ambientLightColor.value.set(S.ambientLightColor);
         U.u_lightDirection.value.set(S.lightDirectionX, S.lightDirectionY, S.lightDirectionZ).normalize();
         U.u_time.value = this.app.currentTime;
         U.u_particle_twinkleIntensity.value = S.particle_twinkleIntensity;
-
+        
         U.u_fire_progress.value = S.fire_visual_progress;
         U.u_fire_ashColor.value.set(S.fire_ashColor);
         U.u_ash_twinkleIntensity.value = S.ash_twinkleIntensity;

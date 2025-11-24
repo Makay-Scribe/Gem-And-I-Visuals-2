@@ -13,6 +13,7 @@
             background: rgba(10, 10, 12, 0.85); border: 1px solid #333;
             padding: 15px; color: #eee; border-radius: 4px;
             backdrop-filter: blur(4px);
+            pointer-events: auto; /* Ensure UI is clickable */
         }
         h1 { font-size: 14px; margin: 0 0 10px 0; text-transform: uppercase; color: #888; border-bottom: 1px solid #444; padding-bottom: 5px;}
         
@@ -37,6 +38,16 @@
 
         .status { font-size: 10px; color: #555; margin-top: 10px; text-align: center;}
     </style>
+
+    <!-- IMPORT MAP: This allows 'import from three' to work without a bundler -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 <body>
 
@@ -69,15 +80,16 @@
         </div>
     </div>
 
-    <!-- Module Script compatible with Vite project structure -->
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
-        import { SimplexNoise } from 'three/addons/math/SimplexNoise.js';
+        
+        // REMOVED: import { SimplexNoise } ... 
+        // Reason: It was unused in the JS (logic is in Shader) and the path often causes errors.
 
         // --- CONFIG ---
-        const WIDTH = 128; // 128x128 = 16,384 particles (Low enough for any GPU, high enough to look cool)
+        const WIDTH = 128; // 128x128 = 16,384 particles
         const COUNT = WIDTH * WIDTH;
         
         // --- SCENE SETUP ---
@@ -88,7 +100,6 @@
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
-        // Enable PBR lighting calculation in shaders
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         document.body.appendChild(renderer.domElement);
 
@@ -102,13 +113,17 @@
         sun.position.set(10, 20, 20);
         scene.add(sun);
         scene.add(new THREE.AmbientLight(0x404040, 1.0));
-        const pointLight = new THREE.PointLight(0xffaa00, 2, 50); // Inner glow light
+        const pointLight = new THREE.PointLight(0xffaa00, 2, 50); 
         scene.add(pointLight);
 
         // --- GPGPU ENGINE (THE MUSCLE) ---
-        // This calculates position. It doesn't care what element is visible.
         const gpuCompute = new GPUComputationRenderer(WIDTH, WIDTH, renderer);
         
+        // If the user is on a system that doesn't support float textures, try half float
+        if ( renderer.capabilities.isWebGL2 === false ) {
+            gpuCompute.setDataType( THREE.HalfFloatType );
+        }
+
         const dtPosition = gpuCompute.createTexture();
         const posArray = dtPosition.image.data;
         
@@ -179,7 +194,6 @@
                 vec4 currentPos = texture2D(texturePosition, uv);
                 
                 // Create Sphere Target (mathematically)
-                // We use the UV to map to spherical coordinates
                 float phi = uv.y * 3.14159;
                 float theta = uv.x * 3.14159 * 2.0;
                 float r = 10.0;
@@ -189,11 +203,10 @@
                     r * sin(phi) * sin(theta)
                 );
 
-                // Create Cube Target (mathematically)
+                // Create Cube Target
                 vec3 cubeTarget = sphereTarget;
-                // Simple box projection
                 float maxDim = max(abs(cubeTarget.x), max(abs(cubeTarget.y), abs(cubeTarget.z)));
-                if(maxDim > 0.0) cubeTarget = cubeTarget / maxDim * 8.0; // 8.0 is half-size of a 16-unit cube
+                if(maxDim > 0.0) cubeTarget = cubeTarget / maxDim * 8.0; 
 
                 // Morph Logic
                 vec3 target = mix(sphereTarget, cubeTarget, uMorph);
@@ -220,12 +233,15 @@
         posVar.material.uniforms.uMorph = { value: 0.0 };
         posVar.material.uniforms.uTurbulence = { value: 0.5 };
         
-        gpuCompute.init();
+        const error = gpuCompute.init();
+        if ( error !== null ) {
+            console.error( error );
+        }
 
 
         // --- VISUALIZERS (THE SKINS) ---
 
-        // 1. EARTH: Instanced Mesh (Physical debris)
+        // 1. EARTH: Instanced Mesh
         const earthGeo = new THREE.TetrahedronGeometry(0.3, 0);
         const earthMat = new THREE.MeshStandardMaterial({ 
             color: 0x8B5A2B, 
@@ -235,15 +251,13 @@
         });
         const earthMesh = new THREE.InstancedMesh(earthGeo, earthMat, COUNT);
         
-        // Add custom attribute to look up texture position
         const refUvs = new Float32Array(COUNT * 2);
         for(let i=0; i<COUNT; i++) {
             refUvs[i*2] = (i % WIDTH) / WIDTH;
             refUvs[i*2+1] = Math.floor(i / WIDTH) / WIDTH;
         }
-        earthMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // We will update this manually or via shader
+        earthMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); 
         
-        // For Earth, we inject the GPGPU logic into the standard material shader
         earthMat.onBeforeCompile = (shader) => {
             shader.uniforms.uPosTex = { value: null };
             shader.vertexShader = `
@@ -255,18 +269,12 @@
                 '#include <begin_vertex>',
                 `
                 #include <begin_vertex>
-                
-                // Read position from GPGPU
                 vec4 posData = texture2D(uPosTex, refUv);
                 vec3 newPos = posData.xyz;
-                
-                // Cheap "Tumble" rotation based on position noise
                 float rotX = newPos.z * 3.0;
                 float rotY = newPos.x * 3.0;
-                
                 mat3 rotMatX = mat3(1,0,0, 0,cos(rotX),-sin(rotX), 0,sin(rotX),cos(rotX));
                 mat3 rotMatY = mat3(cos(rotY),0,sin(rotY), 0,1,0, -sin(rotY),0,cos(rotY));
-                
                 transformed = rotMatY * rotMatX * transformed;
                 transformed += newPos;
                 `
@@ -277,8 +285,8 @@
         scene.add(earthMesh);
 
 
-        // 2. WATER: Displaced Plane (Liquid Surface)
-        const waterGeo = new THREE.PlaneGeometry(40, 40, WIDTH - 1, WIDTH - 1); // Match GPGPU Res
+        // 2. WATER: Displaced Plane
+        const waterGeo = new THREE.PlaneGeometry(40, 40, WIDTH - 1, WIDTH - 1); 
         const waterMat = new THREE.MeshStandardMaterial({
             color: 0x007AFF,
             roughness: 0.1,
@@ -295,22 +303,17 @@
                 uniform vec2 uTexelSize;
             ` + shader.vertexShader;
 
-            // Recalculate normals for shininess
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `
-                vec2 texUV = uv; // Plane UVs match texture UVs perfectly here
+                vec2 texUV = uv; 
                 vec3 posCenter = texture2D(uPosTex, texUV).xyz;
                 vec3 posRight = texture2D(uPosTex, texUV + vec2(uTexelSize.x, 0.0)).xyz;
                 vec3 posUp = texture2D(uPosTex, texUV + vec2(0.0, uTexelSize.y)).xyz;
-
                 vec3 tangent = posRight - posCenter;
                 vec3 bitangent = posUp - posCenter;
-                
-                // New Normal
                 vec3 newNormal = normalize(cross(tangent, bitangent));
-                vNormal = newNormal; // Pass to fragment shader
-
+                vNormal = newNormal;
                 vec3 transformed = posCenter;
                 `
             );
@@ -321,8 +324,8 @@
         scene.add(waterMesh);
 
 
-        // 3. WIND: Instanced Mesh Lines (Streaks)
-        const windGeo = new THREE.BoxGeometry(0.05, 0.05, 1.0); // Long thin box
+        // 3. WIND: Instanced Mesh Lines
+        const windGeo = new THREE.BoxGeometry(0.05, 0.05, 1.0);
         const windMat = new THREE.MeshBasicMaterial({
             color: 0xA0E0E0,
             transparent: true,
@@ -343,22 +346,11 @@
                 '#include <begin_vertex>',
                 `
                 vec3 pos = texture2D(uPosTex, refUv).xyz;
-                
-                // Fake velocity calculation by noise (since we don't have prevPos in this simple demo)
-                // In real app, you'd use the Velocity Texture
                 vec3 vel = normalize(pos); 
-                
-                // Orient along "velocity" (radial for sphere)
                 vec3 up = vec3(0,1,0);
                 vec3 axis = normalize(cross(up, vel));
                 float angle = acos(dot(up, vel));
-                
-                // Quaternion rotation logic in shader is hard, so we cheat:
-                // Just adding position for now, but scaling Z makes it look like a streak
-                transformed.z *= 2.0 + length(pos)*0.2; // Stretch based on distance
-                
-                // LookAt logic simplified:
-                // This effectively orients the streak away from center
+                transformed.z *= 2.0 + length(pos)*0.2; 
                 transformed += pos;
                 `
             );
@@ -368,9 +360,8 @@
         scene.add(windMesh);
 
 
-        // 4. FIRE: Points (Volumetric)
+        // 4. FIRE: Points
         const fireGeo = new THREE.BufferGeometry();
-        // We can re-use the generic position buffer, but need refUVs as attribute
         const firePos = new Float32Array(COUNT * 3);
         fireGeo.setAttribute('position', new THREE.BufferAttribute(firePos, 3));
         fireGeo.setAttribute('refUv', new THREE.BufferAttribute(refUvs, 2));
@@ -388,34 +379,20 @@
                 
                 void main() {
                     vec3 pos = texture2D(uPosTex, refUv).xyz;
-                    
-                    // Add some "Rising" visual noise unique to fire rendering
-                    // This doesn't affect physics, just the visual representation
                     pos.y += sin(pos.x * 2.0 + uTime * 5.0) * 0.5;
-                    
                     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
                     gl_Position = projectionMatrix * mvPosition;
-                    
-                    // Size attenuates with depth
                     gl_PointSize = (100.0 / -mvPosition.z);
-                    
-                    // Calc "heat" based on height
                     vLife = smoothstep(-5.0, 10.0, pos.y);
                 }
             `,
             fragmentShader: `
                 varying float vLife;
                 void main() {
-                    // Circular particle
                     vec2 coord = gl_PointCoord - vec2(0.5);
                     if(length(coord) > 0.5) discard;
-                    
-                    // Fire Gradient: Red -> Orange -> Yellow
                     vec3 color = mix(vec3(1.0, 0.1, 0.0), vec3(1.0, 0.8, 0.2), vLife);
-                    
-                    // Fade edges
                     float alpha = 1.0 - smoothstep(0.0, 0.5, length(coord));
-                    
                     gl_FragColor = vec4(color, alpha * 0.5);
                 }
             `,
@@ -430,11 +407,9 @@
 
         // --- UI LOGIC ---
         window.setMode = (mode) => {
-            // Reset UI
             document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
             document.querySelector(`button[data-mode="${mode}"]`).classList.add('active');
             
-            // Reset Visibilities
             earthMesh.visible = false;
             waterMesh.visible = false;
             windMesh.visible = false;
@@ -457,18 +432,13 @@
             requestAnimationFrame(animate);
             const time = clock.getElapsedTime();
             
-            // 1. Update Physics Uniforms (Inputs)
             posVar.material.uniforms.uTime.value = time;
             posVar.material.uniforms.uMorph.value = parseFloat(document.getElementById('morphSlider').value);
             posVar.material.uniforms.uTurbulence.value = parseFloat(document.getElementById('noiseSlider').value);
             
-            // 2. Run GPGPU (The Muscle)
             gpuCompute.compute();
-            
-            // 3. Get Result
             const currentPosTex = gpuCompute.getCurrentRenderTarget(posVar).texture;
             
-            // 4. Feed Result to Active Skin
             if(earthMesh.visible && earthMesh.userData.shader) {
                 earthMesh.userData.shader.uniforms.uPosTex.value = currentPosTex;
             }
@@ -489,7 +459,6 @@
 
         animate();
         
-        // Handle Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();

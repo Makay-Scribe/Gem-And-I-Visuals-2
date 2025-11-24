@@ -137,6 +137,8 @@
                     <button class="segmented-control-button" data-mode="deformation">Faceted</button>
                     <button class="segmented-control-button" data-mode="geocube">GeoCube</button>
                     <button class="segmented-control-button active" data-mode="particles">Particles</button>
+                    <!-- Added Liquid Button -->
+                    <button class="segmented-control-button" data-mode="liquid">Liquid</button>
                 </div>
 
                 <hr style="border-color: #333; margin: 6px 0;">
@@ -444,7 +446,7 @@
                             <input type="range" id="particle_flowScale" min="0.0" max="1.0" step="0.01" value="0.1">
                             <hr style="border-color: #333; margin: 4px 0;">
                             <label>Attraction: <span id="particle_attractionStrengthValue" class="range-value-display"></span></label>
-                            <input type="range" id="particle_attractionStrength" min="0.0" max="1.0" step="0.01" value="0.1">
+                            <input type="range" id="particle_attractionStrength" min="0.0" max="10.0" step="0.1" value="5.0">
                             <hr style="border-color: #333; margin: 4px 0;">
                             <label>Base Size: <span id="particle_base_sizeValue" class="range-value-display"></span></label>
                             <input type="range" id="particle_base_size" min="0.1" max="10.0" step="0.1" value="3.0">

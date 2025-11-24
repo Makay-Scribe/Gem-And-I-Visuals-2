@@ -3,20 +3,21 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export const UIManager = {
     app: null,
-    _debugTimeout: null,
-    eqCanvas: null,
-    eqCtx: null,
-    eqGradient: null,
-    audioStatusP: null,
+    _debugTimeout: null, 
+    _morphResetTimeout: null, 
+    eqCanvas: null, 
+    eqCtx: null, 
+    eqGradient: null, 
+    audioStatusP: null, 
     debugDisplay: null,
     controlDOMElements: {},
-    particleModelMesh: null,
+    particleModelMesh: null, 
     particleModelTexture: null,
     gltfLoader: new GLTFLoader(),
-
+    
     _isProgrammaticUpdate: false,
     _sliderCache: new Map(),
-
+    
     gpgpuExclusiveGroups: [
         ['gpgpu_enableFold', 'gpgpu_enableCylinder'],
         ['gpgpu_enableCloth']
@@ -32,33 +33,35 @@ export const UIManager = {
     init(appInstance) {
         this.app = appInstance;
 
-        this.audioStatusP = document.getElementById('audioStatusP');
+        this.audioStatusP = document.getElementById('audioStatusP'); 
         this.debugDisplay = document.getElementById('debugDisplay');
         this.gpgpuPixelValueDisplay = document.getElementById('gpgpuDebugPixelValue');
-
+        
         const toggleButton = document.getElementById('controlsToggleButton');
         if (toggleButton) {
             toggleButton.classList.add('button-glow-effect');
         }
 
-        this.syncAllControlsToSettings();
+        this.syncAllControlsToSettings(); 
 
         this.initImageEffectsControls();
         this.setupMasterControls();
-        this.setupEQCanvas();
+        this.setupEQCanvas(); 
         this.setupEventListeners();
 
         this._updateGpgpuModeVisibility();
-        this._updateDeformationPanelStates();
-
+        this._updateDeformationPanelStates(); 
+        
         this.updateBackgroundControlsVisibility(true);
         this.updateImageEffectsVisibility(true);
 
         this.updateMasterControls();
-
-        this.app.ParticleTransitions.setActivePreset('default');
+        
+        if (this.app.ParticleTransitions) {
+            this.app.ParticleTransitions.setActivePreset('default');
+        }
     },
-
+    
     syncSlidersFromState() {
         if (!this.app) return;
         const S = this.app.vizSettings;
@@ -88,10 +91,10 @@ export const UIManager = {
     syncAllControlsToSettings() {
         this._isProgrammaticUpdate = true;
         this._sliderCache.clear();
-
+        
         Object.keys(this.app.defaultVisualizerSettings).forEach(key => {
             const el = document.getElementById(key);
-            if (el) {
+            if (el) { 
                 const value = this.app.vizSettings[key];
                 if (el.type === 'checkbox') {
                     el.checked = value;
@@ -110,10 +113,10 @@ export const UIManager = {
                 checkbox.checked = this.app.vizSettings[checkbox.id];
             }
         });
-
+        
         this._isProgrammaticUpdate = false;
     },
-
+    
     initImageEffectsControls() {
         const S = this.app.vizSettings;
         const controls = [
@@ -141,14 +144,14 @@ export const UIManager = {
 
         const S = this.app.vizSettings;
         const UIElements = this.controlDOMElements;
-
+        
         const activeManager = (S.activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
-
+        
         if (!activeManager || !activeManager.state) {
             this._isProgrammaticUpdate = false;
             return;
         }
-
+        
         const targetPosition = activeManager.state.targetPosition;
 
         if (targetPosition && UIElements.sliderX) {
@@ -159,7 +162,7 @@ export const UIManager = {
             this.updateRangeDisplay('actorY', targetPosition.y);
             this.updateRangeDisplay('actorDepth', targetPosition.z);
         }
-
+        
         this._isProgrammaticUpdate = false;
     },
 
@@ -183,22 +186,24 @@ export const UIManager = {
         };
         this.controlDOMElements = UIElements;
 
-        UIElements.actorToggleContainer.querySelectorAll('button').forEach(button => {
-            button.addEventListener('click', (e) => {
-                this.app.vizSettings.activeControl = e.target.dataset.actor;
-                this.updateMasterControls();
+        if (UIElements.actorToggleContainer) {
+            UIElements.actorToggleContainer.querySelectorAll('button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    this.app.vizSettings.activeControl = e.target.dataset.actor;
+                    this.updateMasterControls();
+                });
             });
-        });
+        }
 
         for (let i = 1; i <= 5; i++) {
             const buttonId = `autopilotPreset${i}`;
             const button = document.getElementById(buttonId);
-            if (button) {
+            if(button) {
                 button.addEventListener('click', () => {
                     const activeControl = this.app.vizSettings.activeControl;
                     const S = this.app.vizSettings;
                     const activeManager = (activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
-
+                    
                     if (activeControl === 'landscape') {
                         S.landscapeAutopilotOn = true;
                         S.activeLandscapePreset = buttonId;
@@ -212,27 +217,29 @@ export const UIManager = {
             }
         }
 
-        UIElements.autopilotOffButton.addEventListener('click', () => {
-            const activeControl = this.app.vizSettings.activeControl;
-            const S = this.app.vizSettings;
-            const activeManager = (activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
+        if (UIElements.autopilotOffButton) {
+            UIElements.autopilotOffButton.addEventListener('click', () => {
+                const activeControl = this.app.vizSettings.activeControl;
+                const S = this.app.vizSettings;
+                const activeManager = (activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
 
-            if (activeControl === 'landscape') S.landscapeAutopilotOn = false;
-            else S.modelAutopilotOn = false;
+                if (activeControl === 'landscape') S.landscapeAutopilotOn = false;
+                else S.modelAutopilotOn = false;
 
-            activeManager.stopAutopilot();
-            this.updateMasterControls();
-        });
-
+                activeManager.stopAutopilot();
+                this.updateMasterControls();
+            });
+        }
+        
         [UIElements.sliderX, UIElements.sliderY, UIElements.sliderZ].forEach(slider => {
-            slider.addEventListener('input', (e) => this.handleActorSliderInput(e.target));
+            if (slider) slider.addEventListener('input', (e) => this.handleActorSliderInput(e.target));
         });
 
-        UIElements.masterScaleSlider.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
-        UIElements.masterSpeedSlider.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
-
-        UIElements.masterSpinCheckbox.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
-        UIElements.masterSpinSpeedInput.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
+        if (UIElements.masterScaleSlider) UIElements.masterScaleSlider.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
+        if (UIElements.masterSpeedSlider) UIElements.masterSpeedSlider.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
+        
+        if (UIElements.masterSpinCheckbox) UIElements.masterSpinCheckbox.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
+        if (UIElements.masterSpinSpeedInput) UIElements.masterSpinSpeedInput.addEventListener('input', (e) => this.handleMasterControlInput(e.target));
     },
 
     handleMasterControlInput(control) {
@@ -240,12 +247,12 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const activeControl = S.activeControl;
         const value = (control.type === 'checkbox') ? control.checked : parseFloat(control.value);
-
+    
         if (control.id === 'masterEnableSpin') {
             if (activeControl === 'landscape') {
                 S.enableLandscapeSpin = value;
             } else {
-                S.enableModelSpin = value;
+                S.enableModelSpin = value; 
             }
         } else if (control.id === 'masterSpinSpeed') {
             if (activeControl === 'landscape') {
@@ -260,7 +267,7 @@ export const UIManager = {
             if (activeControl === 'landscape') S.landscapeAutopilotSpeed = value;
             else S.modelAutopilotSpeed = value;
         }
-
+    
         if (control.type === 'range' || control.type === 'number') {
             this.updateRangeDisplay(control.id, value);
         }
@@ -271,12 +278,12 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const activeManager = (S.activeControl === 'landscape') ? this.app.ImagePlaneManager : this.app.ModelManager;
         if (!activeManager || !activeManager.state) return;
-
+        
         activeManager.state.isUnderManualControl = true;
-
+        
         const targetPosition = activeManager.state.targetPosition;
         const value = parseFloat(slider.value);
-
+        
         switch (slider.id) {
             case 'actorX': targetPosition.x = value; break;
             case 'actorY': targetPosition.y = value; break;
@@ -291,70 +298,72 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const activeControl = S.activeControl;
         const UIElements = this.controlDOMElements;
-
+        
         let isAutopilotOn, scaleProp, speedProp, spinEnableProp, spinSpeedProp;
-
+        
         if (activeControl === 'landscape') {
             isAutopilotOn = S.landscapeAutopilotOn;
             scaleProp = 'landscapeScale';
             speedProp = 'landscapeAutopilotSpeed';
             spinEnableProp = 'enableLandscapeSpin';
             spinSpeedProp = 'landscapeSpinSpeed';
-            UIElements.autopilotHeader.textContent = "LANDSCAPE AUTOPILOT";
-            UIElements.masterSpinControl.style.opacity = '1';
-            UIElements.masterSpinCheckbox.disabled = false;
-            UIElements.masterSpinSpeedInput.disabled = false;
+            if (UIElements.autopilotHeader) UIElements.autopilotHeader.textContent = "LANDSCAPE AUTOPILOT";
+            if (UIElements.masterSpinControl) UIElements.masterSpinControl.style.opacity = '1';
+            if (UIElements.masterSpinCheckbox) UIElements.masterSpinCheckbox.disabled = false;
+            if (UIElements.masterSpinSpeedInput) UIElements.masterSpinSpeedInput.disabled = false;
 
-        } else {
+        } else { 
             isAutopilotOn = S.modelAutopilotOn;
             scaleProp = 'modelScale';
             speedProp = 'modelAutopilotSpeed';
             spinEnableProp = 'enableModelSpin';
             spinSpeedProp = 'modelSpinSpeed';
-            UIElements.autopilotHeader.textContent = "3D MODEL AUTOPILOT";
-            UIElements.masterSpinControl.style.opacity = '0.4';
-            UIElements.masterSpinCheckbox.disabled = true;
-            UIElements.masterSpinSpeedInput.disabled = true;
+            if (UIElements.autopilotHeader) UIElements.autopilotHeader.textContent = "3D MODEL AUTOPILOT";
+            if (UIElements.masterSpinControl) UIElements.masterSpinControl.style.opacity = '0.4';
+            if (UIElements.masterSpinCheckbox) UIElements.masterSpinCheckbox.disabled = true;
+            if (UIElements.masterSpinSpeedInput) UIElements.masterSpinSpeedInput.disabled = true;
         }
 
-        UIElements.actorToggleContainer.querySelectorAll('button').forEach(btn => {
-            const isActive = btn.dataset.actor === activeControl;
-            btn.classList.toggle('active', isActive);
-            btn.classList.toggle('button-glow-effect', isActive);
-        });
+        if (UIElements.actorToggleContainer) {
+            UIElements.actorToggleContainer.querySelectorAll('button').forEach(btn => {
+                const isActive = btn.dataset.actor === activeControl;
+                btn.classList.toggle('active', isActive);
+                btn.classList.toggle('button-glow-effect', isActive);
+            });
+        }
+        
+        if (UIElements.manualContainer) UIElements.manualContainer.style.display = isAutopilotOn ? 'none' : 'block';
+        if (UIElements.masterSpeedContainer) UIElements.masterSpeedContainer.style.display = isAutopilotOn ? 'block' : 'none';
 
-        UIElements.manualContainer.style.display = isAutopilotOn ? 'none' : 'block';
-        UIElements.masterSpeedContainer.style.display = isAutopilotOn ? 'block' : 'none';
-
-        if (UIElements.masterScaleSlider) {
+        if(UIElements.masterScaleSlider) {
             UIElements.masterScaleSlider.value = S[scaleProp];
             this.updateRangeDisplay('masterScale', S[scaleProp]);
         }
-        if (UIElements.masterSpeedSlider) {
+        if(UIElements.masterSpeedSlider) {
             UIElements.masterSpeedSlider.value = S[speedProp];
             this.updateRangeDisplay('masterSpeed', S[speedProp]);
         }
 
-        if (UIElements.masterSpinCheckbox) {
+        if(UIElements.masterSpinCheckbox) {
             UIElements.masterSpinCheckbox.checked = S[spinEnableProp];
         }
-        if (UIElements.masterSpinSpeedInput) {
+        if(UIElements.masterSpinSpeedInput) {
             UIElements.masterSpinSpeedInput.value = S[spinSpeedProp];
         }
-
+        
         this.syncManualSlidersFromState();
         this.updatePresetGlow();
         this.refreshAccordion(UIElements.masterControlContainer);
-
+        
         this._isProgrammaticUpdate = false;
     },
-
+    
     updatePresetGlow() {
         const S = this.app.vizSettings;
         const activeControl = S.activeControl;
-
+        
         let isAutopilotOn, activePreset;
-
+        
         if (activeControl === 'landscape') {
             isAutopilotOn = S.landscapeAutopilotOn;
             activePreset = this.app.ImagePlaneManager.autopilot.preset;
@@ -365,15 +374,17 @@ export const UIManager = {
 
         for (let i = 1; i <= 5; i++) {
             const button = document.getElementById(`autopilotPreset${i}`);
-            if (button) button.classList.remove('button-glow-effect');
+            if(button) button.classList.remove('button-glow-effect');
         }
-        document.getElementById('autopilotOffButton').classList.remove('button-glow-effect');
+        
+        const offButton = document.getElementById('autopilotOffButton');
+        if (offButton) offButton.classList.remove('button-glow-effect');
 
         if (isAutopilotOn && activePreset) {
             const button = document.getElementById(activePreset);
             if (button) button.classList.add('button-glow-effect');
-        } else {
-            document.getElementById('autopilotOffButton').classList.add('button-glow-effect');
+        } else if (offButton) {
+            offButton.classList.add('button-glow-effect');
         }
     },
 
@@ -413,27 +424,27 @@ export const UIManager = {
         this.isDisplayingPixelValue = false;
     },
 
-    logError(message) {
-        if (!this.debugDisplay) return;
-        this.debugDisplay.textContent = message;
-        this.debugDisplay.className = 'debugDisplay error';
-        if (this._debugTimeout) clearTimeout(this._debugTimeout);
-        this._debugTimeout = setTimeout(() => { this.debugDisplay.textContent = ''; this.debugDisplay.className = 'debugDisplay'; }, 8000);
+    logError(message) { 
+        if (!this.debugDisplay) return; 
+        this.debugDisplay.textContent = message; 
+        this.debugDisplay.className = 'debugDisplay error'; 
+        if (this._debugTimeout) clearTimeout(this._debugTimeout); 
+        this._debugTimeout = setTimeout(() => { this.debugDisplay.textContent = ''; this.debugDisplay.className = 'debugDisplay'; }, 8000); 
     },
 
-    logSuccess(message) {
-        if (!this.debugDisplay) return;
-        this.debugDisplay.textContent = message;
-        this.debugDisplay.className = 'debugDisplay success';
-        if (this._debugTimeout) clearTimeout(this._debugTimeout);
-        this._debugTimeout = setTimeout(() => { this.debugDisplay.textContent = ''; this.debugDisplay.className = 'debugDisplay'; }, 5000);
+    logSuccess(message) { 
+        if (!this.debugDisplay) return; 
+        this.debugDisplay.textContent = message; 
+        this.debugDisplay.className = 'debugDisplay success'; 
+        if (this._debugTimeout) clearTimeout(this._debugTimeout); 
+        this._debugTimeout = setTimeout(() => { this.debugDisplay.textContent = ''; this.debugDisplay.className = 'debugDisplay'; }, 5000); 
     },
 
     updateRangeDisplay(id, value) {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-            if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_cohesionStrength'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_cohesionStrength'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity'].includes(id)) {
                 precision = 2;
@@ -448,10 +459,10 @@ export const UIManager = {
         const mode = this.app.vizSettings.backgroundMode;
         const shaderControls = document.getElementById('shaderToyControls');
         const butterchurnControls = document.getElementById('butterchurnControls');
-
+        
         if (shaderControls) shaderControls.style.display = (mode === 'shader') ? 'block' : 'none';
         if (butterchurnControls) butterchurnControls.style.display = (mode === 'butterchurn') ? 'block' : 'none';
-
+    
         if (mode === 'butterchurn') {
             const engineSelect = document.getElementById('butterchurnEngineSelect');
             if (this.app.ButterchurnManager.activeEngine === null) {
@@ -464,7 +475,7 @@ export const UIManager = {
         } else {
             this.app.ButterchurnManager.deactivate();
         }
-
+    
         if (!isInitial) this.refreshAccordion(document.getElementById('backgroundMode').closest('.accordion-item'));
     },
 
@@ -474,8 +485,8 @@ export const UIManager = {
         }
     },
 
-    toggleLightSliders() {
-        const disabled = this.app.vizSettings.enableLightOrbit;
+    toggleLightSliders() { 
+        const disabled = this.app.vizSettings.enableLightOrbit; 
         document.getElementById('lightDirectionX').disabled = disabled;
         document.getElementById('lightDirectionY').disabled = disabled;
         document.getElementById('lightDirectionZ').disabled = disabled;
@@ -490,7 +501,7 @@ export const UIManager = {
                 parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
                 parentContent = parentContent.parentElement.closest('.accordion-content.open');
             }
-        }, 50);
+        }, 50); 
     },
 
     loadUserShader(presetId) {
@@ -499,7 +510,7 @@ export const UIManager = {
             console.warn("No ShaderToy GLSL provided.");
             return;
         }
-
+        
         if (this.app.BackgroundManager) {
             this.app.BackgroundManager.updateShader(userFragmentShader);
             this.app.BackgroundManager.activePresetId = presetId;
@@ -509,27 +520,27 @@ export const UIManager = {
             this.logError("BackgroundManager not found to update shader.");
         }
     },
-
+    
     loadChannelTexture(channelIndex, file) {
         if (!this.app.BackgroundManager) {
             this.logError("BackgroundManager not found for texture loading.");
             return;
         }
-
+        
         const objectURL = URL.createObjectURL(file);
         new this.app.THREE.TextureLoader().load(objectURL, (texture) => {
             const uniformName = `iChannel${channelIndex}`;
-
+            
             if (this.app.shaderMaterial.uniforms[uniformName]) {
                 const oldTexture = this.app.shaderMaterial.uniforms[uniformName].value;
-                if (oldTexture && typeof oldTexture.dispose === 'function') {
+                if(oldTexture && typeof oldTexture.dispose === 'function') {
                     oldTexture.dispose();
                 }
 
                 this.app.shaderMaterial.uniforms[uniformName].value = texture;
-
+                
                 const resUniformName = `iChannelResolution`;
-                if (this.app.shaderMaterial.uniforms[resUniformName]) {
+                if(this.app.shaderMaterial.uniforms[resUniformName]) {
                     this.app.shaderMaterial.uniforms[resUniformName].value[channelIndex].set(texture.image.width, texture.image.height, 1);
                 }
 
@@ -539,8 +550,8 @@ export const UIManager = {
             }
             URL.revokeObjectURL(objectURL);
         }, undefined, (error) => {
-            this.logError(`Error loading texture for ${uniformName}: ${error}`);
-            URL.revokeObjectURL(objectURL);
+                this.logError(`Error loading texture for ${uniformName}: ${error}`);
+                URL.revokeObjectURL(objectURL);
         });
     },
 
@@ -554,11 +565,13 @@ export const UIManager = {
             particles: document.getElementById('particleControlsContainer'),
         };
 
-        let activeContainerKey = mode;
-        if (mode === 'faceted') {
-            activeContainerKey = 'deformation';
-        }
-
+        // Map modes to container IDs
+        let activeContainerKey = null;
+        if (mode === 'faceted') activeContainerKey = 'deformation';
+        else if (mode === 'geocube') activeContainerKey = 'geocube';
+        // Both Particles AND Liquid should show the particle controls (Flow, Attraction)
+        else if (mode === 'particles' || mode === 'liquid') activeContainerKey = 'particles';
+        
         for (const [key, container] of Object.entries(containers)) {
             if (container) {
                 container.style.display = (key === activeContainerKey) ? 'block' : 'none';
@@ -568,15 +581,13 @@ export const UIManager = {
         document.querySelectorAll('#gpgpuModeSelector .segmented-control-button').forEach(btn => {
             const btnMode = btn.dataset.mode;
             let isActive = false;
-            if (mode === 'faceted' && btnMode === 'deformation') {
-                isActive = true;
-            } else if (mode === btnMode) {
-                isActive = true;
-            }
+            if (mode === 'faceted' && btnMode === 'deformation') isActive = true;
+            else if (mode === btnMode) isActive = true;
+            
             btn.classList.toggle('active', isActive);
             btn.classList.toggle('button-glow-effect', isActive);
         });
-
+        
         this._updateDeformationPanelStates();
         this.refreshAccordion(document.getElementById('gpgpuEffectsAccordion'));
     },
@@ -585,7 +596,7 @@ export const UIManager = {
         const S = this.app.vizSettings;
         const container = document.getElementById('deformationControlsContainer');
         if (!container) return;
-
+        
         container.querySelectorAll('.accordion-item').forEach(panel => {
             panel.classList.remove('container-disabled');
         });
@@ -606,7 +617,7 @@ export const UIManager = {
                         break;
                     }
                 }
-
+                
                 if (activeEffectInGroup) {
                     group.forEach(effectId => {
                         if (effectId !== activeEffectInGroup) {
@@ -619,7 +630,7 @@ export const UIManager = {
                 }
             });
         }
-
+        
         this.refreshAccordion(container);
     },
 
@@ -655,23 +666,23 @@ export const UIManager = {
                 }
             }
         });
-
+        
         this.app.ImagePlaneManager.createDefaultLandscape();
         this._updateGpgpuModeVisibility();
         this._updateDeformationPanelStates();
 
         this.logSuccess("All GPGPU settings have been reset to default.");
-
+        
         this._isProgrammaticUpdate = false;
     },
-
+    
     _switchGpgpuMode(newUiMode) {
         const S = this.app.vizSettings;
         const oldSystemMode = S.gpgpuGeometryMode;
         const newSystemMode = (newUiMode === 'deformation') ? 'faceted' : newUiMode;
 
         if (oldSystemMode === newSystemMode) return;
-
+        
         if (oldSystemMode === 'geocube') {
             this.app.CubeWallManager.setActive(false);
         }
@@ -681,7 +692,7 @@ export const UIManager = {
 
         S.gpgpuGeometryMode = newSystemMode;
         this.app.ComputeManager.switchMode(newSystemMode);
-
+        
         this._updateGpgpuModeVisibility();
     },
 
@@ -690,37 +701,37 @@ export const UIManager = {
         document.getElementById('playPauseAudioButton').addEventListener('click', () => this.app.AudioProcessor.toggleFilePlayback());
         document.getElementById('playTestToneButton').addEventListener('click', () => this.app.AudioProcessor.toggleTestTone());
         document.querySelectorAll('.browse-btn').forEach(btn => btn.addEventListener('click', () => document.getElementById(btn.dataset.target).click()));
-
+        
         document.getElementById('loadShaderCode').addEventListener('click', () => this.loadUserShader());
 
-        document.getElementById('clearShaderCode').addEventListener('click', () => {
-            document.getElementById('shaderToyGLSL').value = '';
-            this.app.vizSettings.shaderToyGLSL = '';
+        document.getElementById('clearShaderCode').addEventListener('click', () => { 
+            document.getElementById('shaderToyGLSL').value = ''; 
+            this.app.vizSettings.shaderToyGLSL = ''; 
             this.app.BackgroundManager.activePresetId = null;
             this.updateBackgroundPresetGlow();
-            this.logSuccess('Shader cleared.');
+            this.logSuccess('Shader cleared.'); 
         });
-        document.getElementById('pasteShaderCode').addEventListener('click', async () => {
-            try {
-                const text = await navigator.clipboard.readText();
-                document.getElementById('shaderToyGLSL').value = text;
-                this.app.vizSettings.shaderToyGLSL = text;
+        document.getElementById('pasteShaderCode').addEventListener('click', async () => { 
+            try { 
+                const text = await navigator.clipboard.readText(); 
+                document.getElementById('shaderToyGLSL').value = text; 
+                this.app.vizSettings.shaderToyGLSL = text; 
                 this.app.BackgroundManager.activePresetId = null;
                 this.updateBackgroundPresetGlow();
-                this.logSuccess('Pasted from clipboard.');
-            } catch (err) {
-                this.logError('Failed to read from clipboard.');
-            }
+                this.logSuccess('Pasted from clipboard.'); 
+            } catch (err) { 
+                this.logError('Failed to read from clipboard.'); 
+            } 
         });
         document.getElementById('landscapeResetButton').addEventListener('click', () => this.resetLandscapeSettings());
         document.getElementById('gpgpuResetButton').addEventListener('click', () => this.resetGpgpuSettings());
-
+        
         const fileInputIds = ['mainTextureInput', 'videoTextureInput', 'audioFileInput', 'gltfModelInput', 'hdriInput', 'iChannel0Input', 'iChannel1Input', 'iChannel2Input', 'iChannel3Input', 'particleModelInput'];
         fileInputIds.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', (e) => this.handleFileSelect(e, id));
         });
-
+        
         const gpgpuDebugCheckbox = document.getElementById('enableGPGPUDebugger');
         if (gpgpuDebugCheckbox) {
             gpgpuDebugCheckbox.addEventListener('change', (e) => {
@@ -728,7 +739,7 @@ export const UIManager = {
                 this.app.vizSettings.enableGPGPUDebugger = e.target.checked;
             });
         }
-
+        
         document.querySelectorAll('#gpgpuModeSelector button').forEach(button => {
             button.addEventListener('click', () => {
                 const mode = button.dataset.mode;
@@ -737,33 +748,33 @@ export const UIManager = {
                 }
             });
         });
-
+        
         document.querySelectorAll('#particleControlsContainer input[type="range"], #particleControlsContainer input[type="color"]').forEach(control => {
             control.addEventListener('input', (e) => {
-                const S = this.app.vizSettings;
+                const S = this.app.vizSettings; 
                 const id = e.target.id;
-
+                
                 if (S[id] !== undefined) {
                     S[id] = (e.target.type === 'color') ? e.target.value : parseFloat(e.target.value);
                 }
-                if (e.target.type === 'range') {
+                if(e.target.type === 'range') {
                     this.updateRangeDisplay(id, S[id]);
-                    this._sliderCache.set(id, S[id]);
+                    this._sliderCache.set(id, S[id]); 
                 }
             });
         });
-
+        
         document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(control => {
             if (control.closest('#particleControlsContainer') || control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list')) return;
             control.addEventListener('input', (e) => {
-                this._isProgrammaticUpdate = true;
+                this._isProgrammaticUpdate = true; 
                 const id = e.target.id;
                 if (!id || this.app.vizSettings[id] === undefined) return;
-
+                
                 const S = this.app.vizSettings;
                 let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
                 S[id] = (e.target.type === 'range' || e.target.type === 'number') ? parseFloat(value) : value;
-
+                
                 if (e.target.type === 'range' || e.target.type === 'number') this.updateRangeDisplay(id, value);
 
                 if (id === 'toneMappingMode') {
@@ -789,38 +800,72 @@ export const UIManager = {
                 this._isProgrammaticUpdate = false;
             });
         });
-
-        document.getElementById('goToCanvasButton').addEventListener('click', () => this.setMorphState(0.0));
-        document.getElementById('goTo3DModelButton').addEventListener('click', () => this.setMorphState(0.95));
-
-        document.getElementById('runTransitionButton').addEventListener('click', () => this.app.ParticleTransitions.run());
-
+        
+        // --- FORCE FAST TRANSITION ---
+        document.getElementById('goToCanvasButton').addEventListener('click', () => {
+            // Explicitly call default for speed, bypassing slow artistic presets
+            if (this.app.ParticleTransitions) this.app.ParticleTransitions.run('default');
+        });
+        document.getElementById('goTo3DModelButton').addEventListener('click', () => {
+            // Explicitly call default for speed
+            if (this.app.ParticleTransitions) this.app.ParticleTransitions.run('default');
+        });
+        
+        document.getElementById('runTransitionButton').addEventListener('click', () => {
+            if (this.app.ParticleTransitions) this.app.ParticleTransitions.run();
+        });
+        
         const morphSlider = document.getElementById('particle_morphProgress');
         if (morphSlider) {
             morphSlider.addEventListener('input', (e) => {
                 const S = this.app.vizSettings;
                 const value = parseFloat(e.target.value);
+                
+                // 1. Update Value
                 S.particle_morphProgress = value;
                 this.updateRangeDisplay('particle_morphProgress', value);
-                this.handleMorphSlider(value);
+                this.handleMorphSlider(value); 
+                
+                // 2. FORCE SNAP PHYSICS (The "Test" Mode)
+                // Interrupt animations and apply "snappy" physics instantly
+                if (this.app.ParticleTransitions) this.app.ParticleTransitions.interrupt();
+                
+                // Hard snap settings for immediate feedback
+                S.particle_attractionStrength = 50.0;
+                S.particle_flowStrength = 0.0; // 0 is better for testing morph shape
+                S.particle_flowSpeed = 0.0;
+                
+                this.syncSlidersToSettings();
+
+                // 3. TIMEOUT TO SOFT REST (20 SECONDS)
+                if (this._morphResetTimeout) clearTimeout(this._morphResetTimeout);
+
+                this._morphResetTimeout = setTimeout(() => {
+                    // Fall back to soft rest
+                    const S = this.app.vizSettings;
+                    S.particle_attractionStrength = 8.0; // Enough to hold shape
+                    S.particle_flowStrength = 0.0;       // Still
+                    S.particle_flowSpeed = 0.0;
+                    this.syncSlidersToSettings();
+                }, 20000); // 20 seconds wait
             });
         }
-
+        
         const presetContainers = ['#particleTransitionPresetContainer', '#particleArtisticPresetContainer'];
         presetContainers.forEach(selector => {
             const container = document.querySelector(selector);
-            if (container) {
+            if(container) {
                 container.querySelectorAll('button').forEach(button => {
                     button.addEventListener('click', () => {
-                        const presetMap = {
+                        const presetMap = { 
                             'transitionPreset1': 'default', 'transitionPreset2': 'pour', 'transitionPreset3': 'liquid',
                             'transitionPreset4': 'explode', 'transitionPreset5': 'nebula', 'transitionPreset6': 'melt',
                             'artisticPreset1': 'supernova', 'artisticPreset2': 'gravity_well', 'artisticPreset3': 'cosmic_dust',
                             'artisticPreset4': 'dissolve', 'artisticPreset5': 'swarm', 'artisticPreset6': 'flow'
                         };
                         const presetId = presetMap[button.id];
-
-                        if (presetId && this.app.ParticleTransitions.transitionPresets[presetId]) {
+                        
+                        if (presetId && this.app.ParticleTransitions && this.app.ParticleTransitions.transitionPresets[presetId]) {
                             this.app.ParticleTransitions.setActivePreset(presetId);
                             document.querySelectorAll('#particleTransitionPresetContainer button, #particleArtisticPresetContainer button').forEach(btn => btn.classList.remove('button-glow-effect'));
                             button.classList.add('button-glow-effect');
@@ -832,14 +877,14 @@ export const UIManager = {
                 });
             }
         });
-
+        
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-            if (checkbox.id === 'enableGPGPUDebugger' || checkbox.closest('#gpgpuEffectsAccordion') || checkbox.closest('#butterchurnControls')) return;
-            checkbox.addEventListener('input', (e) => {
-                this._isProgrammaticUpdate = true;
-                if (this.app.vizSettings[e.target.id] !== undefined) {
-                    this.app.vizSettings[e.target.id] = e.target.checked;
-                }
+             if (checkbox.id === 'enableGPGPUDebugger' || checkbox.closest('#gpgpuEffectsAccordion') || checkbox.closest('#butterchurnControls')) return;
+             checkbox.addEventListener('input', (e) => {
+                 this._isProgrammaticUpdate = true;
+                 if (this.app.vizSettings[e.target.id] !== undefined) {
+                     this.app.vizSettings[e.target.id] = e.target.checked;
+                 }
 
                 if (e.target.id === 'enablePBRColor') {
                     const ipm = this.app.ImagePlaneManager;
@@ -850,9 +895,9 @@ export const UIManager = {
                     }
                 }
                 this._isProgrammaticUpdate = false;
-            });
+             });
         });
-
+        
         document.querySelectorAll('#deformationControlsContainer .header-toggle-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', (e) => {
                 if (this._isProgrammaticUpdate) return;
@@ -865,11 +910,11 @@ export const UIManager = {
 
         this.setupButterchurnEventListeners();
 
-        document.getElementById('controlsToggleButton').addEventListener('click', (e) => {
-            const panel = document.getElementById('controlsPanel');
-            panel.classList.toggle('visible');
-            e.target.textContent = panel.classList.contains('visible') ? "Hide" : "Show";
-
+        document.getElementById('controlsToggleButton').addEventListener('click', (e) => { 
+            const panel = document.getElementById('controlsPanel'); 
+            panel.classList.toggle('visible'); 
+            e.target.textContent = panel.classList.contains('visible') ? "Hide" : "Show"; 
+            
             const headersToGlow = document.querySelectorAll('[data-header-id]');
             if (panel.classList.contains('visible')) {
                 headersToGlow.forEach(header => {
@@ -886,18 +931,18 @@ export const UIManager = {
 
         document.querySelectorAll('.accordion-header, .accordion-header-with-toggle').forEach(headerContainer => {
             let button = headerContainer.matches('.accordion-header') ? headerContainer : headerContainer.querySelector('.accordion-header');
-
+            
             button.addEventListener('click', () => {
                 const content = headerContainer.parentElement.querySelector('.accordion-content');
                 if (!content) return;
 
                 const parentAccordion = headerContainer.closest('.accordion-item');
                 if (parentAccordion.classList.contains('container-disabled')) return;
-
+                
                 if (headerContainer.dataset.headerId) {
                     headerContainer.classList.toggle('button-glow-effect');
                 }
-
+                
                 content.classList.toggle('open');
 
                 if (content.classList.contains('open')) {
@@ -905,27 +950,27 @@ export const UIManager = {
                 } else {
                     content.style.maxHeight = '0px';
                 }
-                this.refreshAccordion(content);
+                this.refreshAccordion(content); 
             });
         });
-
+        
         for (let i = 1; i <= 8; i++) {
             const btn = document.getElementById(`presetBg${i}`);
-            if (btn) btn.addEventListener('click', () => {
+            if (btn) btn.addEventListener('click', () => { 
                 const presetId = `presetBg${i}`;
-                const shaderCode = this.app.shaderPresets[presetId];
-                if (shaderCode) {
-                    document.getElementById('shaderToyGLSL').value = shaderCode;
-                    this.app.vizSettings.shaderToyGLSL = shaderCode;
-                    this.logSuccess(`Preset '${presetId}' loaded.`);
-                    this.loadUserShader(presetId);
+                const shaderCode = this.app.shaderPresets[presetId]; 
+                if (shaderCode) { 
+                    document.getElementById('shaderToyGLSL').value = shaderCode; 
+                    this.app.vizSettings.shaderToyGLSL = shaderCode; 
+                    this.logSuccess(`Preset '${presetId}' loaded.`); 
+                    this.loadUserShader(presetId); 
                 }
             });
         }
-
+        
         Object.keys(this.app.modelPresets).forEach(presetId => {
             const loadBtn = document.getElementById(presetId);
-            if (loadBtn) {
+            if(loadBtn) {
                 loadBtn.addEventListener('click', () => {
                     const preset = this.app.modelPresets[presetId];
                     if (preset.homeOffset && !(preset.homeOffset instanceof this.app.THREE.Vector3)) {
@@ -944,12 +989,12 @@ export const UIManager = {
                     this.logError(`Preset ${presetId} not found.`);
                     return;
                 }
-
+                
                 this.logSuccess(`Baking ${preset.name}...`);
                 this.gltfLoader.load(preset.path, (gltf) => {
                     let bestMesh = null;
                     gltf.scene.traverse(child => { if (child.isMesh) { bestMesh = child; } });
-
+                    
                     if (bestMesh) {
                         this.particleModelMesh = bestMesh;
 
@@ -960,7 +1005,7 @@ export const UIManager = {
                             }
                         } else {
                             this.logError(`Model "${file.name}" has no texture map.`);
-                            this.particleModelTexture = null;
+                            this.particleModelTexture = null; 
                         }
 
                         const CM = this.app.ComputeManager;
@@ -981,20 +1026,20 @@ export const UIManager = {
             demoButton.addEventListener('click', () => this.toggleDemoMode());
         }
     },
-
+    
     handleMorphSlider(progress) {
         const S = this.app.vizSettings;
         const CM = this.app.ComputeManager;
-        if (!CM || !CM.gpuCompute) return;
-
+        if (!CM || !CM.gpuCompute || !CM.velocityVariable) return;
+        
         const targetState = (progress > 0.5) ? 'model' : 'flat';
-
-        if (S.particle_target !== targetState || true) {
+        
+        if (S.particle_target !== targetState || true) { 
             S.particle_target = targetState;
-
+            
             if (targetState === 'model') {
                 if (!this.particleModelMesh) {
-                    if (progress > 0.1) {
+                    if (progress > 0.1 && this._isProgrammaticUpdate === false) { 
                         this.logError("No model baked. Please load & bake a model first.");
                     }
                     const slider = document.getElementById('particle_morphProgress');
@@ -1003,17 +1048,21 @@ export const UIManager = {
                     this.updateRangeDisplay('particle_morphProgress', 0.0);
                     return;
                 }
-
-                CM.velocityVariable.material.uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
-                CM.velocityVariable.material.needsUpdate = true;
-
+                
+                if (CM.velocityVariable.material) {
+                    CM.velocityVariable.material.uniforms.u_targetPositionMap.value = CM.particleModelPositionTexture;
+                    CM.velocityVariable.material.needsUpdate = true;
+                }
+                
             } else {
-                CM.velocityVariable.material.uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
-                CM.velocityVariable.material.needsUpdate = true;
+                if (CM.velocityVariable.material) {
+                    CM.velocityVariable.material.uniforms.u_targetPositionMap.value = CM.particleFlatPositionTexture;
+                    CM.velocityVariable.material.needsUpdate = true;
+                }
             }
         }
     },
-
+    
     setMorphState(targetProgress) {
         const slider = document.getElementById('particle_morphProgress');
         if (slider) {
@@ -1039,21 +1088,21 @@ export const UIManager = {
             editor.classList.remove('container-disabled');
         }
     },
-
-    updateTransitionAnimation() { },
-
-    loadPresetValues(presetId) { },
+    
+    updateTransitionAnimation() {},
+    
+    loadPresetValues(presetId) {},
 
     syncSlidersToSettings() {
         this._isProgrammaticUpdate = true;
 
         const S = this.app.vizSettings;
         const editorSliderIds = [
-            'particle_flowStrength', 'particle_flowSpeed', 'particle_flowScale',
-            'particle_attractionStrength', 'particle_base_size', 'particle_min_size',
+            'particle_flowStrength', 'particle_flowSpeed', 'particle_flowScale', 
+            'particle_attractionStrength', 'particle_base_size', 'particle_min_size', 
             'particle_size_mix', 'particle_twinkleIntensity'
         ];
-
+        
         editorSliderIds.forEach(key => {
             const slider = document.getElementById(key);
             if (slider && S[key] !== undefined) {
@@ -1061,10 +1110,10 @@ export const UIManager = {
                 this.updateRangeDisplay(key, S[key]);
             }
         });
-
+        
         this._isProgrammaticUpdate = false;
     },
-
+    
     setSliderValue(id, value) {
         const slider = document.getElementById(id);
         if (slider) {
@@ -1088,12 +1137,12 @@ export const UIManager = {
         console.log("Starting Demo Mode...");
         this.app.isDemoModeActive = true;
         document.getElementById('demoModeButton').textContent = 'STOP DEMO';
-
+        
         this._switchGpgpuMode('deformation');
 
         this.app.ImagePlaneManager.startAutopilot('autopilotPreset3');
         this.app.ModelManager.startAutopilot('autopilotPreset2');
-
+        
         const audioEl = this.app.AudioProcessor.audioElement;
         if (audioEl && audioEl.src && audioEl.paused) {
             this.app.AudioProcessor.toggleFilePlayback();
@@ -1103,9 +1152,9 @@ export const UIManager = {
         this.app.vizSettings.enableShaderMouse = true;
 
         this.demoShaderIndex = 0;
-        this.cycleDemoShader();
-        if (this.demoShaderInterval) clearInterval(this.demoShaderInterval);
-        this.demoShaderInterval = setInterval(() => this.cycleDemoShader(), 60 * 1000);
+        this.cycleDemoShader(); 
+        if(this.demoShaderInterval) clearInterval(this.demoShaderInterval);
+        this.demoShaderInterval = setInterval(() => this.cycleDemoShader(), 60 * 1000); 
 
         this.app.vizSettings.enableGPGPUDebugger = false;
         this.app.vizSettings.enableOnScreenDebugger = false;
@@ -1122,7 +1171,7 @@ export const UIManager = {
 
         this.app.ImagePlaneManager.stopAutopilot();
         this.app.ModelManager.stopAutopilot();
-
+        
         const audioEl = this.app.AudioProcessor.audioElement;
         if (audioEl && !audioEl.paused) {
             this.app.AudioProcessor.toggleFilePlayback();
@@ -1134,27 +1183,27 @@ export const UIManager = {
         }
 
         const defaultMode = this.app.defaultVisualizerSettings.gpgpuGeometryMode;
-
+        
         this._switchGpgpuMode(defaultMode);
 
         this.app.vizSettings = JSON.parse(JSON.stringify(this.app.defaultVisualizerSettings));
-
+        
         const defaultShaderId = 'presetBg6';
         this.app.vizSettings.shaderToyGLSL = this.app.shaderPresets[defaultShaderId];
         this.loadUserShader(defaultShaderId);
-
+        
         this.syncAllControlsToSettings();
         this.updateMasterControls();
         this.updateBackgroundControlsVisibility();
         this._updateDeformationPanelStates();
     },
-
+    
     cycleDemoShader() {
         if (!this.app.isDemoModeActive) return;
 
         const presetId = this.demoShaderOrder[this.demoShaderIndex];
         const shaderCode = this.app.shaderPresets[presetId];
-
+        
         if (shaderCode) {
             document.getElementById('shaderToyGLSL').value = shaderCode;
             this.app.vizSettings.shaderToyGLSL = shaderCode;
@@ -1176,29 +1225,29 @@ export const UIManager = {
 
         const speedSlider = document.getElementById('butterchurnSpeed');
         if (speedSlider) speedSlider.addEventListener('input', (e) => { this.app.vizSettings.butterchurnSpeed = parseInt(e.target.value); this.updateRangeDisplay('butterchurnSpeed', e.target.value); });
-
+        
         const audioInfluence = document.getElementById('butterchurnAudioInfluence');
         if (audioInfluence) audioInfluence.addEventListener('input', (e) => { this.app.vizSettings.butterchurnAudioInfluence = parseFloat(e.target.value); this.updateRangeDisplay('butterchurnAudioInfluence', e.target.value); if (this.app.AudioProcessor.butterchurnGainNode) this.app.AudioProcessor.butterchurnGainNode.gain.value = e.target.value; });
-
+        
         const blendTime = document.getElementById('butterchurnBlendTime');
         if (blendTime) blendTime.addEventListener('input', (e) => { this.app.vizSettings.butterchurnBlendTime = parseFloat(e.target.value); this.updateRangeDisplay('butterchurnBlendTime', e.target.value); });
-
+        
         const cycleTime = document.getElementById('butterchurnCycleTime');
         if (cycleTime) cycleTime.addEventListener('input', (e) => { this.app.vizSettings.butterchurnCycleTime = parseFloat(e.target.value); this.updateRangeDisplay('butterchurnCycleTime', e.target.value); this.app.ButterchurnManager.updateCycleInterval(); });
-
+        
         const opacitySlider = document.getElementById('butterchurnOpacity');
-        if (opacitySlider) opacitySlider.addEventListener('input', (e) => { this.app.vizSettings.butterchurnOpacity = parseFloat(e.target.value); this.updateRangeDisplay('butterchurnOpacity', e.target.value); if (this.app.butterchurnMaterial) this.app.butterchurnMaterial.opacity = e.target.value; });
-
+        if (opacitySlider) opacitySlider.addEventListener('input', (e) => { this.app.vizSettings.butterchurnOpacity = parseFloat(e.target.value); this.updateRangeDisplay('butterchurnOpacity', e.target.value); if(this.app.butterchurnMaterial) this.app.butterchurnMaterial.opacity = e.target.value; });
+        
         const tintColor = document.getElementById('butterchurnTintColor');
-        if (tintColor) tintColor.addEventListener('input', (e) => { this.app.vizSettings.butterchurnTintColor = e.target.value; if (this.app.butterchurnMaterial) this.app.butterchurnMaterial.color.set(e.target.value); });
-
+        if (tintColor) tintColor.addEventListener('input', (e) => { this.app.vizSettings.butterchurnTintColor = e.target.value; if(this.app.butterchurnMaterial) this.app.butterchurnMaterial.color.set(e.target.value); });
+        
         const enableCycle = document.getElementById('butterchurnEnableCycle');
         if (enableCycle) enableCycle.addEventListener('change', (e) => { if (this._isProgrammaticUpdate) return; this.app.vizSettings.butterchurnEnableCycle = e.target.checked; this.app.ButterchurnManager.updateCycleInterval(); });
-
+        
         document.getElementById('butterchurnPrevPreset').addEventListener('click', () => this.app.ButterchurnManager.prevPreset());
         document.getElementById('butterchurnRandomPreset').addEventListener('click', () => this.app.ButterchurnManager.randomPreset());
         document.getElementById('butterchurnNextPreset').addEventListener('click', () => this.app.ButterchurnManager.nextPreset());
-
+        
         document.getElementById('butterchurnSearchButton').addEventListener('click', () => this.filterButterchurnPresets());
         document.getElementById('butterchurnPresetSearch').addEventListener('keyup', (e) => { if (e.key === 'Enter') this.filterButterchurnPresets(); });
         document.getElementById('butterchurnPresetList').addEventListener('change', (e) => { const selectedIndex = parseInt(e.target.value); if (!isNaN(selectedIndex)) this.app.ButterchurnManager.loadPresetByIndex(selectedIndex); });
@@ -1211,7 +1260,7 @@ export const UIManager = {
 
         listElement.dataset.originalKeys = JSON.stringify(presetKeys);
         searchBox.value = '';
-
+        
         this.filterButterchurnPresets();
     },
 
@@ -1222,7 +1271,7 @@ export const UIManager = {
 
         const searchTerm = searchBox.value.toLowerCase();
         const allKeys = JSON.parse(listElement.dataset.originalKeys);
-
+        
         listElement.innerHTML = '';
         const filteredKeys = searchTerm === '' ? allKeys : allKeys.filter(key => key.toLowerCase().includes(searchTerm));
 
@@ -1237,7 +1286,7 @@ export const UIManager = {
                 listElement.appendChild(option);
             });
         }
-
+        
         document.getElementById('butterchurnTotalPresets').textContent = filteredKeys.length;
         this.refreshAccordion(listElement);
     },
@@ -1249,8 +1298,8 @@ export const UIManager = {
     },
 
     handleFileSelect(event, id) {
-        const file = event.target.files[0];
-        if (!file) return;
+        const file = event.target.files[0]; 
+        if (!file) return; 
 
         if (id.startsWith('iChannel')) {
             const channelIndex = parseInt(id.charAt(id.length - 1));
@@ -1259,23 +1308,23 @@ export const UIManager = {
         }
 
         switch (id) {
-            case 'mainTextureInput':
+            case 'mainTextureInput': 
             case 'videoTextureInput':
                 this.updateFileNameDisplay(id === 'videoTextureInput' ? 'video' : 'image', file.name);
                 this.app.ImagePlaneManager.loadTexture(file);
                 break;
-            case 'audioFileInput':
-                this.updateFileNameDisplay('audio', file.name);
+            case 'audioFileInput': 
+                this.updateFileNameDisplay('audio', file.name); 
                 if (this.app.AudioProcessor) this.app.AudioProcessor.loadAudioFile(file);
                 break;
-            case 'hdriInput':
+            case 'hdriInput': 
                 this.updateFileNameDisplay('hdri', file.name);
                 console.warn("Custom HDRI loading for main scene environment is currently handled by BackgroundManager based on BG FX mode. Direct HDRI input is not fully implemented in this version.");
                 break;
             case 'gltfModelInput':
                 this.updateFileNameDisplay('gltf', file.name);
                 const preset = { path: URL.createObjectURL(file), name: file.name, id: null, homeOffset: new this.app.THREE.Vector3() };
-                this.app.ModelManager.loadGLTFModel(preset);
+                this.app.ModelManager.loadGLTFModel(preset); 
                 break;
             case 'particleModelInput':
                 this.updateFileNameDisplay('particleModel', file.name);
@@ -1283,7 +1332,7 @@ export const UIManager = {
                 this.gltfLoader.load(objectURL, (gltf) => {
                     let bestMesh = null;
                     gltf.scene.traverse(child => { if (child.isMesh) { bestMesh = child; } });
-
+                    
                     if (bestMesh) {
                         this.particleModelMesh = bestMesh;
 
@@ -1294,7 +1343,7 @@ export const UIManager = {
                             }
                         } else {
                             this.logError(`Model "${file.name}" has no texture map.`);
-                            this.particleModelTexture = null;
+                            this.particleModelTexture = null; 
                         }
 
                         const CM = this.app.ComputeManager;
@@ -1314,7 +1363,7 @@ export const UIManager = {
         }
     },
     updateFileNameDisplay(type, name) {
-        const idMap = {
+       const idMap = {
             'image': 'imageFileName', 'video': 'videoFileName',
             'audio': 'audioFileName', 'hdri': 'hdriFileName', 'gltf': 'gltfFileName',
             'particleModel': 'particleModelName'
@@ -1331,65 +1380,65 @@ export const UIManager = {
         if (!playButton) return;
 
         playButton.classList.remove('button-glow-effect', 'button-solid-glow');
-
+        
         let message = '';
         switch (sourceType) {
-            case 'none': message = "AUDIO: IDLE"; break;
-            case 'mic': message = "AUDIO: Mic/System"; break;
-            case 'file_ready':
-                message = "AUDIO: File Ready";
-                playButton.textContent = "Play File";
+            case 'none': message = "AUDIO: IDLE"; break; 
+            case 'mic': message = "AUDIO: Mic/System"; break; 
+            case 'file_ready': 
+                message = "AUDIO: File Ready"; 
+                playButton.textContent = "Play File"; 
                 playButton.classList.add('button-glow-effect');
-                break;
-            case 'file_playing':
-                message = "AUDIO: Playing";
-                playButton.textContent = "Pause File";
+                break; 
+            case 'file_playing': 
+                message = "AUDIO: Playing"; 
+                playButton.textContent = "Pause File"; 
                 playButton.classList.add('button-solid-glow');
-                break;
-            case 'file_paused':
-                message = "AUDIO: Paused";
-                playButton.textContent = "Play File";
+                break; 
+            case 'file_paused': 
+                message = "AUDIO: Paused"; 
+                playButton.textContent = "Play File"; 
                 playButton.classList.add('button-glow-effect');
-                break;
+                break; 
             case 'testTone': message = "AUDIO: Test Tone"; break;
             case 'error': message = `ERROR: ${statusText}`; break;
         }
         this.audioStatusP.textContent = message;
     },
     setupEQCanvas() {
-        this.eqCanvas = document.getElementById('eqVisualizerCanvas');
-        if (!this.eqCanvas) { console.warn("UIManager.setupEQCanvas: #eqVisualizerCanvas not found."); return; }
-        this.eqCtx = this.eqCanvas.getContext('2d');
+        this.eqCanvas = document.getElementById('eqVisualizerCanvas'); 
+        if (!this.eqCanvas) { console.warn("UIManager.setupEQCanvas: #eqVisualizerCanvas not found."); return; } 
+        this.eqCtx = this.eqCanvas.getContext('2d'); 
 
         const dpr = window.devicePixelRatio || 1;
         const rect = this.eqCanvas.getBoundingClientRect();
 
         this.eqCanvas.width = rect.width * dpr;
         this.eqCanvas.height = rect.height * dpr;
-
+        
         this.eqCtx.scale(dpr, dpr);
 
         this.eqCanvas.style.width = `${rect.width}px`;
         this.eqCanvas.style.height = `${rect.height}px`;
 
-        this.eqGradient = this.eqCtx.createLinearGradient(0, 0, rect.width, 0);
-        this.eqGradient.addColorStop(0, '#007AFF');
-        this.eqGradient.addColorStop(0.5, '#5856D6');
+        this.eqGradient = this.eqCtx.createLinearGradient(0, 0, rect.width, 0); 
+        this.eqGradient.addColorStop(0, '#007AFF'); 
+        this.eqGradient.addColorStop(0.5, '#5856D6'); 
         this.eqGradient.addColorStop(1, '#FF2D55');
     },
     updateEQ(data) {
-        if (!this.eqCtx || !data) return;
+        if (!this.eqCtx || !data) return; 
         const width = this.eqCanvas.clientWidth;
-        const height = this.eqCanvas.clientHeight;
+        const height = this.eqCanvas.clientHeight; 
 
-        this.eqCtx.clearRect(0, 0, width, height);
-        const numBars = 64;
-        const barWidth = width / numBars;
+        this.eqCtx.clearRect(0, 0, width, height); 
+        const numBars = 64; 
+        const barWidth = width / numBars; 
         this.eqCtx.fillStyle = this.eqGradient;
-        for (let i = 0; i < numBars; i++) {
-            const logIndex = Math.floor(Math.pow(i / numBars, 2) * (data.length * 0.8));
-            const value = data[logIndex] / 255.0;
-            if (value > 0) this.eqCtx.fillRect(i * barWidth, height - (value * height), barWidth, value * height);
+        for (let i = 0; i < numBars; i++) { 
+            const logIndex = Math.floor(Math.pow(i / numBars, 2) * (data.length * 0.8)); 
+            const value = data[logIndex] / 255.0; 
+            if (value > 0) this.eqCtx.fillRect(i * barWidth, height - (value * height), barWidth, value * height); 
         }
     },
     resetLandscapeSettings() {
@@ -1397,11 +1446,11 @@ export const UIManager = {
 
         const S = this.app.vizSettings;
         const D = this.app.defaultVisualizerSettings;
-
+    
         const landscapeKeys = [
             'enableLandscape', 'landscapeSpinSpeed', 'planeAspectRatio', 'planeOrientation'
         ];
-
+    
         landscapeKeys.forEach(key => {
             if (D[key] !== undefined) {
                 S[key] = D[key];
@@ -1418,7 +1467,7 @@ export const UIManager = {
                 }
             }
         });
-
+    
         this.app.ImagePlaneManager.createDefaultLandscape();
         this._isProgrammaticUpdate = false;
         this.logSuccess("Landscape settings reset.");

@@ -1,4 +1,4 @@
-// Unified Particle Physics Shader - Fixed Interaction
+// Unified Particle Physics Shader - "Snappy & Responsive" Tune
 #include <gpgpu_common>
 
 // --- Uniforms ---
@@ -43,16 +43,15 @@ void main() {
 
     // --- 1. CALCULATE FORCES ---
     
-    // A. Hydro Force (Mouse Interaction)
-    // This needs to be ALWAYS active so you can push particles off their target.
+    // A. Hydro Force
     vec2 fluidUV = (position.xy / u_planeDimensions) + 0.5;
     fluidUV = clamp(fluidUV, 0.0, 1.0); 
     vec3 hydroVelocity = texture(u_hydroVelocityTexture, fluidUV).xyz;
     
-    // Boost factor: 100.0 allows the mouse to overpower the attraction
-    vec3 hydroForce = hydroVelocity * 100.0 * particle_flowStrength;
+    // Tune: High multiplier to make sure the liquid pushes particles effectively
+    vec3 hydroForce = hydroVelocity * 10.0 * particle_flowStrength;
 
-    // B. Simplex Noise (Ambient Drift)
+    // B. Simplex Noise (Eternal Drift)
     vec3 noise_coord = position * particle_flowScale;
     noise_coord.z += u_time * particle_flowSpeed;
     vec3 staticNoise = vec3(
@@ -60,7 +59,7 @@ void main() {
         snoise(noise_coord + vec3(17.4)), 
         snoise(noise_coord + vec3(93.1))
     );
-    vec3 noiseForce = staticNoise * 2.0 * particle_flowStrength;
+    vec3 noiseForce = staticNoise * 0.5 * particle_flowStrength;
 
     // --- 2. ORBITAL ATTRACTION ---
     vec3 toTarget = targetPos - position;
@@ -69,19 +68,19 @@ void main() {
     vec3 dir = vec3(0.0);
     if (dist > 0.0001) dir = toTarget / dist;
 
-    // Tangent (Spiral)
     vec3 axis = vec3(0.0, 1.0, 0.0); 
     vec3 tangent = cross(dir, axis); 
     
-    // Approach logic
-    float approachFactor = smoothstep(0.0, 5.0, dist); 
+    float approachFactor = smoothstep(0.0, 15.0, dist); 
     float randomID = rand(uv); 
     float arrivalMask = smoothstep(randomID - 0.2, randomID + 0.2, particle_morphProgress);
 
     vec3 moveDir = mix(dir, tangent, approachFactor * 0.5 * (1.0 - arrivalMask)); 
     
-    // Attraction Force
-    vec3 attractionForce = moveDir * particle_attractionStrength * dist * 2.0; 
+    // *** CRITICAL FIX ***
+    // Removed the `* 0.05` multiplier. 
+    // We use the RAW attraction strength now for instant snapping.
+    vec3 attractionForce = moveDir * particle_attractionStrength; 
 
     // --- 3. COHESION & GRAVITY ---
     vec3 extraForces = vec3(0.0);
@@ -103,16 +102,22 @@ void main() {
     }
 
     // --- 4. INTEGRATION ---
-    
-    // Damping Logic:
-    // When particles are at the target (dist ~ 0), we kill the NOISE so the image is sharp.
-    // But we DO NOT kill the Hydro force, so you can still push them around.
-    float stabilityFactor = smoothstep(0.0, 2.0, dist);
-    
-    vec3 totalForce = attractionForce + hydroForce + (noiseForce * stabilityFactor) + extraForces;
+    vec3 totalForce = attractionForce + hydroForce + noiseForce + extraForces;
 
-    velocity += totalForce * u_delta; 
-    velocity *= 0.90; // Friction
+    // *** CRITICAL FIX ***
+    // Increased Max Acceleration from 50.0 to 1000.0
+    // This allows particles to cross the screen in < 1 second if force is high.
+    float maxAccel = 1000.0; 
+    vec3 acceleration = totalForce;
+    if (length(acceleration) > maxAccel) {
+        acceleration = normalize(acceleration) * maxAccel;
+    }
+
+    velocity += acceleration * u_delta; 
+    
+    // Friction/Damping
+    // 0.92 allows for fast movement but stops them from vibrating endlessly at the target
+    velocity *= 0.92; 
 
     gl_FragColor = vec4(velocity, 1.0);
 }

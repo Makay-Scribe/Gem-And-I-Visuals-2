@@ -3,6 +3,7 @@ import landscapeRenderVertexShader from '../shaders/landscape_render.vert?raw';
 import cubewallRenderVertexShader from '../shaders/cubewall_render.vert?raw';
 import landscapeRenderFragmentShader from '../shaders/landscape_render.frag?raw';
 import { ParticleSystem } from '../features/particles/ParticleSystem.js';
+import { LiquidSystem } from '../features/liquid/LiquidSystem.js';
 
 export const ImagePlaneManager = {
     app: null,
@@ -79,6 +80,7 @@ export const ImagePlaneManager = {
         this.app.scene.add(this.landscapeContainer);
 
         ParticleSystem.init(this.app);
+        LiquidSystem.init(this.app);
     },
 
     startAutopilot(presetId) {
@@ -138,6 +140,10 @@ export const ImagePlaneManager = {
         
         if (ParticleSystem.mesh) {
             ParticleSystem.mesh.visible = (mode === 'particles');
+        }
+        
+        if (LiquidSystem.mesh) {
+            LiquidSystem.mesh.visible = (mode === 'liquid');
         }
         
         const state = this.state;
@@ -200,12 +206,20 @@ export const ImagePlaneManager = {
 
     createDefaultLandscape() {
         this.updatePlaneDimensions();
+        
         this._cleanupMeshes(); 
+
         this._createPlaneMesh();
         this._createInstancedCubeMesh();
+        
         const particleMesh = ParticleSystem.createMesh();
         this.landscapeContainer.add(particleMesh);
+
+        const liquidMesh = LiquidSystem.createMesh();
+        this.landscapeContainer.add(liquidMesh);
+
         this.applyAndStoreHomeOrientation();
+        
         this.landscapeContainer.position.copy(this.state.homePosition);
         this.landscapeContainer.quaternion.copy(this.state.homeQuaternion);
         this.state.targetPosition.copy(this.state.homePosition);
@@ -216,9 +230,12 @@ export const ImagePlaneManager = {
     _cleanupMeshes() {
         if (this.landscape) { this.landscape.geometry.dispose(); this.landscapeContainer.remove(this.landscape); this.landscape = null; }
         if (this.instancedMesh) { this.instancedMesh.geometry.dispose(); this.landscapeContainer.remove(this.instancedMesh); this.instancedMesh = null; }
+        
         if (this.facetedMaterial) { this.facetedMaterial.dispose(); this.facetedMaterial = null; }
         if (this.geocubeMaterial) { this.geocubeMaterial.dispose(); this.geocubeMaterial = null; }
+        
         ParticleSystem.dispose();
+        LiquidSystem.dispose();
     },
 
     _createPlaneMesh() {
@@ -229,7 +246,9 @@ export const ImagePlaneManager = {
             gpgpuUvs[i * 2 + 1] = geometry.attributes.uv.getY(i);
         }
         geometry.setAttribute('uv_gpgpu', new this.app.THREE.BufferAttribute(gpgpuUvs, 2));
+
         this._createFacetedMaterial();
+
         this.landscape = new this.app.THREE.Mesh(geometry, this.facetedMaterial);
         this.landscape.frustumCulled = false;
         this.landscapeContainer.add(this.landscape);
@@ -240,7 +259,9 @@ export const ImagePlaneManager = {
         const CUBE_SIZE = this.planeDimensions.x / GRID_SIZE;
         const COUNT = GRID_SIZE * GRID_SIZE;
         const cubeGeom = new this.app.THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+        
         this._createGeocubeMaterial();
+
         this.instancedMesh = new this.app.THREE.InstancedMesh(cubeGeom, this.geocubeMaterial, COUNT);
         this.instancedMesh.frustumCulled = false;
         const instanceIds = new Float32Array(COUNT);
@@ -258,7 +279,7 @@ export const ImagePlaneManager = {
     applyAndStoreHomeOrientation() {
         const S = this.app.vizSettings;
         this.state.homeQuaternion.identity(); 
-        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles') {
+        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'liquid') {
             // Default upright orientation
         } else {
             const tempObject = new this.app.THREE.Object3D();
@@ -326,8 +347,12 @@ export const ImagePlaneManager = {
             
             if (this.facetedMaterial) this.facetedMaterial.uniforms.u_map.value = texture;
             if (this.geocubeMaterial) this.geocubeMaterial.uniforms.u_map.value = texture;
+            
             if (ParticleSystem.material) {
                 ParticleSystem.material.uniforms.u_map.value = texture;
+            }
+            if (LiquidSystem.material) {
+                LiquidSystem.material.uniforms.u_map.value = texture;
             }
             
             this.currentTexture = texture;
@@ -353,13 +378,17 @@ export const ImagePlaneManager = {
         
         if (S.gpgpuGeometryMode === 'particles') {
             ParticleSystem.updateUniforms();
+        } else if (S.gpgpuGeometryMode === 'liquid') {
+            LiquidSystem.updateUniforms();
         } else { 
             const allMaterials = [this.facetedMaterial, this.geocubeMaterial];
+            
             allMaterials.forEach(mat => {
                 if (!mat || !CM.landscapeGpuCompute) return;
                 const U = mat.uniforms;
                 const positionTarget = CM.landscapeGpuCompute.getCurrentRenderTarget(CM.landscapePositionVariable);
                 U.u_positionTexture.value = positionTarget.texture;
+                
                 U.u_gpgpu_cubeWallMorph.value = S.gpgpu_cubeWallMorph; 
                 U.u_time.value = this.app.currentTime;
                 U.u_metalness.value = S.metalness;
@@ -386,6 +415,7 @@ export const ImagePlaneManager = {
         if (mode === 'faceted') activeMesh = this.landscape;
         else if (mode === 'geocube') activeMesh = this.instancedMesh;
         else if (mode === 'particles') activeMesh = ParticleSystem.mesh;
+        else if (mode === 'liquid') activeMesh = LiquidSystem.mesh;
 
         if (!activeMesh) return;
 
