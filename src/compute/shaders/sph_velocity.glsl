@@ -35,7 +35,7 @@ uniform sampler2D u_blurredPosition;
 
 // --- Physics Constants ---
 const float PARTICLE_MASS = 1.0;
-const float DAMPING = 0.95;
+const float DAMPING = 0.65;
 
 uniform float u_worldSize;
 
@@ -112,7 +112,7 @@ void main() {
 
         vec3 acceleration = totalForce / PARTICLE_MASS;
 
-        float maxAccel = 50.0;
+        float maxAccel = 800.0;
         if (length(acceleration) > maxAccel) {
             acceleration = normalize(acceleration) * maxAccel;
         }

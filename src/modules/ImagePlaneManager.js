@@ -135,16 +135,31 @@ export const ImagePlaneManager = {
         
         const mode = S.gpgpuGeometryMode;
         
-        if (this.landscape) this.landscape.visible = (mode === 'faceted');
-        if (this.instancedMesh) this.instancedMesh.visible = (mode === 'geocube');
+        // --- STRICT VISIBILITY LOGIC ---
+        // Ensure mutally exclusive visibility to prevent "double rendering"
         
+        // 1. Standard Landscape (Faceted)
+        if (this.landscape) {
+            this.landscape.visible = (mode === 'faceted');
+        }
+        
+        // 2. GeoCubes
+        if (this.instancedMesh) {
+            this.instancedMesh.visible = (mode === 'geocube');
+        }
+        
+        // 3. Particles
         if (ParticleSystem.mesh) {
             ParticleSystem.mesh.visible = (mode === 'particles');
         }
         
+        // 4. Liquid (Legacy)
         if (LiquidSystem.mesh) {
             LiquidSystem.mesh.visible = (mode === 'liquid');
         }
+        
+        // 5. Elemental (Managed by ElementalManager, but ensuring others are off here)
+        // If mode is 'elemental', the above checks ensure faceted/geocube/particles/liquid are FALSE.
         
         const state = this.state;
         const ap = this.autopilot;
@@ -279,7 +294,7 @@ export const ImagePlaneManager = {
     applyAndStoreHomeOrientation() {
         const S = this.app.vizSettings;
         this.state.homeQuaternion.identity(); 
-        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'liquid') {
+        if (S.gpgpuGeometryMode === 'geocube' || S.gpgpuGeometryMode === 'particles' || S.gpgpuGeometryMode === 'liquid' || S.gpgpuGeometryMode === 'elemental') {
             // Default upright orientation
         } else {
             const tempObject = new this.app.THREE.Object3D();
@@ -348,6 +363,7 @@ export const ImagePlaneManager = {
             if (this.facetedMaterial) this.facetedMaterial.uniforms.u_map.value = texture;
             if (this.geocubeMaterial) this.geocubeMaterial.uniforms.u_map.value = texture;
             
+            // FIXED: Safety checks before accessing materials
             if (ParticleSystem.material) {
                 ParticleSystem.material.uniforms.u_map.value = texture;
             }
@@ -380,6 +396,8 @@ export const ImagePlaneManager = {
             ParticleSystem.updateUniforms();
         } else if (S.gpgpuGeometryMode === 'liquid') {
             LiquidSystem.updateUniforms();
+        } else if (S.gpgpuGeometryMode === 'elemental') {
+            // ElementalManager handles its own updates
         } else { 
             const allMaterials = [this.facetedMaterial, this.geocubeMaterial];
             
@@ -416,6 +434,7 @@ export const ImagePlaneManager = {
         else if (mode === 'geocube') activeMesh = this.instancedMesh;
         else if (mode === 'particles') activeMesh = ParticleSystem.mesh;
         else if (mode === 'liquid') activeMesh = LiquidSystem.mesh;
+        // For 'elemental', the active mesh is managed by ElementalManager, but it sits in the same container
 
         if (!activeMesh) return;
 

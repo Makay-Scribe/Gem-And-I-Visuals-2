@@ -137,8 +137,8 @@
                     <button class="segmented-control-button" data-mode="deformation">Faceted</button>
                     <button class="segmented-control-button" data-mode="geocube">GeoCube</button>
                     <button class="segmented-control-button active" data-mode="particles">Particles</button>
-                    <!-- Added Liquid Button -->
-                    <button class="segmented-control-button" data-mode="liquid">Liquid</button>
+                    <!-- Elemental Button -->
+                    <button class="segmented-control-button" data-mode="elemental">Elemental</button>
                 </div>
 
                 <hr style="border-color: #333; margin: 6px 0;">
@@ -397,6 +397,7 @@
                 </div>
 
                 <div id="particleControlsContainer">
+                    <!-- Shared controls for Particles and Legacy Liquid -->
                     <div class="file-input-row">
                         <button class="browse-btn" data-target="particleModelInput">Upload GLB...</button>
                         <span id="particleModelName" class="file-name-display">Devmodel.glb (Default)</span>
@@ -465,6 +466,49 @@
                                 <span>Max</span>
                             </div>
                             <input type="range" id="particle_twinkleIntensity" min="0.0" max="1.0" step="0.01" value="0.0">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW ELEMENTAL CONTAINER -->
+                <div id="elementalControlsContainer" style="display: none;">
+                    
+                    <!-- Morph Slider -->
+                    <label>Canvas <-> Blob <-> Model</label>
+                    <!-- Unique ID for Elemental Morph -->
+                    <input type="range" id="elemental_morph" min="0" max="1" step="0.01" value="0">
+                    <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--label-color); padding: 0 2px;">
+                        <span>Canvas</span>
+                        <span>Blob</span>
+                        <span>Model</span>
+                    </div>
+                    
+                    <hr style="border-color: #333; margin: 10px 0;">
+
+                    <div class="control-group">
+                        <label>Turbulence Strength: <span id="elemental_turbulenceValue" class="range-value-display">0.5</span></label>
+                        <input type="range" id="elemental_turbulence" min="0" max="2" step="0.01" value="0.5">
+                    </div>
+
+                    <div class="control-group">
+                        <label>Speed: <span id="elemental_speedValue" class="range-value-display">0.5</span></label>
+                        <input type="range" id="elemental_speed" min="0" max="2" step="0.01" value="0.5">
+                    </div>
+
+                    <div class="control-group">
+                        <label>Frequency / Detail: <span id="elemental_frequencyValue" class="range-value-display">0.1</span></label>
+                        <input type="range" id="elemental_frequency" min="0.01" max="0.5" step="0.01" value="0.1">
+                    </div>
+
+                    <hr style="border-color: #333; margin: 10px 0;">
+
+                    <div class="control-group">
+                        <label>Visualizer Mode</label>
+                        <div class="elemental-mode-grid">
+                            <button data-mode="earth" class="elemental-mode-btn">Earth</button>
+                            <button data-mode="water" class="elemental-mode-btn active">Water</button>
+                            <button data-mode="wind" class="elemental-mode-btn">Wind</button>
+                            <button data-mode="fire" class="elemental-mode-btn">Fire</button>
                         </div>
                     </div>
                 </div>

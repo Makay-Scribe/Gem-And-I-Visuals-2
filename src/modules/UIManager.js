@@ -66,17 +66,14 @@ export const UIManager = {
         if (!this.app) return;
         const S = this.app.vizSettings;
 
+        // Sync Particle Sliders
         const idsToSync = [
             'particle_morphProgress',
             'particle_cohesionStrength'
         ];
 
         idsToSync.forEach(id => {
-            let valueToSync;
-            if (S[id] !== undefined) {
-                valueToSync = S[id];
-            }
-
+            let valueToSync = S[id];
             if (valueToSync !== undefined && this._sliderCache.get(id) !== valueToSync) {
                 const slider = document.getElementById(id);
                 if (slider) {
@@ -86,6 +83,10 @@ export const UIManager = {
                 }
             }
         });
+
+        // Sync Elemental Sliders (Morph is shared concept but separate variable in new mode)
+        // Note: S.particle_morphProgress is reused for elemental morph in the manager, 
+        // but we map it from the new slider ID 'elemental_morph' in event listeners.
     },
 
     syncAllControlsToSettings() {
@@ -444,7 +445,7 @@ export const UIManager = {
         const display = document.getElementById(id + 'Value');
         if (display) {
             let precision = 1;
-             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_cohesionStrength'].includes(id)) {
+             if (['masterScale', 'masterSpeed', 'butterchurnAudioInfluence', 'peelAmount', 'peelCurl', 'sagAudioMod', 'droopAudioMod', 'droopSupportedWidthFactor', 'droopSupportedDepthFactor', 'cylinderRadius', 'cylinderHeightScale', 'bendAudioMod', 'foldDepth', 'foldRoundness', 'foldNudge', 'foldCreaseDepth', 'foldCreaseSharpness', 'foldTuckAmount', 'foldTuckReach', 'gpgpu_eqRippleBarWidth', 'gpgpu_eqRippleSmoothing', 'gpgpu_eqRippleRangeStart', 'gpgpu_eqRippleRangeEnd', 'imageEffect_colorTolerance', 'imageEffect_edgeSoftness', 'imageEffect_pointX', 'imageEffect_pointY', 'imageEffect_strength', 'imageEffect_radius', 'imageEffect_audioInfluence', 'gpgpu_foldDepth', 'gpgpu_foldRoundness', 'gpgpu_foldNudge', 'gpgpu_foldCreaseDepth', 'gpgpu_foldCreaseSharpness', 'gpgpu_foldTuckAmount', 'gpgpu_foldTuckReach', 'gpgpu_cylinderRadius', 'gpgpu_cylinderHeightScale', 'gpgpu_sagAmount', 'gpgpu_sagFalloffSharpness', 'gpgpu_sagAudioMod', 'gpgpu_droopAmount', 'gpgpu_droopAudioMod', 'gpgpu_droopFalloffSharpness', 'gpgpu_droopSupportedWidthFactor', 'gpgpu_droopSupportedDepthFactor', 'gpgpu_peelAmount', 'gpgpu_peelCurl', 'gpgpu_peelDrift', 'gpgpu_peelTextureAmount', 'particle_flowScale', 'particle_flowSpeed', 'particle_flowStrength', 'particle_attractionStrength', 'particle_morphProgress', 'particle_size_mix', 'particle_twinkleIntensity', 'particle_cohesionStrength', 'elemental_morph', 'elemental_turbulence', 'elemental_speed', 'elemental_frequency'].includes(id)) {
                 precision = 2;
             } else if (['deformationStrength', 'audioSmoothing', 'metalness', 'roughness', 'reflectionStrength', 'toneMappingExposure', 'peelDrift', 'peelTextureAmount', 'bendFalloffSharpness', 'gpgpu_tendrilSway', 'gpgpu_tendrilGlowFalloff', 'gpgpu_triWaveFrequency', 'gpgpu_triWaveSpeed', 'particle_base_size', 'particle_min_size', 'gpgpu_cubeWallBevelWidth', 'gpgpu_cubeWallBevelIntensity'].includes(id)) {
                 precision = 2;
@@ -563,14 +564,15 @@ export const UIManager = {
             deformation: document.getElementById('deformationControlsContainer'),
             geocube: document.getElementById('geocubeControlsContainer'),
             particles: document.getElementById('particleControlsContainer'),
+            elemental: document.getElementById('elementalControlsContainer'),
         };
 
         // Map modes to container IDs
         let activeContainerKey = null;
         if (mode === 'faceted') activeContainerKey = 'deformation';
         else if (mode === 'geocube') activeContainerKey = 'geocube';
-        // Both Particles AND Liquid should show the particle controls (Flow, Attraction)
         else if (mode === 'particles' || mode === 'liquid') activeContainerKey = 'particles';
+        else if (mode === 'elemental') activeContainerKey = 'elemental';
         
         for (const [key, container] of Object.entries(containers)) {
             if (container) {
@@ -690,6 +692,18 @@ export const UIManager = {
             this.app.CubeWallManager.setActive(true);
         }
 
+        // Handle switching to/from Elemental Manager
+        if (newSystemMode === 'elemental') {
+            if (this.app.ElementalManager) {
+                if (!this.app.ElementalManager.gpuCompute) this.app.ElementalManager.initPhysics(); 
+                this.app.ElementalManager.setMode(this.app.ElementalManager.activeMode);
+            }
+        } else if (oldSystemMode === 'elemental') {
+            if (this.app.ElementalManager) {
+                Object.values(this.app.ElementalManager.meshes).forEach(m => { if(m) m.visible = false; });
+            }
+        }
+
         S.gpgpuGeometryMode = newSystemMode;
         this.app.ComputeManager.switchMode(newSystemMode);
         
@@ -740,6 +754,7 @@ export const UIManager = {
             });
         }
         
+        // GPGPU Mode Selector Listener
         document.querySelectorAll('#gpgpuModeSelector button').forEach(button => {
             button.addEventListener('click', () => {
                 const mode = button.dataset.mode;
@@ -747,6 +762,43 @@ export const UIManager = {
                     this._switchGpgpuMode(mode);
                 }
             });
+        });
+
+        // --- ELEMENTAL BUTTON LISTENERS ---
+        document.querySelectorAll('.elemental-mode-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const mode = e.target.dataset.mode;
+                if (this.app.ElementalManager) {
+                    this.app.ElementalManager.setMode(mode);
+                    // Update active visual state on buttons
+                    document.querySelectorAll('.elemental-mode-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                }
+            });
+        });
+
+        // --- ELEMENTAL SLIDERS ---
+        const elementalSliders = ['elemental_morph', 'elemental_turbulence', 'elemental_speed', 'elemental_frequency'];
+        elementalSliders.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    // Map to vizSettings variables
+                    if (id === 'elemental_morph') {
+                        this.app.vizSettings.particle_morphProgress = val;
+                    } else if (id === 'elemental_turbulence') {
+                        this.app.vizSettings.particle_flowStrength = val;
+                    } else if (id === 'elemental_speed') {
+                        this.app.vizSettings.particle_flowSpeed = val;
+                    } else if (id === 'elemental_frequency') {
+                        this.app.vizSettings.particle_flowScale = val;
+                    }
+                    
+                    // Update generic range display
+                    this.updateRangeDisplay(id, val);
+                });
+            }
         });
         
         document.querySelectorAll('#particleControlsContainer input[type="range"], #particleControlsContainer input[type="color"]').forEach(control => {
@@ -765,7 +817,17 @@ export const UIManager = {
         });
         
         document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(control => {
-            if (control.closest('#particleControlsContainer') || control.closest('#cameraOptions') || control.closest('#masterSpinControl') || control.closest('.accordion-header-with-toggle') || control.closest('#imageEffectsAccordion') || control.closest('#butterchurnControls') || control.closest('.accordion-content .file-input-row') || control.closest('.model-preset-list')) return;
+            // Avoid double binding for already handled sliders
+            if (control.closest('#particleControlsContainer') || 
+                control.closest('#elementalControlsContainer') || 
+                control.closest('#cameraOptions') || 
+                control.closest('#masterSpinControl') || 
+                control.closest('.accordion-header-with-toggle') || 
+                control.closest('#imageEffectsAccordion') || 
+                control.closest('#butterchurnControls') || 
+                control.closest('.accordion-content .file-input-row') || 
+                control.closest('.model-preset-list')) return;
+                
             control.addEventListener('input', (e) => {
                 this._isProgrammaticUpdate = true; 
                 const id = e.target.id;

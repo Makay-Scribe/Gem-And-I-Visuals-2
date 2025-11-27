@@ -752,3 +752,43 @@ canvas#glCanvas { display: block; width: 100vw; height: 100vh; position: absolut
 #demoModeButton:active {
     transform: scale(0.98);
 }
+
+/* --- ELEMENTAL ENGINE STYLES --- */
+.elemental-mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.elemental-mode-btn {
+    background: #222;
+    border: 1px solid #444;
+    color: #ccc;
+    padding: 6px;
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+}
+
+.elemental-mode-btn:hover { background: #333; border-color: #666; }
+
+/* Active States with Glows */
+.elemental-mode-btn[data-mode="earth"].active { 
+    background: #5D4037; color: #fff; border-color: #8D6E63; 
+    box-shadow: 0 0 8px rgba(141, 110, 99, 0.6); 
+}
+.elemental-mode-btn[data-mode="water"].active { 
+    background: #0277BD; color: #fff; border-color: #29B6F6;
+    box-shadow: 0 0 8px rgba(41, 182, 246, 0.6); 
+}
+.elemental-mode-btn[data-mode="wind"].active { 
+    background: #00695C; color: #E0F2F1; border-color: #80CBC4;
+    box-shadow: 0 0 8px rgba(128, 203, 196, 0.6); 
+}
+.elemental-mode-btn[data-mode="fire"].active { 
+    background: #D84315; color: #fff; border-color: #FF7043;
+    box-shadow: 0 0 8px rgba(255, 112, 67, 0.6); 
+}

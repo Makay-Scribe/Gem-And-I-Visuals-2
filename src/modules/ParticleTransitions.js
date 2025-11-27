@@ -15,10 +15,10 @@ export const ParticleTransitions = {
         },
         'pour': {
             duration: 8000,
-            particle_flowStrength: 2.0,
-            particle_flowSpeed: 0.5,
-            particle_flowScale: 0.2,
-            particle_attractionStrength: 1.5,
+            particle_flowStrength: 9.0,
+            particle_flowSpeed: 9.5,
+            particle_flowScale: 9.2,
+            particle_attractionStrength: 9.5,
         },
         'liquid': {
             duration: 8000,

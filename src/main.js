@@ -18,6 +18,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ParticleTransitions } from './modules/ParticleTransitions.js';
 import { FluidDirector } from './compute/FluidDirector.js';
 import { HydroSimManager } from './compute/HydroSimManager.js';
+// --- NEW IMPORT ---
+import { ElementalManager } from './modules/ElementalManager.js';
 
 
 const App = {
@@ -67,6 +69,8 @@ const App = {
     CubeWallManager: CubeWallManager, DirectorManager: DirectorManager,
     ParticleTransitions: ParticleTransitions, FluidDirector: FluidDirector,
     HydroSimManager: HydroSimManager,
+    // --- NEW MODULE ---
+    ElementalManager: ElementalManager,
 
     defaultVisualizerSettings: {
         activeControl: 'landscape', landscapeAutopilotOn: false, modelAutopilotOn: false,
@@ -312,6 +316,13 @@ const App = {
             console.warn("HydroSimManager module missing or undefined.");
         }
         
+        // --- ELEMENTAL INIT ---
+        if (this.ElementalManager) {
+            this.ElementalManager.init(this);
+        } else {
+            console.warn("ElementalManager module missing or undefined.");
+        }
+        
         if (this.GPGPUDebugger) this.GPGPUDebugger.init(this);
         if (this.UIManager) this.UIManager.init(this); 
         
@@ -420,6 +431,11 @@ const App = {
         
         if (this.HydroSimManager && this.HydroSimManager.gpuCompute) this.HydroSimManager.update(cappedDelta);
         if (this.ComputeManager && this.ComputeManager.gpuCompute) this.ComputeManager.update(cappedDelta); 
+        // --- NEW UPDATE CALL ---
+        if (this.ElementalManager && S.gpgpuGeometryMode === 'elemental') {
+            this.ElementalManager.update(cappedDelta);
+        }
+
         if (S.gpgpuGeometryMode === 'particles' && this.ParticleTransitions) this.ParticleTransitions.update(); 
         
         if(this.DirectorManager) this.DirectorManager.update(cappedDelta);
